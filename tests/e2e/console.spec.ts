@@ -237,7 +237,10 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
       "href",
       "https://claude.ai/new",
     );
-    await expect(page.getByText("The ledger starts with a published invoice")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Receivables", exact: true })).toBeVisible();
+    await expect(page.getByTestId("receivables")).toHaveText("0 USDC");
+    await expect(page.getByRole("heading", { name: "Prepare your workspace" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Latest settlement" })).toHaveCount(0);
     await noOverflow(page);
     await testInfo.attach("overview", {
       body: await page.screenshot({ fullPage: true, path: testInfo.outputPath("overview.png") }),
@@ -249,8 +252,10 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
     });
     await expect(nav.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
     await nav.getByRole("link", { name: "Invoices" }).click();
-    await expect(page.getByRole("heading", { name: "Publication comes next" })).toBeVisible();
-    await expect(page.locator("form")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "No invoices yet" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Draft in Claude. Review here." })).toBeVisible();
+    await expect(page.locator("form")).toHaveCount(1);
+    await expect(page.getByRole("search", { name: "Filter invoices" })).toHaveAttribute("method", "get");
     await page.getByRole("button", { name: "Account", exact: true }).click();
     await expect(
       page

@@ -53,6 +53,40 @@ async function withFixtureLock<T>(sql: string, operation: () => Promise<T>): Pro
   try { return await operation(); } finally { await finished; }
 }
 
+async function withFixtureTransaction<T>(sql: string, operation: (pid: number, commit: (sql: string) => Promise<void>) => Promise<T>): Promise<T> {
+  fixture("select 1;");
+  const child = spawn("docker", ["exec", "-i", "supabase_db_payr", "psql", "-U", "postgres", "-d", "postgres",
+    "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1"], { stdio: ["pipe", "pipe", "pipe"] });
+  let stderr = "";
+  child.stderr.on("data", (data) => { stderr += String(data); });
+  const ready = new Promise<number>((resolve, reject) => {
+    let stdout = "";
+    child.stdout.on("data", (data) => {
+      stdout += String(data);
+      const match = stdout.match(/fixture-pid:(\d+)/);
+      if (match) resolve(Number(match[1]));
+    });
+    child.on("error", reject);
+    child.on("close", () => reject(new Error(stderr || "Local fixture closed before ready")));
+  });
+  const finished = new Promise<void>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", (code) => code === 0 ? resolve() : reject(new Error(stderr)));
+  });
+  void finished.catch(() => {});
+  child.stdin.write(`begin; set local statement_timeout = '8s'; set local idle_in_transaction_session_timeout = '10s';
+    ${sql}; select 'fixture-pid:' || pg_backend_pid();\n`);
+  try {
+    return await operation(await ready, (continuation) => {
+      child.stdin.end(`${continuation}; commit;`);
+      return finished;
+    });
+  } finally {
+    if (!child.stdin.writableEnded) child.stdin.end("rollback;");
+    await finished;
+  }
+}
+
 function expectFixtureFailure(sql: string, marker: string) {
   try { fixture(sql); } catch (error) {
     expect(String((error as { stderr: unknown }).stderr)).toContain(marker);
@@ -82,13 +116,186 @@ async function token(identity: IdentitySession) {
   return { ...input, metadata };
 }
 
-async function avoidMinuteBoundary() {
+async function avoidMinuteBoundary(minimumSeconds = 3) {
   const seconds = Number(fixture("select extract(second from clock_timestamp());"));
-  if (seconds > 57) await new Promise((resolve) => setTimeout(resolve, (60 - seconds) * 1000 + 20));
+  if (seconds > 60 - minimumSeconds) await new Promise((resolve) => setTimeout(resolve, (60 - seconds) * 1000 + 20));
 }
 
 describe("F2 identity transactions through Supabase", () => {
-  beforeEach(() => fixture("truncate public.connector_ip_rate_limits, public.workspaces cascade;"));
+  beforeEach(() => fixture("truncate public.auth_nonce_rate_limits, public.connector_ip_rate_limits, public.workspaces cascade;"));
+
+  it("admits only five nonce requests per wallet despite changing IP hashes", async () => {
+    await avoidMinuteBoundary();
+    const walletHash = randomBytes(32).toString("hex");
+    for (let index = 0; index < 5; index++) {
+      expect(await repository.admitNonceIssuance({ walletHash, ipHash: randomBytes(32).toString("hex") }))
+        .toEqual({ allowed: true, retryAfterSeconds: 0 });
+    }
+    const denied = await repository.admitNonceIssuance({ walletHash, ipHash: randomBytes(32).toString("hex") });
+    expect(denied.allowed).toBe(false);
+    expect(Number.isInteger(denied.retryAfterSeconds)).toBe(true);
+    expect(denied.retryAfterSeconds).toBeGreaterThanOrEqual(1);
+    expect(denied.retryAfterSeconds).toBeLessThanOrEqual(60);
+  });
+
+  it.each([ ["wallet", 5, 20], ["ip", 30, 45], ["global", 300, 330] ] as const)(
+    "enforces the concurrent nonce %s quota with bounded counters", async (quota, limit, requests) => {
+      await avoidMinuteBoundary(10);
+      const walletHash = randomBytes(32).toString("hex");
+      const ipHash = randomBytes(32).toString("hex");
+      const results: Awaited<ReturnType<typeof repository.admitNonceIssuance>>[] = [];
+      // Bound HTTP fanout to the local gateway's capacity, and drain each batch even on failure.
+      for (let offset = 0; offset < requests; offset += 32) {
+        const batch = await Promise.allSettled(Array.from({ length: Math.min(32, requests - offset) }, () => repository.admitNonceIssuance({
+          walletHash: quota === "wallet" ? walletHash : randomBytes(32).toString("hex"),
+          ipHash: quota === "ip" ? ipHash : randomBytes(32).toString("hex"),
+        })));
+        expect(batch.filter((result) => result.status === "rejected")).toEqual([]);
+        for (const result of batch) if (result.status === "fulfilled") results.push(result.value);
+      }
+      expect(results.filter((result) => result.allowed)).toEqual(Array.from({ length: limit }, () => ({ allowed: true, retryAfterSeconds: 0 })));
+      const denied = results.filter((result) => !result.allowed);
+      expect(denied).toHaveLength(requests - limit);
+      for (const result of denied) {
+        expect(Number.isInteger(result.retryAfterSeconds)).toBe(true);
+        expect(result.retryAfterSeconds).toBeGreaterThanOrEqual(1);
+        expect(result.retryAfterSeconds).toBeLessThanOrEqual(60);
+      }
+      const counts = await service.from("auth_nonce_rate_limits").select("purpose,subject_hash,request_count,window_started_at");
+      expect(counts.error).toBeNull();
+      for (const purpose of ["global", "ip", "wallet"]) {
+        const rows = counts.data!.filter((row) => row.purpose === purpose);
+        expect(rows.reduce((sum, row) => sum + row.request_count, 0)).toBe(limit);
+        expect(rows).toHaveLength(purpose === "global" || purpose === quota ? 1 : limit);
+        expect(rows.every((row) => /^[0-9a-f]{64}$/.test(row.subject_hash) && row.window_started_at.endsWith(":00+00:00"))).toBe(true);
+      }
+    }, 20_000,
+  );
+
+  it.each([ ["wallet", 5], ["ip", 30], ["global", 300] ] as const)(
+    "does not allocate any nonce buckets or increment counters on %s denial", async (quota, limit) => {
+      await avoidMinuteBoundary();
+      const hash = randomBytes(32).toString("hex");
+      fixture(`insert into public.auth_nonce_rate_limits (purpose,subject_hash,window_started_at,request_count)
+        values ('${quota}','${quota === "global" ? "0".repeat(64) : hash}',date_trunc('minute',clock_timestamp()),${limit});`);
+      const before = await service.from("auth_nonce_rate_limits").select("*");
+      expect(before.error).toBeNull();
+      const results = await Promise.all(Array.from({ length: 40 }, () => repository.admitNonceIssuance({
+        walletHash: quota === "wallet" ? hash : randomBytes(32).toString("hex"),
+        ipHash: quota === "ip" ? hash : randomBytes(32).toString("hex"),
+      })));
+      expect(results.every((result) => !result.allowed)).toBe(true);
+      const after = await service.from("auth_nonce_rate_limits").select("*");
+      expect(after.error).toBeNull();
+      expect(after.data).toEqual(before.data);
+      expectFixtureFailure(`update public.auth_nonce_rate_limits set request_count = ${limit + 1};`, "check constraint");
+    },
+  );
+
+  it("rejects invalid nonce admission hashes without persisting caller data", async () => {
+    const valid = { p_wallet_hash: "a".repeat(64), p_ip_hash: "b".repeat(64) };
+    for (const key of Object.keys(valid)) {
+      for (const value of [null, "", owner, "192.0.2.1", "::1", "A".repeat(64), "g".repeat(64), "a".repeat(63), "a".repeat(65), "a".repeat(64) + "\n"]) {
+        const result = await service.rpc("payr_admit_nonce_issuance_v1", { ...valid, [key]: value });
+        expect(result.error).toMatchObject({ code: "22023", message: "INVALID_INPUT" });
+      }
+    }
+    expect(fixture("select count(*) from public.auth_nonce_rate_limits;")).toBe("0");
+  });
+
+  it.each(["allowed", "wallet", "ip", "global"] as const)(
+    "prunes expired nonces and windows older than ten minutes during %s admission", async (quota) => {
+      await avoidMinuteBoundary();
+      const identity = await login();
+      const live = await repository.issueNonce(nonce());
+      const consumed = await repository.issueNonce(nonce());
+      await repository.completeLogin(consumed.id, owner);
+      const payout = await repository.issueNonce(nonce({ purpose: "payr-payout-change-v1", workspaceId: identity.workspaceId,
+        payoutFrom: owner, payoutTo: otherOwner, profileRevision: 1 }));
+      const hash = randomBytes(32).toString("hex");
+      fixture(`insert into public.auth_nonces (id,wallet,purpose,challenge,domain,uri,chain_id,issued_at,expires_at,consumed_at,
+          workspace_id,payout_from,payout_to,profile_revision)
+        select gen_random_uuid(),'${owner}',case when payout then 'payr-payout-change-v1' else 'payr-login-v1' end,
+          replace(gen_random_uuid()::text,'-','') || repeat('A',11),'payr.example','https://payr.example',5042002,t - interval '300 seconds',t,
+          case when consumed then t - interval '1 second' end,
+          case when payout then '${identity.workspaceId}'::uuid end,case when payout then '${owner}' end,
+          case when payout then '${otherOwner}' end,case when payout then 1 end
+        from (select date_trunc('milliseconds',clock_timestamp()) as t) times
+          cross join (values (false),(true)) p(payout) cross join (values (false),(true)) c(consumed);
+        insert into public.auth_nonce_rate_limits (purpose,subject_hash,window_started_at,request_count)
+        select purpose,case when purpose = 'global' then repeat('0',64) else '${hash}' end,
+          date_trunc('minute',clock_timestamp()) - age * interval '1 minute',1
+        from (values ('global'),('ip'),('wallet')) p(purpose) cross join (values (11),(9)) ages(age);`);
+      if (quota !== "allowed") {
+        fixture(`insert into public.auth_nonce_rate_limits (purpose,subject_hash,window_started_at,request_count)
+          values ('${quota}','${quota === "global" ? "0".repeat(64) : hash}',date_trunc('minute',clock_timestamp()),
+            ${quota === "wallet" ? 5 : quota === "ip" ? 30 : 300});`);
+      }
+      expect(fixture("select count(*) from public.auth_nonces where expires_at <= clock_timestamp();")).toBe("4");
+      expect((await repository.admitNonceIssuance({ walletHash: hash, ipHash: hash })).allowed).toBe(quota === "allowed");
+      expect(fixture("select count(*) from public.auth_nonces where expires_at <= clock_timestamp();")).toBe("0");
+      expect(fixture("select count(*) from public.auth_nonce_rate_limits where window_started_at < clock_timestamp() - interval '10 minutes';")).toBe("0");
+      expect(fixture("select count(*) from public.auth_nonce_rate_limits where window_started_at < date_trunc('minute',clock_timestamp());")).toBe("3");
+      for (const input of [live, consumed, payout]) {
+        expect(await repository.findNonce(input.id)).not.toBeNull();
+        expectFixtureFailure(`delete from public.auth_nonces where id = '${input.id}';`, "AUTH_NONCE_IMMUTABLE");
+      }
+      expect((await repository.findNonce(consumed.id))?.consumedAt).not.toBeNull();
+      expect(await repository.getProfile(identity)).toMatchObject({ revision: 1, payoutWallet: owner });
+    },
+  );
+
+  it("separates nonce wallet/IP hashes and ignores exhausted previous database minutes", async () => {
+    await avoidMinuteBoundary();
+    const hash = "0".repeat(64);
+    fixture(`insert into public.auth_nonce_rate_limits (purpose,subject_hash,window_started_at,request_count)
+      select purpose,'${hash}',date_trunc('minute',clock_timestamp()) - interval '1 minute',limit_count
+      from (values ('global',300),('ip',30),('wallet',5)) p(purpose,limit_count);`);
+    expect(await repository.admitNonceIssuance({ walletHash: hash, ipHash: hash })).toEqual({ allowed: true, retryAfterSeconds: 0 });
+    expect(fixture(`select count(*) from public.auth_nonce_rate_limits
+      where window_started_at = date_trunc('minute',clock_timestamp()) and request_count = 1;`)).toBe("3");
+    expect(fixture("select count(*) from public.auth_nonce_rate_limits;")).toBe("6");
+  });
+
+  it("chooses the nonce admission minute after waiting for the global lock", async () => {
+    // Approach the boundary before locking so the HTTP request stays below its statement timeout.
+    const seconds = Number(fixture("select extract(second from clock_timestamp());"));
+    await new Promise((resolve) => setTimeout(resolve, ((57 - seconds + 60) % 60) * 1000));
+    const hash = randomBytes(32).toString("hex");
+    await withFixtureTransaction(`select pg_advisory_xact_lock(hashtextextended('payr:nonce-issuance:v1',0));
+      insert into public.auth_nonce_rate_limits (purpose,subject_hash,window_started_at,request_count)
+        values ('global',repeat('0',64),date_trunc('minute',clock_timestamp()),300)`, async (pid, commit) => {
+      const admitted = repository.admitNonceIssuance({ walletHash: hash, ipHash: hash });
+      void admitted.catch(() => {});
+      await expect.poll(() => fixture(`select exists (select 1 from pg_stat_activity
+        where query like '%payr_admit_nonce_issuance_v1%' and ${pid} = any(pg_blocking_pids(pid)));`), { timeout: 4000 }).toBe("t");
+      await commit(`set local statement_timeout = '65s';
+        select pg_sleep(extract(epoch from date_trunc('minute',clock_timestamp()) + interval '1 minute' - clock_timestamp()) + 0.05)`);
+      expect(await admitted).toEqual({ allowed: true, retryAfterSeconds: 0 });
+    });
+    expect(fixture(`select count(*) from public.auth_nonce_rate_limits
+      where window_started_at = date_trunc('minute',clock_timestamp()) and request_count = 1;`)).toBe("3");
+  }, 70_000);
+
+  it("rolls back all nonce quota counters if a later bucket write fails", async () => {
+    const input = { walletHash: randomBytes(32).toString("hex"), ipHash: randomBytes(32).toString("hex") };
+    fixture("alter table public.auth_nonce_rate_limits add constraint identity_fixture_fail check (purpose <> 'wallet') not valid;");
+    try {
+      await expect(repository.admitNonceIssuance(input)).rejects.toMatchObject({ code: "DATABASE_ERROR" });
+      expect(fixture("select count(*) from public.auth_nonce_rate_limits;")).toBe("0");
+    } finally { fixture("alter table public.auth_nonce_rate_limits drop constraint identity_fixture_fail;"); }
+    expect(await repository.admitNonceIssuance(input)).toEqual({ allowed: true, retryAfterSeconds: 0 });
+  });
+
+  it("denies nonce admission to an otherwise unknown PUBLIC-only caller", () => {
+    expectFixtureFailure(`begin; create role payr_nonce_public_fixture nologin;
+      grant payr_nonce_public_fixture to postgres;
+      grant usage on schema public to payr_nonce_public_fixture; set local role payr_nonce_public_fixture;
+      select public.payr_admit_nonce_issuance_v1(repeat('a',64),repeat('b',64));`,
+    "permission denied for function payr_admit_nonce_issuance_v1");
+    expect(fixture("select count(*) from pg_roles where rolname = 'payr_nonce_public_fixture';")).toBe("0");
+    expect(fixture("select count(*) from public.auth_nonce_rate_limits;")).toBe("0");
+  });
 
   it("round-trips signed facts and consumes one nonce exactly once with initial owner payout", async () => {
     const input = nonce();
@@ -128,6 +335,36 @@ describe("F2 identity transactions through Supabase", () => {
     expect(updates.filter((result) => result.status === "rejected")[0]).toMatchObject({ reason: { code: "REVISION_CONFLICT" } });
     expect(await repository.listClients(identity)).toEqual([expect.objectContaining({ id: client.id, revision: 2, alias: "changed" })]);
   });
+
+  it.each(["saveProfile", "payout completion"])("does not deadlock repeat login against %s and its workspace audit FK", async (mutation) => {
+    const identity = await login();
+    const input = await repository.issueNonce(nonce());
+    const payout = mutation === "payout completion" ? await repository.issueNonce(nonce({
+      purpose: "payr-payout-change-v1", workspaceId: identity.workspaceId,
+      payoutFrom: owner, payoutTo: otherOwner, profileRevision: 1,
+    })) : null;
+    await withFixtureTransaction(`update public.sender_profiles set updated_at = clock_timestamp()
+      where workspace_id = '${identity.workspaceId}'`, async (pid, commit) => {
+      const repeated = repository.completeLogin(input.id, owner);
+      void repeated.catch(() => {});
+      // Wait for login to hold the workspace lock and block on this uncommitted profile version.
+      await expect.poll(() => fixture(`select exists (select 1 from pg_stat_activity
+        where query like '%payr_complete_login_v1%' and ${pid} = any(pg_blocking_pids(pid)));`), { timeout: 4000 }).toBe("t");
+      const sql = payout
+        ? `select public.payr_apply_payout_change_v1('${payout.id}', '${identity.workspaceId}', '${owner}')`
+        : `select public.payr_save_sender_profile_v1('${identity.workspaceId}', '${owner}', '${JSON.stringify(senderInput)}'::jsonb)`;
+      const results = await Promise.allSettled([repeated, commit(sql)]);
+      expect(results).toEqual([{ status: "fulfilled", value: identity }, { status: "fulfilled", value: undefined }]);
+    });
+    expect(await repository.getProfile(identity)).toMatchObject({ revision: 2, payoutWallet: payout ? otherOwner : owner,
+      businessName: payout ? null : senderInput.businessName });
+    expect((await repository.findNonce(input.id))?.consumedAt).not.toBeNull();
+    if (payout) expect((await repository.findNonce(payout.id))?.consumedAt).not.toBeNull();
+    const activity = await repository.listActivity(identity);
+    expect(activity.filter((event) => event.action === "auth.login")).toHaveLength(2);
+    expect(activity.filter((event) => event.action === (payout ? "profile.payout_change" : "profile.save"))).toHaveLength(1);
+    await expect(repository.completeLogin(input.id, owner)).rejects.toMatchObject({ code: "NONCE_INVALID_OR_USED" });
+  }, 15_000);
 
   it("binds payout to the exact owner, workspace, old/new payout and revision and rejects replay", async () => {
     const identity = await login();
@@ -257,6 +494,9 @@ describe("F2 identity transactions through Supabase", () => {
       5042002,date_trunc('milliseconds',now()) - interval '300 seconds',date_trunc('milliseconds',now()));`);
     await expect(repository.completeLogin(id, owner)).rejects.toMatchObject({ code: "NONCE_INVALID_OR_USED" });
     expectFixtureFailure(`update public.auth_nonces set consumed_at = expires_at where id = '${id}';`, "AUTH_NONCE_IMMUTABLE");
+    expect((await service.from("auth_nonces").delete().eq("id", id)).error?.code).toBe("42501");
+    fixture(`delete from public.auth_nonces where id = '${id}';`);
+    expect(await repository.findNonce(id)).toBeNull();
     const input = await repository.issueNonce(nonce());
     for (const assignment of ["wallet = '" + otherOwner + "'", "expires_at = expires_at + interval '1 second'", "purpose = 'other'", "challenge = repeat('A',43)"]) {
       expectFixtureFailure(`update public.auth_nonces set ${assignment} where id = '${input.id}';`, "AUTH_NONCE_IMMUTABLE");
@@ -412,7 +652,7 @@ describe("F2 identity transactions through Supabase", () => {
     const activity = await repository.listActivity(identity);
     expect(activity).toHaveLength(100);
     expect(activity.every((event) => event.action === "connector.admit")).toBe(true);
-    for (const table of ["auth_nonces", "sender_profiles", "clients", "connector_tokens", "connector_rate_limits", "connector_ip_rate_limits", "audit_events"]) {
+    for (const table of ["auth_nonces", "auth_nonce_rate_limits", "sender_profiles", "clients", "connector_tokens", "connector_rate_limits", "connector_ip_rate_limits", "audit_events"]) {
       const key = table.includes("rate_limits") ? "subject_hash" : "id";
       const value = key === "id" ? randomUUID() : "f".repeat(64);
       const inserted = key === "id" ? await service.from(table).insert({ id: value }) : await service.from(table).insert({ subject_hash: value });
@@ -435,10 +675,11 @@ describe("F2 identity transactions through Supabase", () => {
     expect((await service.from("connector_ip_rate_limits").select("request_count").eq("subject_hash", ipHash)).data).toEqual([]);
   });
 
-  it("pins all fourteen exact RPC signatures and denies anon/authenticated execution", async () => {
+  it("pins all fifteen exact RPC signatures and denies anon/authenticated execution", async () => {
     const scope = { p_workspace_id: randomUUID(), p_owner_wallet: owner };
     const id = randomUUID();
     const calls: Record<string, Record<string, unknown>> = {
+      payr_admit_nonce_issuance_v1: { p_wallet_hash: "a".repeat(64), p_ip_hash: "b".repeat(64) },
       payr_issue_auth_nonce_v1: { p_nonce: nonce() },
       payr_find_auth_nonce_v1: { p_nonce_id: id },
       payr_complete_login_v1: { p_nonce_id: id, p_verified_wallet: owner },
@@ -460,7 +701,7 @@ describe("F2 identity transactions through Supabase", () => {
         'service',has_function_privilege('service_role',p.oid,'execute')))
       from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
       where n.nspname = 'public' and p.proname in (${Object.keys(calls).map((name) => `'${name}'`).join(",")});`));
-    expect(metadata).toHaveLength(14);
+    expect(metadata).toHaveLength(15);
     for (const row of metadata) {
       expect(row).toMatchObject({ args: Object.keys(calls[row.name]), definer: true, config: ['search_path=""'], anon: false, authenticated: false, service: true });
     }
@@ -469,6 +710,8 @@ describe("F2 identity transactions through Supabase", () => {
       or has_function_privilege('anon',p.oid,'execute') or has_function_privilege('authenticated',p.oid,'execute')
       or has_function_privilege('service_role',p.oid,'execute'));`)).toBe("0");
     expect(fixture(`select relrowsecurity::text from pg_catalog.pg_class where oid = 'public.connector_ip_rate_limits'::regclass;`)).toBe("true");
+    expect(fixture(`select relrowsecurity::text from pg_catalog.pg_class where oid = 'public.auth_nonce_rate_limits'::regclass;`)).toBe("true");
+    expect(fixture(`select count(*) from pg_catalog.pg_policy where polrelid = 'public.auth_nonce_rate_limits'::regclass;`)).toBe("0");
     const anon = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
     const authenticated = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
     const email = `identity-${randomUUID()}@example.test`;
@@ -482,6 +725,7 @@ describe("F2 identity transactions through Supabase", () => {
           expect((await client.rpc(name, args)).error?.code, name).toBe("42501");
         }
         expect((await client.from("connector_ip_rate_limits").select("*")).error?.code).toBe("42501");
+        expect((await client.from("auth_nonce_rate_limits").select("*")).error?.code).toBe("42501");
       }
     } finally { if (user.data.user) await service.auth.admin.deleteUser(user.data.user.id); }
   });

@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 import {
-  assertReleasePackageChange,
+  assertSingleVersionChange,
   compareVersions,
   latestVersionTag,
   normalizeVersionTag,
@@ -44,6 +44,9 @@ run("git", [
 ]);
 
 const baseRef = `refs/remotes/origin/${baseBranch}`;
+const worktreeStatus = capture("git", ["status", "--porcelain", "--untracked-files=all"]);
+if (worktreeStatus) fail("Release verification requires a clean worktree");
+
 const ancestor = spawnSync("git", ["merge-base", "--is-ancestor", baseRef, "HEAD"]);
 if (ancestor.status !== 0) fail(`Release branch is not based on current origin/${baseBranch}`);
 
@@ -67,16 +70,28 @@ const finalCommitFiles = capture("git", ["diff-tree", "--no-commit-id", "--name-
 if (finalCommitFiles !== "package.json") fail("The final release commit must change only package.json");
 
 const parentPackageJson = capture("git", ["show", "HEAD^:package.json"]);
+const basePackageJson = capture("git", ["show", `${baseRef}:package.json`]);
 try {
-  assertReleasePackageChange(parentPackageJson, currentPackageJson, expectedTag);
+  assertSingleVersionChange(basePackageJson, parentPackageJson, currentPackageJson, expectedTag);
 } catch (error) {
   fail(error.message);
 }
 
 const tags = capture("git", ["tag", "--list"]).split("\n").filter(Boolean);
 const latestTag = latestVersionTag(tags);
-if (latestTag && latestTag !== `v${basePackage.version}`) {
+if (!latestTag) fail("The current base must have an annotated baseline or release tag");
+if (latestTag !== `v${basePackage.version}`) {
   fail(`Base package version ${basePackage.version} does not match latest tag ${latestTag}`);
+}
+if (capture("git", ["cat-file", "-t", `refs/tags/${latestTag}`]) !== "tag") {
+  fail(`${latestTag} must be an annotated tag`);
+}
+if (capture("git", ["rev-list", "-n", "1", latestTag]) !== capture("git", ["rev-parse", baseRef])) {
+  fail(`${latestTag} must target current origin/${baseBranch}`);
+}
+const taggedPackage = JSON.parse(capture("git", ["show", `${latestTag}:package.json`]));
+if (taggedPackage.version !== basePackage.version) {
+  fail(`${latestTag} package version does not match base ${basePackage.version}`);
 }
 
 if (tags.includes(expectedTag) || remoteTagExists(expectedTag)) fail(`Release tag ${expectedTag} already exists`);

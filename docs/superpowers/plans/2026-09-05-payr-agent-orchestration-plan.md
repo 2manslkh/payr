@@ -140,8 +140,9 @@ The PR body records the base tag/SHA, included tickets, migrations, contract or 
 1. Preserve the current local hardening commit and dirty approved work on `integration/r00-bootstrap-v0.1.1`.
 2. Reconcile the governing documents and add PR-first release tooling.
 3. Run the complete R00 gate and independent reviews.
-4. Create annotated baseline tag `v0.1.0` at the current remote `main` baseline.
-5. Prepare `v0.1.1`, push the integration branch and baseline tag, and open the R00 PR.
-6. Merge through GitHub with a merge commit, tag that merge `v0.1.1`, and verify post-merge CI.
-7. Configure branch and tag protections.
-8. Begin R01. Product worktree fanout starts only after R00 is complete.
+4. Disable squash/rebase merges and enable automatic branch cleanup in repository settings.
+5. Create annotated baseline tag `v0.1.0` at the current remote `main` baseline, then protect version-tag creation/update/deletion with a GitHub Actions release bypass.
+6. Prepare `v0.1.1`, push the integration branch and baseline tag, and open the R00 PR.
+7. After the PR's check names exist, protect `main` with strict required PR checks before merging R00.
+8. Merge through GitHub with a merge commit, let CI tag that merge `v0.1.1`, and verify the tag and post-merge CI.
+9. Begin R01. Product worktree fanout starts only after R00 is complete.

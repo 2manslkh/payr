@@ -25,8 +25,9 @@ Use `pnpm release:prepare -- <version> --dry-run` to inspect the proposed versio
 
 ## Tag The Merge
 
-1. Run `pnpm release:tag -- vX.Y.Z` after the merge. The command fetches `origin/main`, proves it is a merge commit whose first-parent package version increased and whose merged head ended with the matching release commit, creates the annotated tag on that merge commit, pushes only the tag, and reads it back from the remote.
-2. Verify the tag target, `package.json` at the tagged commit, merged PR, and post-merge `main` CI.
-3. Delete integration branches and worktrees only after the tag and post-merge CI are green.
+1. The `publish-release-tag` CI job runs `pnpm release:tag` after every push to `main`. The command fetches `origin/main`, proves exact two-parent merge topology, proves the reviewed head was current and ended with the only version change, creates the annotated tag on that merge commit, pushes only the tag, and reads it back from the remote.
+2. Run `pnpm release:tag -- vX.Y.Z` manually as an idempotent read-back or recovery step. An already published matching tag succeeds even if `main` has advanced.
+3. Verify the tag target, `package.json` at the tagged commit, merged PR, and post-merge `main` CI.
+4. Delete integration branches and worktrees only after the tag and post-merge CI are green.
 
 Tags are immutable. If post-merge CI fails, preserve the tag and create a patch release PR. Never add a corrective commit directly to `main` and never move or delete a published version tag.

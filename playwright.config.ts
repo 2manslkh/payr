@@ -1,7 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const port = Number.parseInt(process.env.PAYR_TEST_PORT ?? "3000", 10);
-if (!Number.isInteger(port) || port < 1 || port > 65535) {
+const portValue = process.env.PAYR_TEST_PORT ?? "3000";
+const port = Number(portValue);
+if (!/^[1-9]\d*$/.test(portValue) || !Number.isInteger(port) || port > 65535) {
   throw new Error("PAYR_TEST_PORT must be an integer between 1 and 65535");
 }
 
@@ -16,7 +17,9 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: `pnpm dev --hostname 127.0.0.1 --port ${port}`,
+    command: process.env.CI
+      ? `pnpm build && pnpm start --hostname 127.0.0.1 --port ${port}`
+      : `pnpm dev --hostname 127.0.0.1 --port ${port}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
   },

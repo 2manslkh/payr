@@ -75,3 +75,18 @@ export function assertReleasePackageChange(beforeJson, afterJson, expectedTag) {
 
   return { previousVersion: before.version, releaseVersion: after.version, tag: normalizedTag };
 }
+
+export function assertSingleVersionChange(baseJson, preReleaseJson, releaseJson, expectedTag) {
+  const base = JSON.parse(baseJson);
+  const preRelease = JSON.parse(preReleaseJson);
+  parseStableVersion(base.version, "Base package version");
+  parseStableVersion(preRelease.version, "Pre-release package version");
+
+  if (preRelease.version !== base.version) {
+    throw new Error(
+      `The package version may change only in the final release commit; found ${base.version} -> ${preRelease.version} earlier in the PR`,
+    );
+  }
+
+  return assertReleasePackageChange(preReleaseJson, releaseJson, expectedTag);
+}

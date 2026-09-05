@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   assertReleasePackageChange,
+  assertSingleVersionChange,
   bumpVersion,
   compareVersions,
   latestVersionTag,
@@ -59,6 +60,17 @@ test("rejects release commits containing another package change", () => {
   assert.throws(() => assertReleasePackageChange(before, after, "v0.8.1"), /only package.json version/);
 });
 
+test("rejects a package version changed before the final release commit", () => {
+  const base = JSON.stringify({ name: "payr", version: "0.8.0", scripts: { test: "vitest" } });
+  const preRelease = JSON.stringify({ name: "payr", version: "0.9.0", scripts: { test: "node --test" } });
+  const release = JSON.stringify({ name: "payr", version: "0.10.0", scripts: { test: "node --test" } });
+
+  assert.throws(
+    () => assertSingleVersionChange(base, preRelease, release, "v0.10.0"),
+    /only in the final release commit/,
+  );
+});
+
 test("verifies a release PR and tags the resulting merge commit", () => {
   const fixtureRoot = mkdtempSync(join(tmpdir(), "payr-release-"));
   const repository = join(fixtureRoot, "repository");
@@ -78,7 +90,12 @@ test("verifies a release PR and tags the resulting merge commit", () => {
     git(["remote", "add", "origin", remote]);
 
     mkdirSync(join(repository, "scripts"));
-    for (const filename of ["release-utils.mjs", "verify-release-pr.mjs", "tag-release.mjs"]) {
+    for (const filename of [
+      "release-utils.mjs",
+      "prepare-release.mjs",
+      "verify-release-pr.mjs",
+      "tag-release.mjs",
+    ]) {
       copyFileSync(join(sourceScripts, filename), join(repository, "scripts", filename));
     }
 
@@ -99,6 +116,14 @@ test("verifies a release PR and tags the resulting merge commit", () => {
     writePackage("0.1.0", "node feature.mjs");
     git(["add", "package.json"]);
     git(["commit", "-m", "feat: add release fixture"]);
+
+    const preparation = spawnSync(process.execPath, ["scripts/prepare-release.mjs", "patch", "--dry-run"], {
+      cwd: repository,
+      encoding: "utf8",
+    });
+    assert.equal(preparation.status, 0, preparation.stderr);
+    assert.match(preparation.stdout, /Release preparation dry run: 0\.1\.0 -> 0\.1\.1/);
+
     writePackage("0.2.0", "node feature.mjs");
     git(["add", "package.json"]);
     git(["commit", "-m", "chore: release v0.2.0"]);
@@ -125,6 +150,18 @@ test("verifies a release PR and tags the resulting merge commit", () => {
     const remoteTarget = git(["rev-parse", "v0.2.0^{}"], remote);
     assert.equal(remoteTarget, mergeCommit);
     assert.equal(JSON.parse(readFileSync(join(repository, "package.json"), "utf8")).version, "0.2.0");
+
+    writeFileSync(join(repository, "after-release.txt"), "later main state\n");
+    git(["add", "after-release.txt"]);
+    git(["commit", "-m", "test: advance main after release"]);
+    git(["push", "origin", "main"]);
+
+    const repeatedTagging = spawnSync(process.execPath, ["scripts/tag-release.mjs", "v0.2.0"], {
+      cwd: repository,
+      encoding: "utf8",
+    });
+    assert.equal(repeatedTagging.status, 0, repeatedTagging.stderr);
+    assert.match(repeatedTagging.stdout, /already published/);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }

@@ -41,6 +41,19 @@ function remoteTagExists(tag) {
   fail(result.stderr.trim() || `Unable to inspect remote tag ${tag}`);
 }
 
+function requireAnnotatedTagAt(tag, commit, expectedVersion) {
+  if (capture("git", ["cat-file", "-t", `refs/tags/${tag}`]) !== "tag") {
+    fail(`${tag} must be an annotated tag`);
+  }
+  if (capture("git", ["rev-list", "-n", "1", tag]) !== commit) {
+    fail(`${tag} must target current origin/main before release preparation`);
+  }
+  const taggedPackage = JSON.parse(capture("git", ["show", `${tag}:package.json`]));
+  if (taggedPackage.version !== expectedVersion) {
+    fail(`${tag} package version ${taggedPackage.version} does not match ${expectedVersion}`);
+  }
+}
+
 const argumentsList = process.argv.slice(2);
 if (argumentsList[0] === "--") argumentsList.shift();
 
@@ -52,6 +65,19 @@ if (!requested || unknownArguments.length > 0) fail(usage);
 const packageJsonUrl = new URL("../package.json", import.meta.url);
 const packageJson = JSON.parse(readFileSync(packageJsonUrl, "utf8"));
 parseStableVersion(packageJson.version, "Current package version");
+
+run("git", ["fetch", "origin", "+refs/heads/main:refs/remotes/origin/main", "--tags"]);
+const baseRef = "refs/remotes/origin/main";
+const baseCommit = capture("git", ["rev-parse", baseRef]);
+const basePackage = JSON.parse(capture("git", ["show", `${baseRef}:package.json`]));
+parseStableVersion(basePackage.version, "Base package version");
+
+if (packageJson.version !== basePackage.version) {
+  fail(`Package version changed before release preparation: ${basePackage.version} -> ${packageJson.version}`);
+}
+
+const baseAncestor = spawnSync("git", ["merge-base", "--is-ancestor", baseRef, "HEAD"]);
+if (baseAncestor.status !== 0) fail("Integration branch is not based on current origin/main");
 
 let nextVersion;
 try {
@@ -69,9 +95,11 @@ if (compareVersions(nextVersion, packageJson.version) <= 0) {
 const nextTag = `v${nextVersion}`;
 const tags = capture("git", ["tag", "--list"]).split("\n").filter(Boolean);
 const latestTag = latestVersionTag(tags);
-if (latestTag && latestTag !== `v${packageJson.version}`) {
+if (!latestTag) fail("Create the annotated baseline tag on origin/main before preparing the first release");
+if (latestTag !== `v${packageJson.version}`) {
   fail(`Current package version ${packageJson.version} does not match latest tag ${latestTag}`);
 }
+requireAnnotatedTagAt(latestTag, baseCommit, basePackage.version);
 
 if (tags.includes(nextTag) || remoteTagExists(nextTag)) fail(`Tag ${nextTag} already exists`);
 
@@ -86,12 +114,8 @@ if (!branch || branch === "main") fail("Prepare releases on a non-main integrati
 const status = capture("git", ["status", "--porcelain", "--untracked-files=all"]);
 if (status) fail("Commit intended changes and remove unintended untracked files before preparing a release");
 
-if (latestTag) {
-  const ancestor = spawnSync("git", ["merge-base", "--is-ancestor", latestTag, "HEAD"]);
-  if (ancestor.status !== 0) fail(`${latestTag} is not an ancestor of the integration branch`);
-  if (capture("git", ["rev-list", "-n", "1", latestTag]) === capture("git", ["rev-parse", "HEAD"])) {
-    fail(`No commits exist after ${latestTag}`);
-  }
+if (baseCommit === capture("git", ["rev-parse", "HEAD"])) {
+  fail(`No commits exist after ${latestTag}`);
 }
 
 run("pnpm", ["verify"]);

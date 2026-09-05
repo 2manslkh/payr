@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createServerEnv, parsePublicEnv } from "./env";
+import { createIdentityEnv, createServerEnv, parsePublicEnv } from "./env";
 
 describe("parsePublicEnv", () => {
   it("rejects a non-HTTPS production app URL", () => {
@@ -67,5 +67,33 @@ describe("createServerEnv", () => {
         CRON_SECRET: "cron-secret",
       }),
     ).toThrow();
+  });
+});
+
+describe("identity runtime configuration", () => {
+  const valid = {
+    NEXT_PUBLIC_APP_URL: "https://payrlink.xyz",
+    ARC_CHAIN_ID: "5042002",
+    SESSION_ENCRYPTION_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(7))),
+    CONNECTOR_TOKEN_PEPPER: btoa(String.fromCharCode(...new Uint8Array(32).fill(8))),
+  };
+
+  it("parses only the identity runtime configuration without unrelated provider keys", () => {
+    expect(createIdentityEnv(valid).chainId).toBe(5042002);
+    expect(createIdentityEnv(valid).sessionKey).toHaveLength(32);
+  });
+
+  it("rejects short secrets and unsafe chain IDs", () => {
+    expect(() => createIdentityEnv({ ...valid, SESSION_ENCRYPTION_KEY: "short" })).toThrow();
+    expect(() => createIdentityEnv({ ...valid, CONNECTOR_TOKEN_PEPPER: "short" })).toThrow();
+    expect(() => createIdentityEnv({ ...valid, ARC_CHAIN_ID: "9007199254740993" })).toThrow();
+  });
+
+  it("rejects URL credentials, paths, query strings and fragments", () => {
+    for (const suffix of ["/path", "?query=1", "#fragment"]) {
+      expect(() => createIdentityEnv({ ...valid, NEXT_PUBLIC_APP_URL: `https://payrlink.xyz${suffix}` })).toThrow();
+    }
+    expect(() => createIdentityEnv({ ...valid, NEXT_PUBLIC_APP_URL: "https://user:pass@payrlink.xyz" })).toThrow();
+    expect(createIdentityEnv({ ...valid, NEXT_PUBLIC_APP_URL: "http://127.0.0.1:3123" }).appOrigin).toBe("http://127.0.0.1:3123");
   });
 });

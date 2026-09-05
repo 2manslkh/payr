@@ -1,9 +1,12 @@
 import { z } from "zod";
+import type { IdentityConfig } from "../lib/identity/contracts";
 
 const isAllowedAppUrl = (value: string) => {
   const url = new URL(value);
 
-  return url.protocol === "https:" || (url.protocol === "http:" && url.hostname === "localhost" && url.port !== "");
+  const localHttp = url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) && url.port !== "";
+  return (url.protocol === "https:" || localHttp) && !url.username && !url.password
+    && url.pathname === "/" && !url.search && !url.hash;
 };
 
 const isAtLeast32ByteEncodedKey = (value: string) => {
@@ -30,7 +33,8 @@ const isAtLeast32ByteEncodedKey = (value: string) => {
 };
 
 const publicEnvSchema = z.object({
-  NEXT_PUBLIC_APP_URL: z.string().url().refine(isAllowedAppUrl, "production app URL must use HTTPS"),
+  NEXT_PUBLIC_APP_URL: z.string().url().refine(isAllowedAppUrl, "app URL must be an HTTPS origin or explicit local HTTP origin")
+    .transform((value) => new URL(value).origin),
 });
 
 const serverEnvSchema = z.object({
@@ -56,3 +60,24 @@ export const parsePublicEnv = (value: unknown): PublicEnv => publicEnvSchema.par
  * parsed as a module side effect, so builds do not require deployment secrets.
  */
 export const createServerEnv = (value: unknown = process.env): ServerEnv => serverEnvSchema.parse(value);
+
+const identityEnvSchema = z.object({
+  NEXT_PUBLIC_APP_URL: publicEnvSchema.shape.NEXT_PUBLIC_APP_URL,
+  ARC_CHAIN_ID: z.string().regex(/^[1-9][0-9]*$/).refine((value) => Number.isSafeInteger(Number(value))),
+  SESSION_ENCRYPTION_KEY: z.string().refine(isAtLeast32ByteEncodedKey, "session key must encode 32 bytes")
+    .refine((value) => {
+      try { return atob(value.replace(/-/g, "+").replace(/_/g, "/")).length === 32; } catch { return false; }
+    }, "session key must encode exactly 32 bytes"),
+  CONNECTOR_TOKEN_PEPPER: z.string().refine(isAtLeast32ByteEncodedKey, "connector pepper must encode at least 32 bytes"),
+});
+
+export function createIdentityEnv(value: unknown = process.env): IdentityConfig {
+  const parsed = identityEnvSchema.parse(value);
+  const decode = (key: string) => Uint8Array.from(atob(key.replace(/-/g, "+").replace(/_/g, "/")), (char) => char.charCodeAt(0));
+  return {
+    appOrigin: parsed.NEXT_PUBLIC_APP_URL,
+    chainId: Number(parsed.ARC_CHAIN_ID),
+    sessionKey: decode(parsed.SESSION_ENCRYPTION_KEY),
+    connectorPepper: decode(parsed.CONNECTOR_TOKEN_PEPPER),
+  };
+}

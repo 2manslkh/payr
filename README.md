@@ -4,7 +4,7 @@ Payr helps independent developers turn confirmed work into an invoice, then reco
 
 ## Status
 
-This repository contains the runnable application shell, a public secret-free health deployment at [payrlink.xyz](https://payrlink.xyz), and the R02 domain/database foundation. Exact USDC arithmetic, invoice/status projections, keyed bearer tokens, tenant-isolated records, and privileged transaction adapters are implemented and tested locally. The landing page identifies **Arc testnet**, but the end-user workflow is not available yet: profile management, invoice publication, wallet payments, contracts, PDFs, MCP, and email delivery remain later tasks.
+This repository contains the R03 wallet-authenticated console and the R02 domain/database foundation. Local functionality includes owner login, encrypted sessions, sender/client profiles, owner-signed payout changes, revocable connector credentials, and redacted activity. Invoice publication, wallet payments, contracts, PDFs, MCP, and email delivery remain later tasks. The public [payrlink.xyz](https://payrlink.xyz) deployment remains the earlier health shell; activating the new hosted console requires a configured Supabase project and identity runtime secrets.
 
 ## Local development
 
@@ -53,6 +53,16 @@ curl http://127.0.0.1:3000/api/health
 
 The health endpoint returns only `{ "status": "ok", "commit": string | null }`; it never returns configuration values.
 
+### Identity console
+
+Configure `NEXT_PUBLIC_APP_URL`, `ARC_CHAIN_ID`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_ENCRYPTION_KEY`, and `CONNECTOR_TOKEN_PEPPER` in the ignored runtime environment before using `/login` and `/app`. The session key must decode from base64/base64url to exactly 32 random bytes; the connector pepper must decode to at least 32 random bytes. They are independent secrets, never browser-facing values. Use the healthy HTTPS origin in production, or an explicit-port localhost/loopback origin locally.
+
+An injected externally owned Ethereum wallet signs a five-minute server challenge; no gas or transaction is involved. Sessions last eight hours and always use a Secure, HttpOnly, SameSite=Lax `__Host-` cookie. First login initializes payout to the signing owner wallet. Changing it requires a fresh owner signature binding the old and new payout addresses. Logout clears this browser's cookie; it does not revoke other sessions.
+
+Connector credentials are shown once and expire within 30 days. The MCP endpoint is deliberately not functional yet. Revoke credentials after demos: Payr's application redaction cannot remove them from CDN/platform logs, browser or clipboard history, or Claude configuration. Nonce issuance and connector admission use atomic database limits; outside Vercel, nonce requests conservatively share one IP bucket instead of trusting forwarded headers.
+
+Browser tests generate ephemeral identity keys for their local server and workers, never reuse production secrets, and keep Secure cookies enabled. `pnpm test:db:local` also exercises the real signature-to-database route flow; browser API mocks are not the only integration evidence.
+
 ## Versioning
 
 Payr uses Semantic Versioning and annotated `vX.Y.Z` Git tags. The release contract and `cut new version` workflow are documented in [`docs/ops/versioning.md`](docs/ops/versioning.md).
@@ -74,4 +84,4 @@ Copy `.env.example` to `.env.local` and provide only the values needed for the f
 - The intended Vercel project runs Next.js on Node 22. `https://payrlink.xyz/api/health` and the stable public fallback `https://payr-sandy.vercel.app/api/health` return the deployed commit without environment details.
 - Local Supabase reset, privilege denial, and repository transactions are verified. A hosted Supabase project is not configured; funded Arc wallets, Resend delivery, Claude connector UI, receipt inboxes, and the authenticated ETHGlobal deadline still require operator work.
 
-Task 2 local evidence and its remaining release boundary are in [`docs/ops/r02-domain-database.md`](docs/ops/r02-domain-database.md). Task 6 live deployment/payment remains gated on funded-wallet evidence, and later connector/email proof remains gated on Claude and Resend configuration. The historical external-prerequisite ledger is in [`docs/ops/preflight.md`](docs/ops/preflight.md).
+Local R03 verification and release boundaries are in [`docs/ops/r03-identity-console.md`](docs/ops/r03-identity-console.md); R02 evidence remains in [`docs/ops/r02-domain-database.md`](docs/ops/r02-domain-database.md). Task 6 live deployment/payment remains gated on funded-wallet evidence, and later connector/email proof remains gated on Claude and Resend configuration. The historical external-prerequisite ledger is in [`docs/ops/preflight.md`](docs/ops/preflight.md).

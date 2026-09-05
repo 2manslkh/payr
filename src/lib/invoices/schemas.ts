@@ -36,7 +36,7 @@ const provenance = z.discriminatedUnion("kind", [
     url: z.string().trim().url().refine((value) => {
       try {
         const url = new URL(value);
-        return /^https?:\/\//i.test(value) && ["http:", "https:"].includes(url.protocol) && !url.username && !url.password;
+        return /^https?:\/\//i.test(value) && ["http:", "https:"].includes(url.protocol) && !url.username && !url.password && !/[\s\\]/.test(value);
       } catch {
         return false;
       }

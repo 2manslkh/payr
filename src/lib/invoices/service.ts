@@ -51,14 +51,19 @@ function buildCompleteDraftSnapshot(input: CreateInvoiceDraftInput, context: Dra
     businessName: { kind: "saved_profile" }, billingAddress: { kind: "saved_profile" }, contactName: { kind: "saved_profile" }, contactEmail: { kind: "saved_profile" },
   };
   const changes: ProposedClientFields = { ...previousClient?.proposedClientChanges.fields };
+  const baseline = client ?? (previousClient?.clientReference.id === context.client?.id
+    && previousClient?.clientReference.revision === context.client?.revision ? context.client : null);
   for (const field of clientFields) {
     const proposal = input.client?.proposed?.[field];
     if (proposal) {
-      if (changes[field] || billing[field] === undefined || canonicalJson(billing[field]) !== canonicalJson(proposal.value)) {
+      if (baseline && canonicalJson(baseline[field]) === canonicalJson(proposal.value)) {
+        delete changes[field];
+        clientProvenance[field] = { kind: "saved_profile" };
+      } else {
         Object.assign(changes, { [field]: proposal });
+        clientProvenance[field] = proposal.provenance;
       }
       Object.assign(billing, { [field]: proposal.value });
-      clientProvenance[field] = proposal.provenance;
     }
     if (!billing[field]) missing(`client.${field}`);
   }
@@ -136,21 +141,30 @@ export function createInvoiceDraftService(repository: DraftRepository, now: () =
       // Repository admission authorizes the actor even on replay; it must not load fresh resolution facts here.
       const replay = await repository.findReplay(actor, idempotencyKey, requestFingerprint);
       if (replay) return draftResult(replay);
-      const context = await repository.getContext(actor, {
-        draftId: input.draftId ?? null, clientId: input.client?.id ?? null, clientAlias: input.client?.alias ?? null,
-      });
-      if (input.draftId) {
-        if (!context.previous || context.previous.draftId !== input.draftId) throw new DraftError("NOT_FOUND", 404);
-        if (context.commercialState !== "draft") throw new DraftError("DRAFT_NOT_EDITABLE", 409);
-        if (context.previous.version !== input.expectedVersion) {
-          throw new DraftError("VERSION_CONFLICT", 409, { draftId: input.draftId, currentVersion: context.previous.version });
+      try {
+        const context = await repository.getContext(actor, {
+          draftId: input.draftId ?? null, clientId: input.client?.id ?? null, clientAlias: input.client?.alias ?? null,
+        });
+        if (input.draftId) {
+          if (!context.previous || context.previous.draftId !== input.draftId) throw new DraftError("NOT_FOUND", 404);
+          if (context.commercialState !== "draft") throw new DraftError("DRAFT_NOT_EDITABLE", 409);
+          if (context.previous.version !== input.expectedVersion) {
+            throw new DraftError("VERSION_CONFLICT", 409, { draftId: input.draftId, currentVersion: context.previous.version });
+          }
         }
+        const snapshot = buildCompleteDraftSnapshot(input, context, now);
+        return draftResult(await repository.saveDraft(actor, {
+          draftId: input.draftId ?? null, expectedVersion: input.expectedVersion ?? null,
+          idempotencyKey, requestFingerprint, snapshot,
+        }));
+      } catch (error) {
+        // An identical request may commit after the first replay lookup but before resolution.
+        if (error instanceof DraftError && ["VERSION_CONFLICT", "PROFILE_CONFLICT", "MISSING_FIELDS", "INVALID_INPUT", "DRAFT_NOT_EDITABLE"].includes(error.code)) {
+          const completed = await repository.findReplay(actor, idempotencyKey, requestFingerprint);
+          if (completed) return draftResult(completed);
+        }
+        throw error;
       }
-      const snapshot = buildCompleteDraftSnapshot(input, context, now);
-      return draftResult(await repository.saveDraft(actor, {
-        draftId: input.draftId ?? null, expectedVersion: input.expectedVersion ?? null,
-        idempotencyKey, requestFingerprint, snapshot,
-      }));
     },
   };
 }

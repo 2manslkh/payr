@@ -121,13 +121,13 @@ it.each([undefined, "New Studio"])("retains a complete confirmed proposal as a p
   expect(repository.saveDraft).toHaveBeenCalledOnce();
 });
 
-it("overlays saved client facts with only actual pending changes, retaining confirmation provenance", async () => {
+it("overlays only actual pending changes and preserves saved provenance for no-op confirmation", async () => {
   const { service } = setup();
   const changes = { contactEmail: proposed.contactEmail, businessName: { ...proposed.businessName!, value: client.businessName } };
   const result = await service.createDraft(actor, { ...input, client: { id: clientId, alias: " Studio ", proposed: changes } });
   expect(result.preview.client).toMatchObject({ businessName: "Client Studio", contactEmail: "new@example.com" });
   expect(result.preview.proposedClientChanges).toEqual({ kind: "update", fields: { contactEmail: proposed.contactEmail } });
-  expect(result.preview.clientProvenance.businessName).toEqual({ kind: "user_provided" });
+  expect(result.preview.clientProvenance.businessName).toEqual({ kind: "saved_profile" });
 });
 
 it("does not turn an unknown saved ID into a new client even with a complete proposal", async () => {

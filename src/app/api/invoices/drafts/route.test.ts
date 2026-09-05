@@ -40,7 +40,7 @@ it("authorizes a mutation with F2 and returns the exact missing-fields envelope 
   const request = post({ idempotencyKey: "missing" });
   const response = await POST(request);
   expect(requireRequestSession).toHaveBeenCalledExactlyOnceWith(request, true);
-  expect(repository.findReplay).toHaveBeenCalledExactlyOnceWith({ ...identity, connectorId: null }, "missing", expect.stringMatching(/^[a-f0-9]{64}$/));
+  expect(repository.findReplay).toHaveBeenCalledWith({ ...identity, connectorId: null }, "missing", expect.stringMatching(/^[a-f0-9]{64}$/));
   expect(response.status).toBe(422);
   expect(await response.json()).toEqual({
     code: "MISSING_FIELDS", draftCreated: false, missingFields: [

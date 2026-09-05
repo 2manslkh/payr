@@ -70,6 +70,7 @@ it.each([
   { kind: "web_source", url: "SECRET" }, { kind: "web_source", url: "/relative" },
   { kind: "web_source", url: "ftp://example.com" }, { kind: "web_source", url: "javascript:alert(1)" },
   { kind: "web_source", url: "https://user:SECRET@example.com" },
+  { kind: "web_source", url: "https://example.com/a b" }, { kind: "web_source", url: "https://example.com\\path" },
   { kind: "user_provided", url: "https://example.com" }, null, false,
 ])("rejects invalid provenance safely (%#)", (provenance) => {
   expectInvalid({ idempotencyKey: "key", ...proposed("contactName", confirmed("Client", provenance)) });

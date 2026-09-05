@@ -44,9 +44,9 @@ function workspaceFixture() {
       clientProvenance: { businessName: { kind: "saved_profile" }, billingAddress: { kind: "saved_profile" }, contactName: { kind: "saved_profile" }, contactEmail: { kind: "web_source", url: "https://example.com/billing" } },
       proposedClientChanges: { kind: "update", fields: { contactEmail: { value: "billing@example.com", provenance: { kind: "web_source", url: "https://example.com/billing" }, confirmed: true } } },
       items: [{ description: hostileText, amountDecimal, amountAtomic }],
-      issueDate: "2026-09-06", dueDate: "2026-10-06", payableUntil: "2026-11-05T00:00:00Z",
+      issueDate: "2026-09-06", dueDate: "2026-10-06", payableUntil: "2026-11-05T00:00:00.000Z",
       amountDecimal, amountAtomic, memo: '<img src=x onerror="alert(1)">',
-      appliedDefaults: [{ field: "issueDate", value: "2026-09-06", source: "workspace_date" }, { field: "dueDate", value: "2026-10-06", source: "sender_terms" }, { field: "payableUntil", value: "2026-11-05T00:00:00Z", source: "technical_deadline" }],
+      appliedDefaults: [{ field: "issueDate", value: "2026-09-06", source: "workspace_date" }, { field: "dueDate", value: "2026-10-06", source: "sender_terms" }, { field: "payableUntil", value: "2026-11-05T00:00:00.000Z", source: "technical_deadline" }],
     };
     return { sender, savedClient, snapshot };
   }

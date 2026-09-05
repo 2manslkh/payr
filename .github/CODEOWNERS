@@ -1,0 +1,7 @@
+/.github/CODEOWNERS @2manslkh
+/.github/workflows/ @2manslkh
+/docs/ops/versioning.md @2manslkh
+/scripts/prepare-release.mjs @2manslkh
+/scripts/release-utils.mjs @2manslkh
+/scripts/tag-release.mjs @2manslkh
+/scripts/verify-release-pr.mjs @2manslkh

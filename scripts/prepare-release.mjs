@@ -1,0 +1,166 @@
+#!/usr/bin/env node
+
+import { execFileSync, spawnSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
+
+import {
+  assertUnchangedVersionHistory,
+  bumpVersion,
+  compareVersions,
+  latestVersionTag,
+  normalizeVersionTag,
+  parseStableVersion,
+} from "./release-utils.mjs";
+
+const usage = "Usage: pnpm release:prepare -- <major|minor|patch|X.Y.Z> [--dry-run]";
+
+function fail(message) {
+  console.error(message);
+  process.exit(1);
+}
+
+function capture(command, args) {
+  return execFileSync(command, args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+}
+
+function run(command, args) {
+  const result = spawnSync(command, args, { stdio: "inherit" });
+  if (result.error) throw result.error;
+  if (result.status !== 0) fail(`${command} ${args.join(" ")} failed with exit code ${result.status}`);
+}
+
+function readRemoteTag(tag) {
+  const output = capture("git", ["ls-remote", "--tags", "origin", `refs/tags/${tag}`, `refs/tags/${tag}^{}`]);
+  if (!output) return null;
+  const refs = new Map(output.split("\n").map((line) => line.split(/\s+/).reverse()));
+  return {
+    tagObject: refs.get(`refs/tags/${tag}`) ?? null,
+    commit: refs.get(`refs/tags/${tag}^{}`) ?? null,
+  };
+}
+
+function remoteVersionTags() {
+  return capture("git", ["ls-remote", "--tags", "origin", "refs/tags/v*"])
+    .split("\n")
+    .filter((line) => line && !line.endsWith("^{}"))
+    .map((line) => line.split(/\s+/)[1].replace("refs/tags/", ""));
+}
+
+function requireAnnotatedTagAt(tag, commit, expectedVersion) {
+  const remoteTag = readRemoteTag(tag);
+  if (!remoteTag?.commit) fail(`Remote ${tag} must be an annotated tag`);
+  if (remoteTag.commit !== commit) {
+    fail(`${tag} must target current origin/main before release preparation`);
+  }
+  const taggedPackage = JSON.parse(capture("git", ["show", `${remoteTag.commit}:package.json`]));
+  if (taggedPackage.version !== expectedVersion) {
+    fail(`${tag} package version ${taggedPackage.version} does not match ${expectedVersion}`);
+  }
+}
+
+function versionHistory(base, tip) {
+  const commits = capture("git", ["rev-list", "--full-history", "--reverse", `${base}..${tip}`, "--", "package.json"])
+    .split("\n")
+    .filter(Boolean);
+  return commits.map((commit) => ({
+    commit,
+    version: JSON.parse(capture("git", ["show", `${commit}:package.json`])).version,
+  }));
+}
+
+const argumentsList = process.argv.slice(2);
+if (argumentsList[0] === "--") argumentsList.shift();
+
+const requested = argumentsList[0];
+const dryRun = argumentsList.slice(1).includes("--dry-run");
+const unknownArguments = argumentsList.slice(1).filter((argument) => argument !== "--dry-run");
+if (!requested || unknownArguments.length > 0) fail(usage);
+
+const packageJsonUrl = new URL("../package.json", import.meta.url);
+const packageJson = JSON.parse(readFileSync(packageJsonUrl, "utf8"));
+parseStableVersion(packageJson.version, "Current package version");
+
+run("git", ["fetch", "origin", "+refs/heads/main:refs/remotes/origin/main", "--tags"]);
+const baseRef = "refs/remotes/origin/main";
+const baseCommit = capture("git", ["rev-parse", baseRef]);
+const basePackage = JSON.parse(capture("git", ["show", `${baseRef}:package.json`]));
+parseStableVersion(basePackage.version, "Base package version");
+
+if (packageJson.version !== basePackage.version) {
+  fail(`Package version changed before release preparation: ${basePackage.version} -> ${packageJson.version}`);
+}
+
+const baseAncestor = spawnSync("git", ["merge-base", "--is-ancestor", baseRef, "HEAD"]);
+if (baseAncestor.status !== 0) fail("Integration branch is not based on current origin/main");
+try {
+  assertUnchangedVersionHistory(basePackage.version, versionHistory(baseRef, "HEAD"));
+} catch (error) {
+  fail(error.message);
+}
+
+let nextVersion;
+try {
+  nextVersion = ["major", "minor", "patch"].includes(requested)
+    ? bumpVersion(packageJson.version, requested)
+    : normalizeVersionTag(requested).slice(1);
+} catch (error) {
+  fail(error.message);
+}
+
+if (compareVersions(nextVersion, packageJson.version) <= 0) {
+  fail(`Requested version ${nextVersion} must be greater than current version ${packageJson.version}`);
+}
+
+const nextTag = `v${nextVersion}`;
+const localTags = capture("git", ["tag", "--list"]).split("\n").filter(Boolean);
+const latestTag = latestVersionTag(remoteVersionTags());
+if (!latestTag) fail("Create the annotated baseline tag on origin/main before preparing the first release");
+if (latestTag !== `v${packageJson.version}`) {
+  fail(`Current package version ${packageJson.version} does not match latest tag ${latestTag}`);
+}
+requireAnnotatedTagAt(latestTag, baseCommit, basePackage.version);
+
+if (localTags.includes(nextTag) || readRemoteTag(nextTag)) fail(`Tag ${nextTag} already exists`);
+
+if (dryRun) {
+  console.log(`Release preparation dry run: ${packageJson.version} -> ${nextVersion} (${nextTag})`);
+  process.exit(0);
+}
+
+const branch = capture("git", ["branch", "--show-current"]);
+if (!branch || branch === "main") fail("Prepare releases on a non-main integration branch");
+
+const status = capture("git", ["status", "--porcelain", "--untracked-files=all"]);
+if (status) fail("Commit intended changes and remove unintended untracked files before preparing a release");
+
+if (baseCommit === capture("git", ["rev-parse", "HEAD"])) {
+  fail(`No commits exist after ${latestTag}`);
+}
+
+run("pnpm", ["verify"]);
+run("pnpm", ["test:e2e"]);
+
+if (capture("git", ["status", "--porcelain", "--untracked-files=all"])) {
+  fail("Release checks modified the worktree; review those changes before retrying");
+}
+
+capture("git", ["var", "GIT_AUTHOR_IDENT"]);
+capture("git", ["var", "GIT_COMMITTER_IDENT"]);
+
+writeFileSync(packageJsonUrl, `${JSON.stringify({ ...packageJson, version: nextVersion }, null, 2)}\n`);
+run("git", ["add", "--", "package.json"]);
+
+const stagedFiles = capture("git", ["diff", "--cached", "--name-only"]);
+if (stagedFiles !== "package.json") fail(`Release commit must contain only package.json; staged: ${stagedFiles || "none"}`);
+
+const releaseMessage = `chore: release ${nextTag}`;
+run("git", ["commit", "--no-gpg-sign", "--only", "--message", releaseMessage, "--", "package.json"]);
+
+if (capture("git", ["status", "--porcelain", "--untracked-files=all"])) {
+  fail("Release preparation left worktree changes");
+}
+
+console.log(`Prepared ${nextTag} on ${branch}. Open or update the release PR; tag only its merge commit.`);

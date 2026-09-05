@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 630 340" role="img" aria-labelledby="title desc">
+  <title id="title">PayR</title>
+  <desc id="desc">PayR wordmark with a forward payment arrow integrated into the R.</desc>
+  <defs>
+    <mask id="arrow-clear-wordmark" maskUnits="userSpaceOnUse" x="0" y="0" width="320" height="330">
+      <rect width="320" height="330" fill="white"/>
+      <path d="M84 164H170L151 142H202L251 188L193 233H142L169 210H77Z" fill="black" stroke="black" stroke-width="18" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <g fill="#071B3B">
+    <text x="38" y="258" font-family="Avenir Next, Avenir, Montserrat, Inter, Arial, sans-serif" font-size="238" font-weight="500" letter-spacing="-12">Pay</text>
+    <g transform="translate(375 40) scale(.70)">
+      <g mask="url(#arrow-clear-wordmark)">
+        <path d="M70 45H203C264 45 300 84 300 141C300 181 282 212 247 235L207 189C229 176 240 160 240 141C240 118 225 106 201 106H55L70 45Z"/>
+        <path d="M48 160C51 142 62 133 80 133H115L88 302H24L46 169C47 166 47 163 48 160Z"/>
+        <path d="M202 218L248 184L307 302H237L180 232L202 218Z"/>
+      </g>
+      <path d="M84 164H170L151 142H202L251 188L193 233H142L169 210H77L84 164Z"/>
+    </g>
+  </g>
+</svg>

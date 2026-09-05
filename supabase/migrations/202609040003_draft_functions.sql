@@ -33,6 +33,28 @@ returns boolean language sql immutable security definer set search_path = '' as 
       U&'\0009\000A\000B\000C\000D\0020\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF')) is true;
 $$;
 
+create function public.payr_draft_country_v1(p_value jsonb)
+returns boolean language sql immutable security definer set search_path = '' as $$
+  select (pg_catalog.jsonb_typeof(p_value) = 'string' and p_value #>> '{}' = any(pg_catalog.string_to_array(
+    'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW', ' '))) is true;
+$$;
+
+create function public.payr_profile_country_guard_v1()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  -- F1 partial addresses may omit countryCode; legacy values remain readable until explicitly corrected.
+  if new.billing_address ? 'countryCode'
+    and public.payr_draft_country_v1(new.billing_address -> 'countryCode') is not true then
+    raise exception using errcode = '22023', message = 'INVALID_INPUT';
+  end if;
+  return new;
+end;
+$$;
+create trigger sender_profiles_country_guard before insert or update of billing_address on public.sender_profiles
+  for each row execute function public.payr_profile_country_guard_v1();
+create trigger clients_country_guard before insert or update of billing_address on public.clients
+  for each row execute function public.payr_profile_country_guard_v1();
+
 create function public.payr_draft_billing_v1(p_value jsonb)
 returns boolean language plpgsql immutable security definer set search_path = '' as $$
 declare v_normalized jsonb;
@@ -40,8 +62,7 @@ begin
   if public.payr_identity_object_v1(p_value, array['businessName','billingAddress','contactName','contactEmail']) is not true then return false; end if;
   v_normalized := public.payr_identity_save_input_v1(p_value ||
     '{"id":null,"expectedRevision":null,"alias":"validation"}'::jsonb, true) - array['id','expectedRevision','alias'];
-  return (v_normalized = p_value and p_value #>> '{billingAddress,countryCode}' = any(pg_catalog.string_to_array(
-    'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW', ' '))) is true;
+  return (v_normalized = p_value and public.payr_draft_country_v1(p_value #> '{billingAddress,countryCode}')) is true;
 exception when sqlstate '22023' then return false;
 end;
 $$;
@@ -58,17 +79,19 @@ begin
   v_authority := pg_catalog.substring(v_url, '(?i)^https?://([^/?#]+)');
   if v_authority is null or pg_catalog.strpos(v_authority,'@') > 0 then return false; end if;
   if pg_catalog.left(v_authority,1) = '[' then
-    v_parts := pg_catalog.regexp_match(v_authority,'(?i)^\[([0-9a-f:.]+)\](:([0-9]{0,5}))?$');
+    v_parts := pg_catalog.regexp_match(v_authority,'(?i)^\[([0-9a-f:.]+)\](:([0-9]*))?$');
     if v_parts is null or pg_catalog.family(v_parts[1]::inet) <> 6 then return false; end if;
   else
-    v_parts := pg_catalog.regexp_match(v_authority,'^([[:alnum:]]([[:alnum:].-]*[[:alnum:].])?)(:([0-9]{0,5}))?$');
+    -- Registered names are not restricted to DNS labels; source URLs are metadata, never fetched.
+    v_parts := pg_catalog.regexp_match(v_authority,'^([A-Za-z0-9._~!$&''()*+,;=-]+)(:([0-9]*))?$');
     if v_parts is null then return false; end if;
     v_host := v_parts[1];
     if v_host ~ '^[0-9.]+$' and pg_catalog.family(v_host::inet) <> 4 then return false; end if;
-    v_parts[3] := v_parts[4];
   end if;
-  v_port := nullif(v_parts[3],'');
-  return (v_port is null or v_port::integer <= 65535) is true;
+  -- Bound the numeric value, not its padded spelling, and guard the cast against overflow.
+  v_port := coalesce(nullif(pg_catalog.ltrim(v_parts[3],'0'),''),'0');
+  if pg_catalog.length(v_port) > 5 then return false; end if;
+  return (v_port::integer <= 65535) is true;
 exception when invalid_text_representation then return false;
 end;
 $$;
@@ -361,6 +384,7 @@ end;
 $$;
 
 revoke all on function public.payr_draft_scope_v1(uuid,text,uuid,text), public.payr_draft_text_v1(jsonb,integer,integer),
+  public.payr_draft_country_v1(jsonb), public.payr_profile_country_guard_v1(),
   public.payr_draft_billing_v1(jsonb), public.payr_draft_provenance_v1(jsonb), public.payr_draft_money_v1(jsonb),
   public.payr_draft_snapshot_valid_v1(jsonb), public.payr_draft_protect_version_v1(), public.payr_draft_version_dto_v1(public.invoice_versions),
   public.payr_find_draft_replay_v1(uuid,text,uuid,text,text), public.payr_get_draft_context_v1(uuid,text,uuid,uuid,uuid,text),

@@ -127,6 +127,49 @@ describe("F3 draft transactions through Supabase RPC", () => {
         values ('${clientId}','${workspaceId}','client','Client','${JSON.stringify(address)}','Client Contact','client@example.test');`);
   });
 
+  it.each(["UK", "ZZ", "EU", "XK", "AA", "gb", " GB ", null, 42])(
+    "rejects non-ISO country %j through profile/client write RPCs without mutations", async (countryCode) => {
+      const billing = { ...snapshot().client, billingAddress: { ...address, countryCode } };
+      const calls = [
+        ["payr_save_sender_profile_v1", { ...billing, expectedRevision: 1, invoicePrefix: "PAYR", defaultPaymentTermsDays: 30 }],
+        ["payr_save_client_v1", { ...billing, id: null, expectedRevision: null, alias: "new-client" }],
+        ["payr_save_client_v1", { ...billing, id: clientId, expectedRevision: 1, alias: "client" }],
+      ] as const;
+      for (const [name, p_input] of calls) {
+        const result = await service.rpc(name, { p_workspace_id: workspaceId, p_owner_wallet: owner, p_input });
+        expect.soft(result.error, name).toMatchObject({ code: "22023", message: "INVALID_INPUT" });
+        expect.soft(result.data, name).toBeNull();
+      }
+      expect(counts()).toBe("0,0,0,1");
+      expect(fixture(`select (select revision from public.sender_profiles) = 1
+        and (select revision from public.clients) = 1 and not exists (select 1 from public.audit_events)
+        and (select billing_address ->> 'countryCode' from public.sender_profiles) = 'GB'
+        and (select billing_address ->> 'countryCode' from public.clients) = 'GB';`)).toBe("t");
+    },
+  );
+
+  it.each(["sender_profiles", "clients"])("guards direct %s country writes while retaining country-less F1 fixtures", (table) => {
+    const other = randomUUID();
+    fixture(`insert into public.workspaces (id,owner_wallet) values ('${other}','0x${"2".repeat(40)}');`);
+    for (const countryCode of ["UK", "ZZ", "gb", null, 42, true, [], {}]) {
+      const billing = JSON.stringify({ ...address, countryCode });
+      for (const sql of [
+        `insert into public.${table} select (jsonb_populate_record(null::public.${table},
+          to_jsonb(p) || jsonb_build_object('id',gen_random_uuid(),'workspace_id','${other}','billing_address','${billing}'::jsonb))).*
+          from public.${table} p where workspace_id = '${workspaceId}';`,
+        `update public.${table} set billing_address = '${billing}' where workspace_id = '${workspaceId}';`,
+      ]) expectFixtureFailure(`\\set VERBOSITY verbose\n${sql}`, "22023: INVALID_INPUT");
+    }
+    fixture(`insert into public.${table} select (jsonb_populate_record(null::public.${table},
+      to_jsonb(p) || jsonb_build_object('id',gen_random_uuid(),'workspace_id','${other}','billing_address','{"line1":"F1 partial"}'::jsonb))).*
+      from public.${table} p where workspace_id = '${workspaceId}';
+      update public.${table} set billing_address = '{}' where workspace_id = '${other}';`);
+    for (const countryCode of ["GB", "US", "AX", "BQ", "SS", "ZW"]) {
+      fixture(`update public.${table} set billing_address = '${JSON.stringify({ ...address, countryCode })}' where workspace_id = '${other}';`);
+      expect(fixture(`select billing_address ->> 'countryCode' from public.${table} where workspace_id = '${other}';`)).toBe(countryCode);
+    }
+  });
+
   it("creates one immutable snapshot and UUID-only replay descriptor without publication or client writes", async () => {
     const input = write();
     const raw = await service.rpc("payr_save_invoice_draft_v1", { ...scope, p_input: input });
@@ -238,6 +281,7 @@ describe("F3 draft transactions through Supabase RPC", () => {
   it("makes Boolean validators return false, never SQL NULL, for null and incomplete inputs", () => {
     for (const value of ["null", "'null'::jsonb", "'{}'::jsonb"]) {
       expect(fixture(`select public.payr_draft_text_v1(${value},100) is false
+        and public.payr_draft_country_v1(${value}) is false
         and public.payr_draft_billing_v1(${value}) is false and public.payr_draft_provenance_v1(${value}) is false
         and public.payr_draft_money_v1(${value}) is false and public.payr_draft_snapshot_valid_v1(${value}) is false;`)).toBe("t");
     }
@@ -371,7 +415,32 @@ describe("F3 draft transactions through Supabase RPC", () => {
     expect(counts()).toBe("2,2,2,1");
   });
 
-  it.each(["https://[:::]/", "HTTPS://example.test:99999/", "https://999.999.999.999/", "https://name:password@example.test/"])(
+  it.each([
+    "https://source_name.example.test/contact", "http://_source.example.test/", "https://-source-.example.test/",
+    "https://source!$&'()*+,;=~.example.test/contact", "https://EXAMPLE.com:000443/contact",
+    "http://example.test:00000065535/", "https://example.test:000000/", "https://example.test:/",
+    "https://[::1]:0000008080/contact", "https://example.test:" + "0".repeat(100) + "443/",
+  ])("accepts registered-name and numeric-port provenance %s through raw RPC", async (url) => {
+    expect(new URL(url).username).toBe("");
+    expect(new URL(url).password).toBe("");
+    const value = newClientSnapshot();
+    const provenance = { kind: "web_source" as const, url };
+    value.clientProvenance.contactEmail = provenance;
+    value.proposedClientChanges.fields.contactEmail!.provenance = provenance;
+    const result = await service.rpc("payr_save_invoice_draft_v1", { ...scope, p_input: write({ snapshot: value }) });
+    expect(result.error).toBeNull();
+    expect(result.data).toMatchObject({ version: 1, snapshot: value });
+    expect(counts()).toBe("1,1,1,1");
+  });
+
+  it.each([
+    "https://[:::]/", "HTTPS://example.test:99999/", "https://999.999.999.999/", "https://name:password@example.test/",
+    "https://example.test:000065536/", "https://[::1]:000065536/", "https://example.test:999999999999999999999/",
+    "https://example.test:abc/", "https://example.test:80:90/", "https://:443/", "https:///contact", "https://?query",
+    "https://[::1/", "https://[127.0.0.1]/", "https://[::1]extra/", "https://source[bad].test/",
+    "https://@example.test/", "https://user@example.test/", "https://source%40example.test/", "https://source|name.test/",
+    "https://source name.test/", "https://source\tname.test/", "https://example.test/white space", "https://example.test\\@other.test/",
+  ])(
     "rejects invalid web-source URL %s even when the diff and provenance agree", async (url) => {
       const value = snapshot();
       value.client.contactName = "New Contact";
@@ -379,8 +448,12 @@ describe("F3 draft transactions through Supabase RPC", () => {
       value.proposedClientChanges = { kind: "update", fields: {
         contactName: { value: "New Contact", confirmed: true, provenance: { kind: "web_source", url } },
       } };
-      expect((await service.rpc("payr_save_invoice_draft_v1", { ...scope, p_input: write({ snapshot: value }) })).error?.message).toBe("INVALID_INPUT");
+      const input = write({ snapshot: value });
+      const result = await service.rpc("payr_save_invoice_draft_v1", { ...scope, p_input: input });
+      expect(result.error).toMatchObject({ code: "22023", message: "INVALID_INPUT" });
+      expect(result.data).toBeNull();
       expect(counts()).toBe("0,0,0,1");
+      expect(await repository.findReplay(actor, input.idempotencyKey, input.requestFingerprint)).toBeNull();
     },
   );
 
@@ -661,7 +734,8 @@ describe("F3 draft transactions through Supabase RPC", () => {
   });
 
   it("keeps every new function private, security definer, empty-search-path, and all F1/F2 grants intact", async () => {
-    const names = ["payr_draft_scope_v1", "payr_draft_text_v1", "payr_draft_billing_v1", "payr_draft_provenance_v1", "payr_draft_money_v1",
+    const names = ["payr_draft_scope_v1", "payr_draft_text_v1", "payr_draft_country_v1", "payr_profile_country_guard_v1",
+      "payr_draft_billing_v1", "payr_draft_provenance_v1", "payr_draft_money_v1",
       "payr_draft_snapshot_valid_v1", "payr_draft_protect_version_v1", "payr_draft_version_dto_v1", "payr_find_draft_replay_v1",
       "payr_get_draft_context_v1", "payr_save_invoice_draft_v1", "payr_invoice_summary_v1", "payr_invoice_summaries_v1",
       "payr_list_invoices_v1", "payr_get_invoice_detail_v1", "payr_get_invoice_overview_v1"];

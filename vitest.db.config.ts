@@ -5,7 +5,7 @@ const { loadEnvConfig } = nextEnv;
 
 loadEnvConfig(process.cwd());
 
-const requiredEnvironment = ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"] as const;
+const requiredEnvironment = ["SUPABASE_URL", "SUPABASE_DB_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"] as const;
 const missingEnvironment = requiredEnvironment.filter((name) => !process.env[name]);
 
 if (missingEnvironment.length > 0) {

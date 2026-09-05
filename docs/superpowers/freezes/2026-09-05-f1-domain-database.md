@@ -45,13 +45,15 @@ Tests cross these interfaces only. Database integration tests additionally cross
 - The enum and column name is `commercial_state`, not `commercial_status`.
 - Tenant identifiers and relationships use UUIDs plus explicit composite `(workspace_id, id)` keys. A global UUID never replaces the workspace component of a child foreign key.
 - EVM addresses and hashes are canonical lowercase `0x` text with length/check constraints. Atomic amounts and block numbers use integer-only `numeric(78,0)` values; chain IDs use positive `bigint`.
+- PostgREST results containing sequence values, atomic amounts, or block numbers use decimal text, not JSON numbers. RPCs return those fields as text and table reads explicitly select `field::text`; callers must never recover precision by converting an already-rounded JavaScript number.
 - A draft may have a null `client_id` while carrying a proposed client snapshot in its version. `client_id` is required when publication finalizes.
 - Invoice artifact facts live on the finalized `publication_attempts` row. R02 does not add an `invoice_documents` table.
+- A logical invoice has at most one finalized publication, even across versions or attempts. Failed attempts may remain for audit; replacement requires a new invoice.
 - Invoice sequences are scoped by workspace and UTC calendar year. The database allocates a positive integer; later formatting combines it with the frozen sender prefix.
 - Settlement invoice-key uniqueness is `(chain_id, contract_address, invoice_key)`. Delivery uniqueness is `(workspace_id, settlement_id, message_kind, normalized_recipient)` with one sorted role array retaining `issuer`, `client`, or both.
 - Reconciliation cursors store `next_block`, the first block not fully processed.
 - The private `documents` bucket permits only `application/pdf`, has a 10 MiB object limit, and is recreated by migration. Object-key format remains a Task 5 freeze because R02 stores no document.
-- Idempotency result descriptors have one allowlisted shape: optional `ids`, `hashes`, and `filenames` string maps plus an optional lowercase `state`. IDs must be UUIDs, hashes must be canonical hexadecimal, and filenames must be basenames. Callers reconstruct every other result from those identifiers; arbitrary nested JSON and URL-bearing values are not accepted.
+- Idempotency result descriptors have one allowlisted shape: optional `ids`, `hashes`, and `filenames` string maps plus an optional lowercase `state`. Map labels are bounded snake_case identifiers, never URLs. IDs must be UUIDs, hashes must be canonical hexadecimal, and filenames must be PDF basenames with no dots except the `.pdf` extension, preventing raw bearer slugs from fitting the filename shape. Callers reconstruct every other result from those identifiers; arbitrary nested JSON and URL-bearing values are not accepted.
 
 ## R02 SQL Transactions
 
@@ -63,7 +65,7 @@ Idempotency reservation and completion are not exposed as independently composab
 
 Inputs: `p_workspace_id uuid`, `p_sequence_year integer`, `p_idempotency_key text`, and `p_request_fingerprint text`.
 
-Returns one row with `outcome text` (`allocated | replayed | conflict`) and nullable `sequence_value bigint`. Allocation, idempotency claim, and the descriptor containing the sequence state occur atomically. A replay returns the same value; a conflict returns no value or prior private descriptor. Every new successful call permanently consumes a distinct value.
+Returns one row with `outcome text` (`allocated | replayed | conflict`) and nullable `sequence_value text`, containing a canonical positive bigint decimal string. Allocation, idempotency claim, and the descriptor containing the sequence state occur atomically. A replay returns the same value; a conflict returns no value or prior private descriptor. Every new successful call permanently consumes a distinct value. This pre-release F1 correction preserves the TypeScript bigint result while avoiding PostgREST JSON-number precision loss.
 
 ### `payr_record_payment_authorization_v1`
 

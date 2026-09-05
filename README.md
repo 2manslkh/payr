@@ -37,6 +37,12 @@ curl http://127.0.0.1:3000/api/health
 
 The health endpoint returns only `{ "status": "ok", "commit": string | null }`; it never returns configuration values.
 
+## Versioning
+
+Payr uses Semantic Versioning and annotated `vX.Y.Z` Git tags. The release contract and `cut new version` workflow are documented in [`docs/ops/versioning.md`](docs/ops/versioning.md).
+
+Multi-agent implementation uses isolated worktrees and versioned integration tranches. The execution runbook is [`docs/superpowers/plans/2026-09-05-payr-agent-orchestration-plan.md`](docs/superpowers/plans/2026-09-05-payr-agent-orchestration-plan.md).
+
 ## Configuration and Arc verification
 
 Copy `.env.example` to `.env.local` and provide only the values needed for the feature being run. Do not commit local environment files or credentials.

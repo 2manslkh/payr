@@ -39,10 +39,12 @@ it("reads request and async dashboard cookies with no database initialization", 
   expect(createIdentityRepository).not.toHaveBeenCalled();
 });
 
-it("checks CSRF before identity for mutations, including the default", async () => {
+it("allows session-authorized reads without Origin and checks CSRF for explicit mutations", async () => {
   vi.mocked(createIdentityEnv).mockReturnValue(config);
-  await expect(requireRequestSession(new Request(config.appOrigin))).rejects.toMatchObject({ code: "ORIGIN_NOT_ALLOWED" });
-  await expect(requireRequestSession(new Request(config.appOrigin, { headers: { origin: config.appOrigin, host: "payrlink.xyz" } })))
+  const token = await createSessionCodec(config).seal(identity);
+  await expect(requireRequestSession(new Request(config.appOrigin, { headers: { cookie: `${SESSION_COOKIE}=${token}` } }))).resolves.toEqual(identity);
+  await expect(requireRequestSession(new Request(config.appOrigin), true)).rejects.toMatchObject({ code: "ORIGIN_NOT_ALLOWED" });
+  await expect(requireRequestSession(new Request(config.appOrigin, { headers: { origin: config.appOrigin, host: "payrlink.xyz" } }), true))
     .rejects.toMatchObject({ code: "AUTH_REQUIRED" });
   expect(createSupabaseAdminClient).not.toHaveBeenCalled();
 });

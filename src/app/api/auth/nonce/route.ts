@@ -1,4 +1,5 @@
 import { readAuthJson } from "../../../../lib/auth/http";
+import { admitNonceRequest } from "../../../../lib/auth/issuance";
 import { requireTrustedOrigin } from "../../../../lib/auth/origin";
 import { apiError, getIdentityConfig, getIdentityRuntime, privateJson, requireRequestSession } from "../../../../lib/auth/runtime";
 import { createAuthService } from "../../../../lib/auth/service";
@@ -10,6 +11,7 @@ export async function POST(request: Request): Promise<Response> {
     const input = nonceRequestSchema.parse(await readAuthJson(request));
     const identity = input.purpose === "payr-payout-change-v1" ? await requireRequestSession(request, false) : undefined;
     const { repository, config } = getIdentityRuntime();
+    await admitNonceRequest(repository, config, request, input.purpose === "payr-login-v1" ? input.wallet : identity!.ownerWallet);
     return privateJson(await createAuthService(repository, config).issue(input, identity));
   } catch (error) {
     return apiError(error);

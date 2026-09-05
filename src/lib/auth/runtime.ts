@@ -30,7 +30,7 @@ export async function readRequestSession(request: Request): Promise<IdentitySess
   return createSessionCodec(getIdentityConfig()).open(token);
 }
 
-export async function requireRequestSession(request: Request, mutation = true): Promise<IdentitySession> {
+export async function requireRequestSession(request: Request, mutation = false): Promise<IdentitySession> {
   if (mutation) requireTrustedOrigin(request, getIdentityConfig().appOrigin);
   const identity = await readRequestSession(request);
   if (!identity) throw new IdentityError("AUTH_REQUIRED", 401);
@@ -52,6 +52,7 @@ const errorStatuses: Readonly<Record<string, number>> = Object.freeze({
   ORIGIN_NOT_ALLOWED: 403, FORBIDDEN: 403, NOT_FOUND: 404, REVISION_CONFLICT: 409,
   PAYLOAD_TOO_LARGE: 413, UNSUPPORTED_MEDIA_TYPE: 415, RATE_LIMITED: 429,
   CONFIGURATION_ERROR: 503, INTERNAL_ERROR: 500,
+  CLIENT_ALIAS_CONFLICT: 409, CONNECTOR_CONFLICT: 409,
 });
 
 export function apiError(error: unknown): Response {

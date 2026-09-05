@@ -73,6 +73,9 @@ export function createIdentityRepository(client: RpcClient): IdentityRepository 
     return { p_workspace_id: identity.workspaceId, p_owner_wallet: identity.ownerWallet };
   }
   return {
+    admitNonceIssuance: (input) => call("payr_admit_nonce_issuance_v1", {
+      p_wallet_hash: input.walletHash, p_ip_hash: input.ipHash,
+    }, z.object({ allowed: z.boolean(), retryAfterSeconds: z.number().int().min(0).max(60) }).strict()),
     issueNonce: (input) => call("payr_issue_auth_nonce_v1", { p_nonce: input }, nonce),
     findNonce: (id) => call("payr_find_auth_nonce_v1", { p_nonce_id: id }, nonce.nullable()),
     completeLogin: (id, verifiedWallet) => call("payr_complete_login_v1", { p_nonce_id: id, p_verified_wallet: verifiedWallet }, session),

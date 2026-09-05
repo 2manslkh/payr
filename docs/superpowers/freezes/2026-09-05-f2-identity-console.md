@@ -10,6 +10,7 @@ This is the R03 integration contract. `PROJECT.md`, `DESIGN.md`, and Task 3 rema
 - Login nonce input: `{purpose: "payr-login-v1", wallet}`. Payout nonce input: `{purpose: "payr-payout-change-v1", newPayoutWallet, expectedRevision}` with identity taken only from the current encrypted session.
 - Nonce response: `{nonceId, message, expiresAt}`. Verification accepts only `{nonceId, signature}`; server reloads and reconstructs every signed fact. Signature verification supports externally owned wallets via viem; smart-account signatures are outside this MVP tranche.
 - Nonces contain 32 random bytes encoded as unpadded base64url and expire after 300 seconds. The database atomically consumes them with workspace creation or payout mutation; exact expiry and replay fail as `NONCE_INVALID_OR_USED`.
+- Unsigned nonce requests first pass atomic database-minute admission: 5/wallet, 30/IP, and 300 globally. Store purpose-separated keyed wallet/IP hashes only. Read IP only from Vercel's overwritten `x-vercel-forwarded-for` when `VERCEL=1`; other runtimes share one conservative local bucket rather than trusting caller headers. Admission prunes expired nonces and old limit windows; live nonce facts remain immutable. The grant remains service-role-only and direct nonce deletion remains forbidden.
 - First successful owner login creates/loads one workspace and a skeletal sender profile. Its initial payout wallet is the authenticated owner wallet; no separate wallet is inferred. Later payout changes require the fresh owner-signed old/new-wallet message and the expected profile revision.
 - Sessions are encrypted/authenticated JWE (`dir`, `A256GCM`) using jose and an exactly 32-byte decoded key. They bind issuer/origin, chain ID, workspace, owner, a random session ID, issue time, and expiry (8 hours). New login creates a new session token. Logout clears this browser cookie; global session revocation is not claimed.
 - Cookie name is always `__Host-payr-session`, Secure, HttpOnly, SameSite=Lax, Path `/`, no Domain, including development. No test or development auth bypass is added.
@@ -50,6 +51,7 @@ RPCs return JSONB using the camelCase DTOs in the shared contract; missing recor
 
 | RPC | Exact named parameters |
 | --- | --- |
+| `payr_admit_nonce_issuance_v1` | `p_wallet_hash text, p_ip_hash text`; returns `{allowed: boolean, retryAfterSeconds: integer 0..60}` |
 | `payr_issue_auth_nonce_v1` | `p_nonce jsonb` (AuthNonce shape); validates purpose/scope/old-new payout/revision and bounded expiry |
 | `payr_find_auth_nonce_v1` | `p_nonce_id uuid` |
 | `payr_complete_login_v1` | `p_nonce_id uuid, p_verified_wallet text` |

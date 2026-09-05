@@ -31,6 +31,7 @@ export function createAuthRepository() {
     return nonce;
   };
   const repository: IdentityRepository = {
+    async admitNonceIssuance() { return { allowed: true, retryAfterSeconds: 0 }; },
     async issueNonce(nonce) { state.nonces.set(nonce.id, nonce); return nonce; },
     async findNonce(id) { return state.nonces.get(id) ?? null; },
     async completeLogin(id, wallet) {

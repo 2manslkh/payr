@@ -119,6 +119,7 @@ export type ConnectorAdmission =
   | Readonly<{ outcome: "rate_limited"; retryAfterSeconds: number }>;
 
 export type IdentityRepository = Readonly<{
+  admitNonceIssuance(input: { walletHash: string; ipHash: string }): Promise<{ allowed: boolean; retryAfterSeconds: number }>;
   issueNonce(nonce: AuthNonce): Promise<AuthNonce>;
   findNonce(id: string): Promise<AuthNonce | null>;
   completeLogin(nonceId: string, verifiedWallet: string): Promise<IdentitySession>;

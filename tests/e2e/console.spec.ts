@@ -113,7 +113,7 @@ test("login: unavailable configuration does not expose credential errors", async
   await page.route("**/api/auth/nonce", (route) =>
     route.fulfill({
       status: 503,
-      json: { error: "CONFIGURATION_ERROR", details: "PRIVATE_SERVER_CREDENTIAL" },
+      json: { error: { code: "CONFIGURATION_ERROR" }, details: "PRIVATE_SERVER_CREDENTIAL" },
     }),
   );
   await page.goto("/login");
@@ -146,7 +146,7 @@ test("login: verification sends only nonce and signature and recovers from expir
   );
   await page.route("**/api/auth/verify", async (route) => {
     expect(route.request().postDataJSON()).toEqual({ nonceId: identity.workspaceId, signature });
-    await route.fulfill({ status: 400, json: { error: "NONCE_INVALID_OR_USED" } });
+    await route.fulfill({ status: 400, json: { error: { code: "NONCE_INVALID_OR_USED" } } });
   });
   await page.goto("/login");
   await page.getByRole("button", { name: "Connect wallet" }).click();
@@ -159,12 +159,9 @@ test("login: verification sends only nonce and signature and recovers from expir
 
 test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", () => {
   test.beforeEach(async ({ context, baseURL }) => {
-    test.skip(
-      !process.env.SESSION_ENCRYPTION_KEY ||
-        !process.env.CONNECTOR_TOKEN_PEPPER ||
-        !process.env.NEXT_PUBLIC_APP_URL,
-      "Coordinator must integrate auth/runtime and configure the webServer and test-worker identity environment.",
-    );
+    expect(process.env.SESSION_ENCRYPTION_KEY).toBeTruthy();
+    expect(process.env.CONNECTOR_TOKEN_PEPPER).toBeTruthy();
+    expect(process.env.NEXT_PUBLIC_APP_URL).toBeTruthy();
     expect(baseURL, "Use the coordinator's baseURL fixture").toBeTruthy();
     expect(
       new URL(baseURL!).hostname,
@@ -177,7 +174,7 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
       sessionKey: new Uint8Array(Buffer.from(process.env.SESSION_ENCRYPTION_KEY!, "base64")),
     }).seal(identity);
     await context.addCookies([
-      { name: SESSION_COOKIE, value: token, url: baseURL, secure: true, httpOnly: true, sameSite: "Lax" },
+      { name: SESSION_COOKIE, value: token, url: baseURL!.replace("http:", "https:") + "/", secure: true, httpOnly: true, sameSite: "Lax" },
     ]);
   });
 
@@ -299,7 +296,7 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
         if (conflict) {
           conflict = false;
           profile = { ...profile, revision: 2, businessName: "Saved elsewhere" };
-          await route.fulfill({ status: 409, json: { error: "REVISION_CONFLICT" } });
+          await route.fulfill({ status: 409, json: { error: { code: "REVISION_CONFLICT" } } });
           return;
         }
         expect(input.expectedRevision).toBe(profile.revision);

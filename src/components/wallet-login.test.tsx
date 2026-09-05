@@ -49,7 +49,7 @@ it("hides technical configuration errors", async () => {
     vi
       .fn()
       .mockResolvedValue(
-        new Response(JSON.stringify({ error: "CONFIGURATION_ERROR", detail: "SECRET_CREDENTIAL" }), {
+        new Response(JSON.stringify({ error: { code: "CONFIGURATION_ERROR" }, detail: "SECRET_CREDENTIAL" }), {
           status: 503,
         }),
       ),

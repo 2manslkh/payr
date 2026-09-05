@@ -1,6 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { isIP } from "node:net";
-import { URL } from "node:url";
+import { normalizeIp } from "../security/ip";
 import { CONNECTOR_SCOPES, IdentityError, type IdentityConfig, type IdentityRepository } from "../identity/contracts";
 import { createConnectorHasher } from "./crypto";
 
@@ -11,25 +10,14 @@ export function createConnectorAuthenticator(repository: IdentityRepository, con
   return {
     async authenticate({ token, ip, action }) {
       try {
+        const normalizedIp = normalizeIp(ip);
         const parsed = typeof token === "string" && token.length === 80
           ? /^([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.([A-Za-z0-9_-]{43})$/.exec(token)
           : null;
         if (!parsed || Buffer.from(parsed[2], "base64url").toString("base64url") !== parsed[2]
           || !CONNECTOR_SCOPES.some((scope) => scope === action)
-          || typeof ip !== "string" || ip.includes("%") || !isIP(ip)) {
+          || normalizedIp === null) {
           throw new IdentityError("CONNECTOR_INVALID", 401);
-        }
-
-        let normalizedIp = ip;
-        if (isIP(ip) === 6) {
-          normalizedIp = new URL(`http://[${ip}]/`).hostname.slice(1, -1);
-          // IPv4-mapped IPv6 must share the native IPv4 rate-limit bucket.
-          const mapped = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(normalizedIp);
-          if (mapped) {
-            const high = parseInt(mapped[1], 16);
-            const low = parseInt(mapped[2], 16);
-            normalizedIp = `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
-          }
         }
 
         const id = parsed[1];

@@ -86,7 +86,7 @@ it("saves all sender fields without payout or owner data", async () => {
 it("preserves edits after failure and explicitly reviews a newer revision before retry", async () => {
   const fetcher = vi
     .fn()
-    .mockResolvedValueOnce(json({ error: "REVISION_CONFLICT" }, 409))
+    .mockResolvedValueOnce(json({ error: { code: "REVISION_CONFLICT" } }, 409))
     .mockResolvedValueOnce(
       json({ profile: { ...profile, businessName: "Someone else's change", revision: 3 } }),
     )
@@ -282,7 +282,7 @@ it("renders actual audit events while excluding unexpected payloads and unknown 
 it("marks navigation semantically and retains the session when logout fails", async () => {
   const fetcher = vi
     .fn()
-    .mockResolvedValue(json({ error: "INTERNAL_ERROR", details: "PRIVATE_CREDENTIAL" }, 500));
+    .mockResolvedValue(json({ error: { code: "INTERNAL_ERROR" }, details: "PRIVATE_CREDENTIAL" }, 500));
   vi.stubGlobal("fetch", fetcher);
   render(session(<AppNavigation />));
   const nav = screen.getByRole("navigation", { name: "Workspace" });

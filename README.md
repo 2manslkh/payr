@@ -27,7 +27,7 @@ pnpm db:start
 pnpm test:e2e
 ```
 
-`pnpm test` aliases `pnpm test:unit`. Unit discovery covers `.test.ts` and `.test.tsx` while excluding integration tests. Playwright runs separate desktop and mobile Chromium projects; set `PAYR_TEST_PORT` to isolate concurrent worktrees. Browser tests now require the local Supabase stack because the invoice pages read real server-side projections. Run database and browser suites serially locally: they share test fixtures.
+`pnpm test` aliases `pnpm test:unit`. Unit discovery covers `.test.ts` and `.test.tsx` while excluding integration tests. Playwright runs separate desktop and mobile Chromium projects against a production build/start both locally and in CI; set `PAYR_TEST_PORT` to isolate concurrent worktrees. Browser tests now require the local Supabase stack because the invoice pages read real server-side projections. Run database and browser suites serially locally: they share test fixtures.
 
 ### Local database
 

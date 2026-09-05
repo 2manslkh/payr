@@ -4,11 +4,11 @@ Last updated: 2026-09-04
 
 ## Stage
 
-Revised product framing has been grilled and incorporated into the written design; the updated artifact is awaiting user review. Implementation planning has not started.
+The Payr product framing and written design are approved. The test-first vertical-slice implementation plan is complete and awaiting execution handoff; application implementation has not started.
 
 ## Single current objective
 
-Review and approve the revised `docs/superpowers/specs/2026-09-04-payr-framing-design.md`, then convert it into a testable vertical-slice implementation plan.
+Review `docs/superpowers/plans/2026-09-04-payr-mvp-implementation-plan.md`, choose the execution mode, then complete Task 1's operational preflight and runnable application shell without expanding scope.
 
 ## Selected concept
 
@@ -16,14 +16,15 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 
 ## Now
 
-- Review the revised written framing/design spec for scope or product corrections.
+- Review the 11-task, 44-hour implementation plan.
 - Confirm the exact submission cutoff time and timezone in the authenticated ETHGlobal dashboard.
-- After written approval, produce an implementation plan with vertical-slice gates.
+- Execute Task 1 only after the implementation-plan handoff.
 - Verify Arc details/balances, `payrlink.xyz` HTTPS, Resend DNS, Claude Gmail, and the Privy allow/deny policy spike before relying on them.
+- Keep atomic commits synchronized to `https://github.com/2manslkh/payr`.
 
 ## Not now
 
-- Application scaffolding or contract implementation before written-spec approval.
+- Application or contract implementation before the implementation-plan handoff.
 - Autonomous payer agents or Circle Agent Stack.
 - Dual-party invoice signatures or agent payout-wallet edits.
 - Fiat onboarding, multiple chains/tokens, escrow, tax logic, reminders, or accounting integrations.
@@ -34,20 +35,27 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 
 ## Blockers
 
-- Written design has not yet been reviewed by the user.
 - Exact submission cutoff time/timezone remains unverified.
-- No integration has been exercised; there is no runnable build.
+- No application integration has been exercised; there is no runnable build.
 - `payrlink.xyz` nameservers/A records have begun resolving, but HTTPS and Resend SPF/DKIM verification are not yet proven.
 - Privy's policy-controlled EIP-712 signing and contract compatibility are unproven.
+- Arc testnet RPC, chain, explorer, funded wallets, and native-USDC behavior must pass Task 1/Task 7 live checks.
 - Arc mainnet-launch prize requires availability or deployment-readiness work through 30 September.
+
+## Repository
+
+- Public repository: `https://github.com/2manslkh/payr`.
+- Branch: `main`.
+- Local and remote `main` matched before the implementation-plan commit.
+- The pre-existing untracked `assets/` directory remains untouched pending a brand-ownership/tracking decision.
 
 ## Readiness
 
-- Product: GREEN — narrow user, firsthand pain, promise, and non-goals are defined.
-- Engineering: YELLOW — credible design exists, but no code or integration proof exists.
-- Demo: YELLOW — causal three-minute sequence and honest fallback are defined, but unexercised.
-- Submission: RED — framing is committed locally, but there is no public repository, deployment, architecture graphic, video, or final submission.
+- Product: GREEN — the user, pain, promise, onchain necessity, and non-goals are approved.
+- Engineering: YELLOW — the architecture and executable plan exist, but no code or integration proof exists.
+- Demo: YELLOW — the causal three-minute sequence and honest fallback are defined, but unexercised.
+- Submission: RED — the public repository exists, but there is no deployed app, architecture graphic, video, or final submission.
 
 ## Next review gate
 
-User approves the written design spec. The following action is implementation planning, not coding.
+The implementation plan is reviewed and an execution mode is selected. The next work is Task 1 only; sponsor polish remains blocked.

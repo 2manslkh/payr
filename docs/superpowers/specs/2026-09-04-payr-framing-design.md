@@ -1,6 +1,6 @@
 # Payr Framing and Design
 
-Status: Draft for written review
+Status: Approved implementation baseline
 Date: 2026-09-04
 Owner: Lim Keng Hin (product and engineering)
 Presentation and submission: Chanita Inthathong

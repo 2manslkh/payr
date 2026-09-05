@@ -44,6 +44,20 @@ function snapshot(): DraftSnapshot {
     appliedDefaults: [{ field: "payableUntil", value: "2026-11-05T00:00:00.000Z", source: "technical_deadline" }],
   };
 }
+function newClientSnapshot(): DraftSnapshot {
+  const value = snapshot();
+  value.clientReference = { id: null, revision: null, alias: null };
+  value.proposedClientChanges = { kind: "create", fields: {
+    businessName: { value: value.client.businessName, provenance: { kind: "user_provided" }, confirmed: true },
+    billingAddress: { value: value.client.billingAddress, provenance: { kind: "user_provided" }, confirmed: true },
+    contactName: { value: value.client.contactName, provenance: { kind: "user_provided" }, confirmed: true },
+    contactEmail: { value: value.client.contactEmail, provenance: { kind: "web_source", url: "https://example.test/contact" }, confirmed: true },
+  } };
+  for (const key of ["businessName", "billingAddress", "contactName", "contactEmail"] as const) {
+    value.clientProvenance[key] = value.proposedClientChanges.fields[key]!.provenance;
+  }
+  return value;
+}
 function write(changes: Partial<DraftWrite> = {}): DraftWrite {
   return { draftId: null, expectedVersion: null, idempotencyKey: randomUUID(), requestFingerprint: "a".repeat(64), snapshot: snapshot(), ...changes };
 }
@@ -166,6 +180,71 @@ describe("F3 draft transactions through Supabase RPC", () => {
     expect(counts()).toBe("0,0,0,1");
   });
 
+  it.each([
+    "draftId", "expectedVersion", "idempotencyKey", "requestFingerprint", "snapshot.schemaVersion",
+    "snapshot.sender.id", "snapshot.sender.revision", "snapshot.sender.businessName", "snapshot.sender.contactName",
+    "snapshot.sender.contactEmail", "snapshot.sender.payoutWallet", "snapshot.sender.invoicePrefix",
+    "snapshot.sender.billingAddress.line1", "snapshot.sender.billingAddress.city", "snapshot.sender.billingAddress.postalCode",
+    "snapshot.sender.billingAddress.countryCode", "snapshot.client.businessName", "snapshot.client.contactName", "snapshot.client.contactEmail",
+    "snapshot.client.billingAddress.line1", "snapshot.client.billingAddress.city", "snapshot.client.billingAddress.postalCode",
+    "snapshot.client.billingAddress.countryCode", "snapshot.clientReference.id", "snapshot.clientReference.revision", "snapshot.clientReference.alias",
+    "snapshot.clientProvenance.businessName.kind", "snapshot.clientProvenance.billingAddress.kind",
+    "snapshot.clientProvenance.contactName.kind", "snapshot.clientProvenance.contactEmail.kind", "snapshot.proposedClientChanges.kind",
+    "snapshot.items.0.description", "snapshot.items.0.amountDecimal", "snapshot.items.0.amountAtomic",
+    "snapshot.amountDecimal", "snapshot.amountAtomic", "snapshot.issueDate", "snapshot.dueDate", "snapshot.payableUntil", "snapshot.memo",
+    "snapshot.appliedDefaults.0.field", "snapshot.appliedDefaults.0.value", "snapshot.appliedDefaults.0.source",
+  ])("rejects null required scalar %s without any reservation or mutation", async (path) => {
+    const input = write(["draftId", "expectedVersion"].includes(path) ? { draftId: randomUUID(), expectedVersion: 1 } : {});
+    const result = await service.rpc("payr_save_invoice_draft_v1", { ...scope, p_input: altered(input, path, null) });
+    expect.soft(result.error).toMatchObject({ code: "22023", message: "INVALID_INPUT" });
+    expect.soft(result.data).toBeNull();
+    expect(counts()).toBe("0,0,0,1");
+    expect(await repository.findReplay(actor, input.idempotencyKey, input.requestFingerprint)).toBeNull();
+  });
+
+  it.each([
+    "snapshot.proposedClientChanges.kind",
+    ...["businessName", "billingAddress", "contactName", "contactEmail"].flatMap((field) =>
+      ["value", "confirmed", "provenance.kind"].map((key) => `snapshot.proposedClientChanges.fields.${field}.${key}`)),
+    "snapshot.proposedClientChanges.fields.contactEmail.provenance.url", "snapshot.clientProvenance.contactEmail.url",
+  ])("rejects null new-client scalar %s without any reservation or mutation", async (path) => {
+    const input = write({ snapshot: newClientSnapshot() });
+    const result = await service.rpc("payr_save_invoice_draft_v1", { ...scope, p_input: altered(input, path, null) });
+    expect.soft(result.error).toMatchObject({ code: "22023", message: "INVALID_INPUT" });
+    expect.soft(result.data).toBeNull();
+    expect(counts()).toBe("0,0,0,1");
+    expect(await repository.findReplay(actor, input.idempotencyKey, input.requestFingerprint)).toBeNull();
+  });
+
+  it.each(["businessName", "billingAddress", "contactName", "contactEmail"] as const)(
+    "rejects matching null provenance kinds with a valid URL for %s without consuming the key", async (field) => {
+      const value = newClientSnapshot();
+      const provenance = { kind: "web_source" as const, url: "https://example.test/contact" };
+      value.clientProvenance[field] = provenance;
+      value.proposedClientChanges.fields[field]!.provenance = provenance;
+      const input = write({ snapshot: value });
+      Reflect.set(provenance, "kind", null);
+      const result = await service.rpc("payr_save_invoice_draft_v1", { ...scope, p_input: input });
+      expect.soft(result.error).toMatchObject({ code: "22023", message: "INVALID_INPUT" });
+      expect.soft(result.data).toBeNull();
+      expect(counts()).toBe("0,0,0,1");
+      expect(await repository.findReplay(actor, input.idempotencyKey, input.requestFingerprint)).toBeNull();
+      Reflect.set(provenance, "kind", "web_source");
+      expect((await repository.saveDraft(actor, input)).snapshot).toEqual(value);
+      expect(counts()).toBe("1,1,1,1");
+    },
+  );
+
+  it("makes Boolean validators return false, never SQL NULL, for null and incomplete inputs", () => {
+    for (const value of ["null", "'null'::jsonb", "'{}'::jsonb"]) {
+      expect(fixture(`select public.payr_draft_text_v1(${value},100) is false
+        and public.payr_draft_billing_v1(${value}) is false and public.payr_draft_provenance_v1(${value}) is false
+        and public.payr_draft_money_v1(${value}) is false and public.payr_draft_snapshot_valid_v1(${value}) is false;`)).toBe("t");
+    }
+    expect(fixture(`select public.payr_draft_provenance_v1('{"kind":null,"url":"https://example.test/contact"}') is false;`)).toBe("t");
+    expect(counts()).toBe("0,0,0,1");
+  });
+
   it("rejects unknown fields at every snapshot nesting level and every missing complete-snapshot field", async () => {
     const input = write();
     const objects = ["snapshot", "snapshot.sender", "snapshot.sender.billingAddress", "snapshot.client", "snapshot.client.billingAddress",
@@ -271,17 +350,7 @@ describe("F3 draft transactions through Supabase RPC", () => {
   });
 
   it("retains confirmed creation/update diffs and provenance without saving client rows", async () => {
-    const created = snapshot();
-    created.clientReference = { id: null, revision: null, alias: null };
-    created.proposedClientChanges = { kind: "create", fields: {
-      businessName: { value: created.client.businessName, provenance: { kind: "user_provided" }, confirmed: true },
-      billingAddress: { value: created.client.billingAddress, provenance: { kind: "user_provided" }, confirmed: true },
-      contactName: { value: created.client.contactName, provenance: { kind: "user_provided" }, confirmed: true },
-      contactEmail: { value: created.client.contactEmail, provenance: { kind: "web_source", url: "https://example.test/contact" }, confirmed: true },
-    } };
-    for (const key of ["businessName", "billingAddress", "contactName", "contactEmail"] as const) {
-      created.clientProvenance[key] = created.proposedClientChanges.fields[key]!.provenance;
-    }
+    const created = newClientSnapshot();
     expect((await repository.saveDraft(actor, write({ snapshot: created }))).snapshot).toEqual(created);
     const updated = snapshot();
     updated.client.contactName = "New Contact";

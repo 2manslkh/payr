@@ -24,6 +24,7 @@ begin
 end;
 $$;
 
+-- JSON null becomes SQL NULL through ->>; validators and rejection guards must fail closed.
 create function public.payr_draft_text_v1(p_value jsonb, p_max integer, p_min integer default 1)
 returns boolean language sql immutable security definer set search_path = '' as $$
   select (pg_catalog.jsonb_typeof(p_value) = 'string'
@@ -36,11 +37,11 @@ create function public.payr_draft_billing_v1(p_value jsonb)
 returns boolean language plpgsql immutable security definer set search_path = '' as $$
 declare v_normalized jsonb;
 begin
-  if not public.payr_identity_object_v1(p_value, array['businessName','billingAddress','contactName','contactEmail']) then return false; end if;
+  if public.payr_identity_object_v1(p_value, array['businessName','billingAddress','contactName','contactEmail']) is not true then return false; end if;
   v_normalized := public.payr_identity_save_input_v1(p_value ||
     '{"id":null,"expectedRevision":null,"alias":"validation"}'::jsonb, true) - array['id','expectedRevision','alias'];
-  return v_normalized = p_value and p_value #>> '{billingAddress,countryCode}' = any(pg_catalog.string_to_array(
-    'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW', ' '));
+  return (v_normalized = p_value and p_value #>> '{billingAddress,countryCode}' = any(pg_catalog.string_to_array(
+    'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW', ' '))) is true;
 exception when sqlstate '22023' then return false;
 end;
 $$;
@@ -50,8 +51,8 @@ returns boolean language plpgsql immutable security definer set search_path = ''
 declare v_url text; v_authority text; v_parts text[]; v_host text; v_port text;
 begin
   if p_value = '{"kind":"user_provided"}'::jsonb then return true; end if;
-  if not public.payr_identity_object_v1(p_value, array['kind','url']) or p_value ->> 'kind' <> 'web_source'
-    or not public.payr_draft_text_v1(p_value -> 'url', 65536) then return false; end if;
+  if public.payr_identity_object_v1(p_value, array['kind','url']) is not true or p_value ->> 'kind' is distinct from 'web_source'
+    or public.payr_draft_text_v1(p_value -> 'url', 65536) is not true then return false; end if;
   v_url := p_value ->> 'url';
   if v_url !~* '^https?://' or v_url ~ '[[:space:][:cntrl:]\\]' then return false; end if;
   v_authority := pg_catalog.substring(v_url, '(?i)^https?://([^/?#]+)');
@@ -67,7 +68,7 @@ begin
     v_parts[3] := v_parts[4];
   end if;
   v_port := nullif(v_parts[3],'');
-  return v_port is null or v_port::integer <= 65535;
+  return (v_port is null or v_port::integer <= 65535) is true;
 exception when invalid_text_representation then return false;
 end;
 $$;
@@ -80,8 +81,8 @@ begin
     and pg_catalog.length(p_value ->> 'amountDecimal') <= 79
     and p_value ->> 'amountDecimal' ~ '^(0|[1-9][0-9]*)(\.[0-9]{0,17}[1-9])?$'
     and p_value ->> 'amountAtomic' ~ '^[1-9][0-9]{0,77}$') is not true then return false; end if;
-  return (p_value ->> 'amountAtomic')::numeric <= 115792089237316195423570985008687907853269984665640564039457584007913129639935
-    and (p_value ->> 'amountDecimal')::numeric * 1000000000000000000 = (p_value ->> 'amountAtomic')::numeric;
+  return ((p_value ->> 'amountAtomic')::numeric <= 115792089237316195423570985008687907853269984665640564039457584007913129639935
+    and (p_value ->> 'amountDecimal')::numeric * 1000000000000000000 = (p_value ->> 'amountAtomic')::numeric) is true;
 end;
 $$;
 
@@ -91,15 +92,15 @@ declare
   v_sender jsonb; v_ref jsonb; v_changes jsonb; v_fields jsonb; v_item jsonb; v_key text;
   v_sum numeric := 0; v_issue date; v_due date; v_deadline text; v_seen text[] := '{}'::text[];
 begin
-  if not public.payr_identity_object_v1(p_value, array['schemaVersion','sender','client','clientReference','clientProvenance',
-    'proposedClientChanges','items','issueDate','dueDate','payableUntil','amountDecimal','amountAtomic','memo','appliedDefaults'])
-    or p_value ->> 'schemaVersion' <> 'payr.draft.v1' then return false; end if;
+  if public.payr_identity_object_v1(p_value, array['schemaVersion','sender','client','clientReference','clientProvenance',
+    'proposedClientChanges','items','issueDate','dueDate','payableUntil','amountDecimal','amountAtomic','memo','appliedDefaults']) is not true
+    or p_value ->> 'schemaVersion' is distinct from 'payr.draft.v1' then return false; end if;
   v_sender := p_value -> 'sender'; v_ref := p_value -> 'clientReference';
   v_changes := p_value -> 'proposedClientChanges'; v_fields := v_changes -> 'fields';
-  if not public.payr_identity_object_v1(v_sender, array['id','revision','businessName','billingAddress','contactName',
-    'contactEmail','payoutWallet','invoicePrefix','defaultPaymentTermsDays'])
-    or not public.payr_draft_billing_v1(v_sender - array['id','revision','payoutWallet','invoicePrefix','defaultPaymentTermsDays'])
-    or not public.payr_draft_billing_v1(p_value -> 'client') then return false; end if;
+  if public.payr_identity_object_v1(v_sender, array['id','revision','businessName','billingAddress','contactName',
+    'contactEmail','payoutWallet','invoicePrefix','defaultPaymentTermsDays']) is not true
+    or public.payr_draft_billing_v1(v_sender - array['id','revision','payoutWallet','invoicePrefix','defaultPaymentTermsDays']) is not true
+    or public.payr_draft_billing_v1(p_value -> 'client') is not true then return false; end if;
   if (pg_catalog.jsonb_typeof(v_sender -> 'id') = 'string' and v_sender ->> 'id' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
     and pg_catalog.jsonb_typeof(v_sender -> 'revision') = 'number' and v_sender ->> 'revision' ~ '^[1-9][0-9]{0,9}$'
     and (v_sender ->> 'revision')::numeric <= 2147483647
@@ -107,14 +108,14 @@ begin
     and pg_catalog.jsonb_typeof(v_sender -> 'invoicePrefix') = 'string' and v_sender ->> 'invoicePrefix' ~ '^[A-Z0-9][A-Z0-9-]{0,31}$'
     and (v_sender -> 'defaultPaymentTermsDays' = 'null'::jsonb or (pg_catalog.jsonb_typeof(v_sender -> 'defaultPaymentTermsDays') = 'number'
       and v_sender ->> 'defaultPaymentTermsDays' ~ '^(0|[1-9][0-9]{0,2})$' and (v_sender ->> 'defaultPaymentTermsDays')::numeric <= 365))) is not true then return false; end if;
-  if not public.payr_identity_object_v1(v_ref, array['id','alias','revision'])
-    or not public.payr_identity_object_v1(p_value -> 'clientProvenance', array['businessName','billingAddress','contactName','contactEmail'])
-    or not public.payr_identity_object_v1(v_changes, array['kind','fields'])
-    or not public.payr_identity_object_v1(v_fields, '{}'::text[], array['businessName','billingAddress','contactName','contactEmail']) then return false; end if;
-  if (v_ref -> 'alias' <> 'null'::jsonb and not public.payr_draft_text_v1(v_ref -> 'alias', 100)) then return false; end if;
+  if public.payr_identity_object_v1(v_ref, array['id','alias','revision']) is not true
+    or public.payr_identity_object_v1(p_value -> 'clientProvenance', array['businessName','billingAddress','contactName','contactEmail']) is not true
+    or public.payr_identity_object_v1(v_changes, array['kind','fields']) is not true
+    or public.payr_identity_object_v1(v_fields, '{}'::text[], array['businessName','billingAddress','contactName','contactEmail']) is not true then return false; end if;
+  if v_ref -> 'alias' is distinct from 'null'::jsonb and public.payr_draft_text_v1(v_ref -> 'alias', 100) is not true then return false; end if;
   if v_ref -> 'id' = 'null'::jsonb then
-    if v_ref -> 'revision' <> 'null'::jsonb or v_changes ->> 'kind' <> 'create'
-      or not (v_fields ?& array['businessName','billingAddress','contactName','contactEmail']) then return false; end if;
+    if v_ref -> 'revision' is distinct from 'null'::jsonb or v_changes ->> 'kind' is distinct from 'create'
+      or (v_fields ?& array['businessName','billingAddress','contactName','contactEmail']) is not true then return false; end if;
   else
     if (pg_catalog.jsonb_typeof(v_ref -> 'id') = 'string' and v_ref ->> 'id' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
       and public.payr_draft_text_v1(v_ref -> 'alias', 100) and pg_catalog.jsonb_typeof(v_ref -> 'revision') = 'number'
@@ -124,25 +125,25 @@ begin
   foreach v_key in array array['businessName','billingAddress','contactName','contactEmail'] loop
     if v_fields ? v_key then
       v_item := v_fields -> v_key;
-      if not public.payr_identity_object_v1(v_item, array['value','provenance','confirmed'])
-        or v_item -> 'confirmed' <> 'true'::jsonb or v_item -> 'value' is distinct from p_value -> 'client' -> v_key
-        or not public.payr_draft_provenance_v1(v_item -> 'provenance')
+      if public.payr_identity_object_v1(v_item, array['value','provenance','confirmed']) is not true
+        or v_item -> 'confirmed' is distinct from 'true'::jsonb or v_item -> 'value' is distinct from p_value -> 'client' -> v_key
+        or public.payr_draft_provenance_v1(v_item -> 'provenance') is not true
         or v_item -> 'provenance' is distinct from p_value -> 'clientProvenance' -> v_key then return false; end if;
     elsif p_value -> 'clientProvenance' -> v_key is distinct from '{"kind":"saved_profile"}'::jsonb then return false;
     end if;
   end loop;
-  if not public.payr_draft_money_v1(p_value) or not public.payr_draft_text_v1(p_value -> 'memo', 2000, 0)
+  if public.payr_draft_money_v1(p_value) is not true or public.payr_draft_text_v1(p_value -> 'memo', 2000, 0) is not true
     or pg_catalog.jsonb_typeof(p_value -> 'items') is distinct from 'array' then return false; end if;
   if pg_catalog.jsonb_array_length(p_value -> 'items') not between 1 and 100 then return false; end if;
   for v_item in select a.value from pg_catalog.jsonb_array_elements(p_value -> 'items') as a(value) loop
-    if not public.payr_identity_object_v1(v_item, array['description','amountDecimal','amountAtomic'])
-      or not public.payr_draft_text_v1(v_item -> 'description', 500) or not public.payr_draft_money_v1(v_item) then return false; end if;
+    if public.payr_identity_object_v1(v_item, array['description','amountDecimal','amountAtomic']) is not true
+      or public.payr_draft_text_v1(v_item -> 'description', 500) is not true or public.payr_draft_money_v1(v_item) is not true then return false; end if;
     v_sum := v_sum + (v_item ->> 'amountAtomic')::numeric;
   end loop;
-  if v_sum <> (p_value ->> 'amountAtomic')::numeric then return false; end if;
+  if v_sum is distinct from (p_value ->> 'amountAtomic')::numeric then return false; end if;
   foreach v_key in array array['issueDate','dueDate'] loop
-    if pg_catalog.jsonb_typeof(p_value -> v_key) <> 'string' or p_value ->> v_key !~ '^[2-9][0-9]{3}-[0-9]{2}-[0-9]{2}$'
-      or pg_catalog.to_char((p_value ->> v_key)::date, 'YYYY-MM-DD') <> p_value ->> v_key then return false; end if;
+    if (pg_catalog.jsonb_typeof(p_value -> v_key) = 'string' and p_value ->> v_key ~ '^[2-9][0-9]{3}-[0-9]{2}-[0-9]{2}$'
+      and pg_catalog.to_char((p_value ->> v_key)::date, 'YYYY-MM-DD') = p_value ->> v_key) is not true then return false; end if;
   end loop;
   v_issue := (p_value ->> 'issueDate')::date; v_due := (p_value ->> 'dueDate')::date;
   if v_due < v_issue or v_due + 30 > date '9999-12-31' then return false; end if;
@@ -150,14 +151,14 @@ begin
   if p_value -> 'payableUntil' is distinct from pg_catalog.to_jsonb(v_deadline)
     or pg_catalog.jsonb_typeof(p_value -> 'appliedDefaults') is distinct from 'array' then return false; end if;
   for v_item in select a.value from pg_catalog.jsonb_array_elements(p_value -> 'appliedDefaults') as a(value) loop
-    if not public.payr_identity_object_v1(v_item, array['field','value','source']) then return false; end if;
+    if public.payr_identity_object_v1(v_item, array['field','value','source']) is not true then return false; end if;
     v_key := v_item ->> 'field';
     if (v_key in ('issueDate','dueDate','payableUntil') and not (v_key = any(v_seen))
       and v_item -> 'value' = p_value -> v_key
       and v_item ->> 'source' = case v_key when 'issueDate' then 'workspace_date' when 'dueDate' then 'sender_terms' else 'technical_deadline' end) is not true then return false; end if;
     v_seen := pg_catalog.array_append(v_seen, v_key);
   end loop;
-  return 'payableUntil' = any(v_seen);
+  return ('payableUntil' = any(v_seen)) is true;
 exception when invalid_text_representation or datetime_field_overflow or invalid_datetime_format or numeric_value_out_of_range then return false;
 end;
 $$;
@@ -177,7 +178,7 @@ begin
   end if;
   if tg_op = 'DELETE' then return old; end if;
   if new.draft_snapshot is not null then
-    if not public.payr_draft_snapshot_valid_v1(new.draft_snapshot)
+    if public.payr_draft_snapshot_valid_v1(new.draft_snapshot) is not true
       or new.sender_snapshot is distinct from new.draft_snapshot -> 'sender'
       or new.client_snapshot is distinct from new.draft_snapshot -> 'client'
       or new.line_items is distinct from new.draft_snapshot -> 'items'
@@ -209,7 +210,7 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare v_request public.idempotency_requests; v_result jsonb;
 begin
   perform public.payr_draft_scope_v1(p_workspace_id, p_owner_wallet, p_connector_id, 'invoice:draft');
-  if not public.payr_draft_text_v1(pg_catalog.to_jsonb(p_idempotency_key), 128)
+  if public.payr_draft_text_v1(pg_catalog.to_jsonb(p_idempotency_key), 128) is not true
     or p_request_fingerprint is null or p_request_fingerprint !~ '^[0-9a-f]{64}$' then
     raise exception using errcode = '22023', message = 'INVALID_INPUT';
   end if;
@@ -235,7 +236,7 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare v_sender public.sender_profiles; v_client public.clients; v_invoice public.invoices; v_version public.invoice_versions;
 begin
   perform public.payr_draft_scope_v1(p_workspace_id, p_owner_wallet, p_connector_id, 'invoice:draft');
-  if p_client_alias is not null and not public.payr_draft_text_v1(pg_catalog.to_jsonb(p_client_alias), 100) then
+  if p_client_alias is not null and public.payr_draft_text_v1(pg_catalog.to_jsonb(p_client_alias), 100) is not true then
     raise exception using errcode = '22023', message = 'INVALID_INPUT';
   end if;
   if p_draft_id is not null then
@@ -266,15 +267,15 @@ declare
   v_invoice public.invoices; v_version public.invoice_versions; v_id uuid; v_key text; v_client_dto jsonb;
 begin
   perform public.payr_draft_scope_v1(p_workspace_id, p_owner_wallet, p_connector_id, 'invoice:draft');
-  if not public.payr_identity_object_v1(p_input, array['draftId','expectedVersion','idempotencyKey','requestFingerprint','snapshot'])
-    or not public.payr_draft_text_v1(p_input -> 'idempotencyKey', 128)
+  if public.payr_identity_object_v1(p_input, array['draftId','expectedVersion','idempotencyKey','requestFingerprint','snapshot']) is not true
+    or public.payr_draft_text_v1(p_input -> 'idempotencyKey', 128) is not true
     or (pg_catalog.jsonb_typeof(p_input -> 'requestFingerprint') = 'string'
       and p_input ->> 'requestFingerprint' ~ '^[0-9a-f]{64}$') is not true
-    or not public.payr_draft_snapshot_valid_v1(p_input -> 'snapshot') then
+    or public.payr_draft_snapshot_valid_v1(p_input -> 'snapshot') is not true then
     raise exception using errcode = '22023', message = 'INVALID_INPUT';
   end if;
   if p_input -> 'draftId' = 'null'::jsonb then
-    if p_input -> 'expectedVersion' <> 'null'::jsonb then raise exception using errcode = '22023', message = 'INVALID_INPUT'; end if;
+    if p_input -> 'expectedVersion' is distinct from 'null'::jsonb then raise exception using errcode = '22023', message = 'INVALID_INPUT'; end if;
   elsif (pg_catalog.jsonb_typeof(p_input -> 'draftId') = 'string'
     and p_input ->> 'draftId' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
     and pg_catalog.jsonb_typeof(p_input -> 'expectedVersion') = 'number' and p_input ->> 'expectedVersion' ~ '^[1-9][0-9]{0,9}$'
@@ -397,7 +398,7 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare v_items jsonb;
 begin
   perform public.payr_draft_scope_v1(p_workspace_id,p_owner_wallet,p_connector_id,'invoice:status');
-  if not public.payr_draft_text_v1(pg_catalog.to_jsonb(p_search),200,0) or p_limit is null or p_limit not between 1 and 50
+  if public.payr_draft_text_v1(pg_catalog.to_jsonb(p_search),200,0) is not true or p_limit is null or p_limit not between 1 and 50
     or p_offset is null or p_offset < 0 or (p_commercial_state is not null and p_commercial_state not in ('draft','published','voided','expired')) then
     raise exception using errcode = '22023', message = 'INVALID_INPUT';
   end if;

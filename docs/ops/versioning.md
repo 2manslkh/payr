@@ -25,7 +25,7 @@ Use `pnpm release:prepare -- <version> --dry-run` to inspect the proposed versio
 
 ## Tag The Merge
 
-1. The `publish-release-tag` CI job runs `pnpm release:tag` after every push to `main`. The command fetches `origin/main`, proves exact two-parent merge topology, proves the reviewed head was current and ended with the only version change, creates the annotated tag on that merge commit, pushes only the tag, and reads it back from the remote.
+1. The `publish-release-tag` CI job runs `pnpm release:tag` after every push to `main`. Its checkout uses the dedicated `PAYR_RELEASE_TAG_SSH_KEY` write deploy key, which may create protected version tags but cannot update or delete them. The command fetches `origin/main`, proves exact two-parent merge topology, proves the reviewed head was current and ended with the only version change, creates the annotated tag on that merge commit, pushes only the tag, and reads it back from the remote.
 2. Run `pnpm release:tag -- vX.Y.Z` manually as an idempotent read-back. To recover a missing tag after `main` advances, run `PAYR_RELEASE_COMMIT=<merge-sha> pnpm release:tag -- vX.Y.Z`.
 3. Verify the tag target, `package.json` at the tagged commit, merged PR, and post-merge `main` CI.
 4. GitHub deletes the remote integration branch after merge. Keep local agent branches and worktrees until the tag and post-merge CI are green.

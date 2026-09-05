@@ -76,6 +76,7 @@ function resetFixtures(): void {
       public.connector_tokens,
       public.auth_nonces,
       public.invoice_sequences,
+      public.reconciliation_cursors,
       public.clients,
       public.sender_profiles,
       public.workspaces
@@ -102,7 +103,7 @@ function resetFixtures(): void {
     ) values
       ('${VERSION_A}', '${WORKSPACE_A}', '${INVOICE_A}', 1, '{}', '{}', '[]', current_date, current_date + 7,
        date_trunc('second', now() + interval '30 days'), extract(epoch from date_trunc('second', now() + interval '30 days'))::bigint,
-       '1', 1000000000000000000, 5042002, '${CONTRACT}', '${PAYEE}', now()),
+       '1.000000000000000001', 1000000000000000001, 5042002, '${CONTRACT}', '${PAYEE}', now()),
       ('${VERSION_B}', '${WORKSPACE_B}', '${INVOICE_B}', 1, '{}', '{}', '[]', current_date, current_date + 7,
        date_trunc('second', now() + interval '30 days'), extract(epoch from date_trunc('second', now() + interval '30 days'))::bigint,
        '2', 2000000000000000000, 5042002, '${CONTRACT}', '${PAYEE}', now());
@@ -136,7 +137,7 @@ function seedSettlementAndReadyReceipt(): void {
     ) values (
       '${SETTLEMENT_A}', '${WORKSPACE_A}', '${INVOICE_A}', '${VERSION_A}', '${ATTEMPT_A}',
       5042002, '${CONTRACT}', '${INVOICE_KEY_A}', '0x${"d".repeat(64)}', 0,
-      100, '2026-09-05T00:00:00Z', '${COMMITMENT_A}', '0x${"e".repeat(40)}', '${PAYEE}', 1000000000000000000
+      100, '2026-09-05T00:00:00Z', '${COMMITMENT_A}', '0x${"e".repeat(40)}', '${PAYEE}', 1000000000000000001
     );
 
     insert into public.receipt_documents (
@@ -164,7 +165,7 @@ function settlementParameters() {
     p_document_commitment: COMMITMENT_A,
     p_payer: `0x${"e".repeat(40)}`,
     p_payee: PAYEE,
-    p_amount_atomic: "1000000000000000000",
+    p_amount_atomic: "1000000000000000001",
     p_receipt_token_id: "00000000-0000-4000-8000-000000000801",
     p_receipt_key_version: 1,
     p_receipt_verifier_hash: "f".repeat(64),
@@ -225,9 +226,9 @@ describe("Payr database security contract", () => {
     });
 
     expect(first.error).toBeNull();
-    expect(first.data).toEqual([{ outcome: "allocated", sequence_value: 1 }]);
+    expect(first.data).toEqual([{ outcome: "allocated", sequence_value: "1" }]);
     expect(replay.error).toBeNull();
-    expect(replay.data).toEqual([{ outcome: "replayed", sequence_value: 1 }]);
+    expect(replay.data).toEqual([{ outcome: "replayed", sequence_value: "1" }]);
     expect(conflict.error).toBeNull();
     expect(conflict.data).toEqual([{ outcome: "conflict", sequence_value: null }]);
 
@@ -254,8 +255,9 @@ describe("Payr database security contract", () => {
     );
 
     expect(allocations.every(({ error }) => error === null)).toBe(true);
-    const values = allocations.map(({ data }) => (data as Array<{ sequence_value: number }>)[0]!.sequence_value);
-    expect([...new Set(values)].sort((a, b) => a - b)).toEqual(Array.from({ length: 20 }, (_, index) => index + 1));
+    const values = allocations.map(({ data }) => (data as Array<{ sequence_value: string }>)[0]!.sequence_value);
+    expect([...new Set(values)].sort((a, b) => BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0))
+      .toEqual(Array.from({ length: 20 }, (_, index) => String(index + 1)));
 
     const replay = await serviceRole.rpc("payr_allocate_invoice_sequence_v1", {
       p_workspace_id: WORKSPACE_A,
@@ -271,9 +273,37 @@ describe("Payr database security contract", () => {
     });
 
     expect(replay.data).toEqual([
-      { outcome: "replayed", sequence_value: (allocations[3]!.data as Array<{ sequence_value: number }>)[0]!.sequence_value },
+      { outcome: "replayed", sequence_value: (allocations[3]!.data as Array<{ sequence_value: string }>)[0]!.sequence_value },
     ]);
-    expect(next.data).toEqual([{ outcome: "allocated", sequence_value: 21 }]);
+    expect(next.data).toEqual([{ outcome: "allocated", sequence_value: "21" }]);
+  });
+
+  it("allocates and replays exact sequence text above MAX_SAFE_INTEGER", async () => {
+    executeSql(`
+      insert into public.invoice_sequences (workspace_id, sequence_year, next_value)
+      values ('${WORKSPACE_A}', 2026, 9007199254740993);
+    `);
+    const parameters = {
+      p_workspace_id: WORKSPACE_A,
+      p_sequence_year: 2026,
+      p_idempotency_key: "large-sequence",
+      p_request_fingerprint: "f".repeat(64),
+    };
+    for (const outcome of ["allocated", "replayed"]) {
+      const result = await serviceRole.rpc("payr_allocate_invoice_sequence_v1", parameters);
+      expect(result.error).toBeNull();
+      expect(result.data).toEqual([{ outcome, sequence_value: "9007199254740993" }]);
+    }
+    const next = await serviceRole.rpc("payr_allocate_invoice_sequence_v1", {
+      ...parameters, p_idempotency_key: "next-large-sequence",
+    });
+    expect(next.error).toBeNull();
+    expect(next.data).toEqual([{ outcome: "allocated", sequence_value: "9007199254740994" }]);
+
+    const persisted = await serviceRole.from("invoice_sequences").select("next_value::text")
+      .eq("workspace_id", WORKSPACE_A).eq("sequence_year", 2026).single();
+    expect(persisted.error).toBeNull();
+    expect(persisted.data).toEqual({ next_value: "9007199254740995" });
   });
 
   it("pins the four enums and the three non-overloaded hardened RPCs", () => {
@@ -461,6 +491,174 @@ describe("Payr database security contract", () => {
     }
   });
 
+  it.each(["ids", "hashes", "filenames"])("rejects unsafe %s descriptor labels", (map) => {
+    const value = { ids: VERSION_A, hashes: COMMITMENT_A, filenames: "invoice.pdf" }[map];
+    for (const label of [
+      "https://example.test/private", "https://example.test/i/credential", "invoiceLabel", "invoice-label",
+      "_invoice", "invoice__id", "invoice_", "a".repeat(64),
+      "url", "invoice_url", "slug", "receipt_slug", "token", "access_token", "bearer_token",
+    ]) {
+      expectSqlFailure(
+        `insert into public.idempotency_requests (
+           id, workspace_id, operation, idempotency_key, request_fingerprint, result_descriptor
+         ) values (
+           gen_random_uuid(), '${WORKSPACE_A}', 'test', 'unsafe-label', '${"8".repeat(64)}',
+           '${JSON.stringify({ [map]: { [label]: value } })}'::jsonb
+         );`,
+        "idempotency_requests_safe_result",
+      );
+    }
+  });
+
+  it.each([
+    null, [], "not-an-object", 1, true,
+    { state: null }, { ids: null }, { hashes: null }, { filenames: null },
+    { ids: [] }, { hashes: "not-a-map" }, { filenames: 1 },
+    { ids: { invoice: null } }, { hashes: { invoice: {} } }, { filenames: { invoice: [] } },
+  ])("rejects null or nonobject descriptor shapes: %j", (descriptor) => {
+    expectSqlFailure(
+      `insert into public.idempotency_requests (
+         id, workspace_id, operation, idempotency_key, request_fingerprint, result_descriptor
+       ) values (
+         gen_random_uuid(), '${WORKSPACE_A}', 'test', 'unsafe-shape', '${"8".repeat(64)}',
+         '${JSON.stringify(descriptor)}'::jsonb
+       );`,
+      "idempotency_requests_safe_result",
+    );
+  });
+
+  it.each([
+    `${"A".repeat(22)}.${"B".repeat(43)}`,
+    `${"A".repeat(22)}.${"B".repeat(43)}.pdf`,
+    "invoice.v1.pdf", "invoice", ".pdf", "invoice.txt", "../invoice.pdf", "https://example.test/invoice.pdf",
+  ])("rejects bearer slugs and non-PDF descriptor basenames: %s", (filename) => {
+    expectSqlFailure(
+      `insert into public.idempotency_requests (
+         id, workspace_id, operation, idempotency_key, request_fingerprint, result_descriptor
+       ) values (
+         gen_random_uuid(), '${WORKSPACE_A}', 'test', 'unsafe-filename', '${"8".repeat(64)}',
+         '${JSON.stringify({ filenames: { invoice: filename } })}'::jsonb
+       );`,
+      "idempotency_requests_safe_result",
+    );
+  });
+
+  it("accepts safe descriptor maps including a nonsecret token_id", () => {
+    for (const descriptor of [
+      {}, { state: "1" }, { ids: {}, hashes: {}, filenames: {} },
+      {
+        ids: { invoice_version_id: VERSION_A, token_id: "00000000-0000-4000-8000-000000000501" },
+        hashes: { document_commitment: COMMITMENT_A },
+        filenames: { invoice_pdf: "PAYR-2026-0001.pdf", ["a".repeat(63)]: "receipt_1.pdf" },
+        state: "finalized",
+      },
+    ]) {
+      executeSql(`
+        insert into public.idempotency_requests (
+          id, workspace_id, operation, idempotency_key, request_fingerprint, result_descriptor
+        ) values (
+          gen_random_uuid(), '${WORKSPACE_A}', 'test', '${randomUUID()}', '${"8".repeat(64)}',
+          '${JSON.stringify(descriptor)}'::jsonb
+        );
+      `);
+    }
+  });
+
+  it.each(["stored", "finalized"])("requires application/pdf on a %s publication artifact", (state) => {
+    const invoiceId = randomUUID();
+    const versionId = randomUUID();
+    executeSql(`
+      insert into public.invoices (id, workspace_id) values ('${invoiceId}', '${WORKSPACE_A}');
+      insert into public.invoice_versions (id, workspace_id, invoice_id, version_number)
+      values ('${versionId}', '${WORKSPACE_A}', '${invoiceId}', 1);
+    `);
+    for (const contentType of ["null", "'text/plain'", "'application/pdf'"]) {
+      const sql = `begin;
+        insert into public.publication_attempts
+        select (jsonb_populate_record(null::public.publication_attempts, to_jsonb(attempt) || jsonb_build_object(
+          'id', gen_random_uuid(), 'invoice_id', '${invoiceId}', 'invoice_version_id', '${versionId}',
+          'invoice_key', '0x${"3".repeat(64)}', 'invoice_token_id', gen_random_uuid(),
+          'state', '${state}', 'finalized_at', ${state === "finalized" ? "now()" : "null"},
+          'pdf_content_type', ${contentType}
+        ))).* from public.publication_attempts as attempt where id = '${ATTEMPT_A}';
+        rollback;`;
+      if (contentType === "'application/pdf'") {
+        executeSql(sql);
+      } else {
+        expectSqlFailure(sql, "publication_attempts_artifact_group");
+      }
+    }
+  });
+
+  it("requires application/pdf on a ready receipt artifact", () => {
+    seedSettlementAndReadyReceipt();
+    for (const contentType of ["null", "'text/plain'", "'application/pdf'"]) {
+      const sql = `begin;
+        insert into public.settlements
+        select (jsonb_populate_record(null::public.settlements, to_jsonb(settlement) || jsonb_build_object(
+          'id', '00000000-0000-4000-8000-000000000602', 'invoice_key', '0x${"1".repeat(64)}',
+          'transaction_hash', '0x${"2".repeat(64)}'
+        ))).* from public.settlements as settlement where id = '${SETTLEMENT_A}';
+        insert into public.receipt_documents
+        select (jsonb_populate_record(null::public.receipt_documents, to_jsonb(receipt) || jsonb_build_object(
+          'id', gen_random_uuid(), 'settlement_id', '00000000-0000-4000-8000-000000000602',
+          'token_id', gen_random_uuid(), 'content_type', ${contentType}
+        ))).* from public.receipt_documents as receipt where id = '${RECEIPT_A}';
+        rollback;`;
+      if (contentType === "'application/pdf'") {
+        executeSql(sql);
+      } else {
+        expectSqlFailure(sql, "receipt_documents_artifact_group");
+      }
+    }
+  });
+
+  it.each(["same", "different"])("rejects a second finalized publication on the %s invoice version", (version) => {
+    const versionId = version === "same" ? VERSION_A : randomUUID();
+    if (version === "different") {
+      executeSql(`
+        insert into public.invoice_versions
+        select (jsonb_populate_record(null::public.invoice_versions, to_jsonb(version) || jsonb_build_object(
+          'id', '${versionId}', 'version_number', 2
+        ))).* from public.invoice_versions as version where id = '${VERSION_A}';
+      `);
+    }
+    expectSqlFailure(
+      `begin;
+       insert into public.publication_attempts
+       select (jsonb_populate_record(null::public.publication_attempts, to_jsonb(attempt) || jsonb_build_object(
+         'id', gen_random_uuid(), 'invoice_version_id', '${versionId}',
+         'invoice_key', '0x${"3".repeat(64)}', 'invoice_token_id', gen_random_uuid()
+       ))).* from public.publication_attempts as attempt where id = '${ATTEMPT_A}';
+       rollback;`,
+      "publication_attempts_one_finalized_per_invoice",
+    );
+  });
+
+  it("retains failed and active attempts but rejects a second finalization", () => {
+    const activeAttemptId = randomUUID();
+    for (const state of ["failed", "stored"]) {
+      executeSql(`
+        insert into public.publication_attempts
+        select (jsonb_populate_record(null::public.publication_attempts, to_jsonb(attempt) || jsonb_build_object(
+          'id', '${state === "stored" ? activeAttemptId : randomUUID()}',
+          'invoice_key', '0x${(state === "stored" ? "3" : "4").repeat(64)}', 'invoice_token_id', gen_random_uuid(),
+          'state', '${state}', 'finalized_at', null,
+          'terminal_failure_code', ${state === "failed" ? "'RENDER_FAILED'" : "null"}
+        ))).* from public.publication_attempts as attempt where id = '${ATTEMPT_A}';
+      `);
+    }
+    expectSqlFailure(
+      `update public.publication_attempts set state = 'finalized', finalized_at = now()
+       where id = '${activeAttemptId}';`,
+      "publication_attempts_one_finalized_per_invoice",
+    );
+    expect(executeSql(`
+      select string_agg(state::text, ',' order by state::text) from public.publication_attempts
+      where workspace_id = '${WORKSPACE_A}' and invoice_id = '${INVOICE_A}';
+    `)).toBe("failed,finalized,stored");
+  });
+
   it("blocks update and delete of every immutable database record", () => {
     seedSettlementAndReadyReceipt();
     const hostileMutations = [
@@ -482,10 +680,11 @@ describe("Payr database security contract", () => {
   it("records an authorization only for the exact payable frozen tuple and strict deadline", async () => {
     const { data: version, error: versionError } = await serviceRole
       .from("invoice_versions")
-      .select("payable_until_second")
+      .select("payable_until_second,amount_atomic::text")
       .eq("id", VERSION_A)
       .single();
     expect(versionError).toBeNull();
+    expect(version!.amount_atomic).toBe("1000000000000000001");
     const payableUntilSecond = Number(version!.payable_until_second);
     const issuedAtSecond = Math.floor(Date.now() / 1_000);
     const parameters = {
@@ -498,7 +697,7 @@ describe("Payr database security contract", () => {
       p_contract_address: CONTRACT,
       p_document_commitment: COMMITMENT_A,
       p_payee: PAYEE,
-      p_amount_atomic: "1000000000000000000",
+      p_amount_atomic: "1000000000000000001",
       p_attestor: `0x${"3".repeat(40)}`,
       p_typed_data_digest: `0x${"4".repeat(64)}`,
       p_signature_hash: `0x${"5".repeat(64)}`,
@@ -511,6 +710,11 @@ describe("Payr database security contract", () => {
     const recorded = await serviceRole.rpc("payr_record_payment_authorization_v1", parameters);
     expect(recorded.error).toBeNull();
     expect(recorded.data).toEqual([{ outcome: "recorded", authorization_id: parameters.p_authorization_id }]);
+
+    const authorization = await serviceRole.from("payment_authorizations").select("amount_atomic::text")
+      .eq("workspace_id", WORKSPACE_A).eq("id", parameters.p_authorization_id).single();
+    expect(authorization.error).toBeNull();
+    expect(authorization.data).toEqual({ amount_atomic: "1000000000000000001" });
 
     const equality = await serviceRole.rpc("payr_record_payment_authorization_v1", {
       ...parameters,
@@ -546,7 +750,7 @@ describe("Payr database security contract", () => {
   });
 
   it("records settlement follow-ups atomically and replays immutable facts only", async () => {
-    const parameters = settlementParameters();
+    const parameters = { ...settlementParameters(), p_block_number: "9007199254740993" };
     const recorded = await serviceRole.rpc("payr_record_settlement_v1", parameters);
     expect(recorded.error).toBeNull();
     expect(recorded.data).toEqual([
@@ -555,7 +759,7 @@ describe("Payr database security contract", () => {
     const result = (recorded.data as Array<{ settlement_id: string; receipt_document_id: string }>)[0]!;
 
     const [settlements, receipts, links, deliveries] = await Promise.all([
-      serviceRole.from("settlements").select("*").eq("id", result.settlement_id),
+      serviceRole.from("settlements").select("id,amount_atomic::text,block_number::text").eq("id", result.settlement_id),
       serviceRole.from("receipt_documents").select("state,settlement_id,token_id").eq("id", result.receipt_document_id),
       serviceRole.from("access_links").select("purpose,receipt_document_id,token_id").eq("receipt_document_id", result.receipt_document_id),
       serviceRole
@@ -565,7 +769,9 @@ describe("Payr database security contract", () => {
         .order("normalized_recipient"),
     ]);
     expect(settlements.error).toBeNull();
-    expect(settlements.data).toHaveLength(1);
+    expect(settlements.data).toEqual([{
+      id: result.settlement_id, amount_atomic: "1000000000000000001", block_number: "9007199254740993",
+    }]);
     expect(receipts.data).toEqual([
       { state: "pending", settlement_id: result.settlement_id, token_id: parameters.p_receipt_token_id },
     ]);
@@ -627,6 +833,59 @@ describe("Payr database security contract", () => {
     expect(sideEffectCounts).toEqual([1, 1, 1, 2]);
   });
 
+  it.each(["100.4", "100.5", "-0.1", "-1", "NaN", "Infinity", "-Infinity", null])(
+    "rejects invalid settlement block input %s without side effects",
+    async (blockNumber) => {
+      const result = await serviceRole.rpc("payr_record_settlement_v1", {
+        ...settlementParameters(),
+        p_block_number: blockNumber,
+      });
+      expect(result.error?.message).toBe("SETTLEMENT_BLOCK_NUMBER_INVALID");
+      for (const table of ["settlements", "receipt_documents", "access_links", "email_deliveries"]) {
+        const { count, error } = await serviceRole.from(table).select("*", { count: "exact", head: true });
+        expect(error, table).toBeNull();
+        expect(count, table).toBe(0);
+      }
+    },
+  );
+
+  it("rejects stored NaN monetary and block facts independently of runtime privileges", () => {
+    seedSettlementAndReadyReceipt();
+    for (const field of ["amount_atomic", "block_number"]) {
+      expectSqlFailure(
+        `insert into public.settlements
+         select (jsonb_populate_record(null::public.settlements, to_jsonb(settlement) || jsonb_build_object(
+           'id', gen_random_uuid(), 'invoice_key', '0x${"1".repeat(64)}',
+           'transaction_hash', '0x${"2".repeat(64)}', '${field}', 'NaN'
+         ))).* from public.settlements as settlement where id = '${SETTLEMENT_A}';`,
+        field === "amount_atomic" ? "settlements_amount_positive" : "settlements_block_number_nonnegative",
+      );
+    }
+    expectSqlFailure(
+      `insert into public.reconciliation_cursors (chain_id, contract_address, next_block)
+       values (5042002, '${CONTRACT}', 'NaN');`,
+      "reconciliation_cursors_next_block_nonnegative",
+    );
+    expectSqlFailure(
+      `insert into public.invoice_versions (id, workspace_id, invoice_id, version_number, amount_decimal, amount_atomic)
+       values (gen_random_uuid(), '${WORKSPACE_A}', '${INVOICE_A}', 2, '1', 'NaN');`,
+      "invoice_versions_amount_consistent",
+    );
+    expectSqlFailure(
+      `insert into public.payment_authorizations (
+         id, workspace_id, invoice_id, invoice_version_id, publication_attempt_id,
+         invoice_key, chain_id, contract_address, document_commitment, payee, amount_atomic,
+         attestor, typed_data_digest, signature_hash, signer_mode, policy_result,
+         issued_at_second, authorization_valid_until, payable_until_second
+       ) values (
+         gen_random_uuid(), '${WORKSPACE_A}', '${INVOICE_A}', '${VERSION_A}', '${ATTEMPT_A}',
+         '${INVOICE_KEY_A}', 5042002, '${CONTRACT}', '${COMMITMENT_A}', '${PAYEE}', 'NaN',
+         '${PAYEE}', '0x${"3".repeat(64)}', '0x${"4".repeat(64)}', 'local-testnet', 'allowed', 1, 2, 3
+       );`,
+      "payment_authorizations_amount_positive",
+    );
+  });
+
   it("fails a new settlement atomically when any follow-up is invalid", async () => {
     const invalid = await serviceRole.rpc("payr_record_settlement_v1", {
       ...settlementParameters(),
@@ -683,7 +942,7 @@ describe("Payr database security contract", () => {
             p_contract_address: CONTRACT,
             p_document_commitment: COMMITMENT_A,
             p_payee: PAYEE,
-            p_amount_atomic: "1000000000000000000",
+            p_amount_atomic: "1000000000000000001",
             p_attestor: `0x${"3".repeat(40)}`,
             p_typed_data_digest: `0x${"4".repeat(64)}`,
             p_signature_hash: `0x${"5".repeat(64)}`,

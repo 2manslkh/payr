@@ -26,7 +26,9 @@ as $$
         and not exists (
           select 1
           from pg_catalog.jsonb_each_text(p_value -> 'ids') as item(key, value)
-          where item.key ~* '(url|slug|token)'
+          where pg_catalog.length(item.key) > 63
+             or item.key !~ '^[a-z][a-z0-9]*(_[a-z0-9]+)*$'
+             or (item.key ~ '(url|slug|token)' and item.key <> 'token_id')
              or item.value !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
         )
         and not exists (
@@ -43,7 +45,9 @@ as $$
         and not exists (
           select 1
           from pg_catalog.jsonb_each_text(p_value -> 'hashes') as item(key, value)
-          where item.key ~* '(url|slug|token)'
+          where pg_catalog.length(item.key) > 63
+             or item.key !~ '^[a-z][a-z0-9]*(_[a-z0-9]+)*$'
+             or item.key ~ '(url|slug|token)'
              or item.value !~ '^0x[0-9a-f]{64}$'
         )
         and not exists (
@@ -60,10 +64,10 @@ as $$
         and not exists (
           select 1
           from pg_catalog.jsonb_each_text(p_value -> 'filenames') as item(key, value)
-          where item.key ~* '(url|slug|token)'
-             or item.value in ('', '.', '..')
-             or item.value ~ '[/\\]'
-             or item.value ~ '[[:cntrl:]]'
+          where pg_catalog.length(item.key) > 63
+             or item.key !~ '^[a-z][a-z0-9]*(_[a-z0-9]+)*$'
+             or item.key ~ '(url|slug|token)'
+             or item.value !~ '^[A-Za-z0-9_-]+[.]pdf$'
         )
         and not exists (
           select 1
@@ -261,7 +265,7 @@ create table public.idempotency_requests (
   constraint idempotency_requests_operation_nonempty check (pg_catalog.btrim(operation) <> ''),
   constraint idempotency_requests_key_nonempty check (pg_catalog.btrim(idempotency_key) <> ''),
   constraint idempotency_requests_fingerprint_format check (request_fingerprint ~ '^[0-9a-f]{64}$'),
-  constraint idempotency_requests_safe_result check (public.payr_is_safe_result_descriptor(result_descriptor)),
+  constraint idempotency_requests_safe_result check (public.payr_is_safe_result_descriptor(result_descriptor) is true),
   constraint idempotency_requests_completion_order check (completed_at is null or completed_at >= created_at)
 );
 
@@ -336,7 +340,7 @@ create table public.invoice_versions (
       and amount_decimal !~ '\.[0-9]*0$'
     )
   ),
-  constraint invoice_versions_amount_positive check (amount_atomic is null or amount_atomic > 0),
+  constraint invoice_versions_amount_positive check (amount_atomic is null or (amount_atomic > 0 and amount_atomic < 'Infinity'::numeric)),
   constraint invoice_versions_amount_consistent check (amount_decimal is null or amount_atomic = amount_decimal::numeric * 1000000000000000000),
   constraint invoice_versions_chain_positive check (chain_id is null or chain_id > 0),
   constraint invoice_versions_contract_format check (contract_address is null or contract_address ~ '^0x[0-9a-f]{40}$'),
@@ -409,7 +413,7 @@ create table public.publication_attempts (
   constraint publication_attempts_terminal_facts check ((state = 'failed') = (terminal_failure_code is not null) and (state = 'finalized') = (finalized_at is not null)),
   constraint publication_attempts_artifact_group check (
     (invoice_data_hash is null and pdf_content_hash is null and document_commitment is null and pdf_filename is null and pdf_byte_length is null and pdf_content_type is null and stored_at is null)
-    or (invoice_data_hash is not null and pdf_content_hash is not null and document_commitment is not null and pdf_filename is not null and pdf_byte_length is not null and pdf_content_type = 'application/pdf' and stored_at is not null)
+    or (invoice_data_hash is not null and pdf_content_hash is not null and document_commitment is not null and pdf_filename is not null and pdf_byte_length is not null and pdf_content_type is not null and pdf_content_type = 'application/pdf' and stored_at is not null)
   ),
   constraint publication_attempts_artifact_state check (
     (state in ('reserved', 'rendering') and invoice_data_hash is null)
@@ -429,6 +433,10 @@ create table public.publication_attempts (
 create unique index publication_attempts_one_active_per_version
 on public.publication_attempts (workspace_id, invoice_id, invoice_version_id)
 where state in ('reserved', 'rendering', 'stored');
+
+create unique index publication_attempts_one_finalized_per_invoice
+on public.publication_attempts (workspace_id, invoice_id)
+where state = 'finalized';
 
 create table public.payment_authorizations (
   id uuid primary key,
@@ -459,7 +467,7 @@ create table public.payment_authorizations (
   constraint payment_authorizations_contract_format check (contract_address ~ '^0x[0-9a-f]{40}$'),
   constraint payment_authorizations_commitment_format check (document_commitment ~ '^0x[0-9a-f]{64}$'),
   constraint payment_authorizations_payee_format check (payee ~ '^0x[0-9a-f]{40}$'),
-  constraint payment_authorizations_amount_positive check (amount_atomic > 0),
+  constraint payment_authorizations_amount_positive check (amount_atomic > 0 and amount_atomic < 'Infinity'::numeric),
   constraint payment_authorizations_attestor_format check (attestor ~ '^0x[0-9a-f]{40}$'),
   constraint payment_authorizations_digest_format check (typed_data_digest ~ '^0x[0-9a-f]{64}$'),
   constraint payment_authorizations_signature_hash_format check (signature_hash ~ '^0x[0-9a-f]{64}$'),
@@ -497,11 +505,11 @@ create table public.settlements (
   constraint settlements_invoice_key_format check (invoice_key ~ '^0x[0-9a-f]{64}$'),
   constraint settlements_transaction_hash_format check (transaction_hash ~ '^0x[0-9a-f]{64}$'),
   constraint settlements_log_index_nonnegative check (log_index >= 0),
-  constraint settlements_block_number_nonnegative check (block_number >= 0),
+  constraint settlements_block_number_nonnegative check (block_number >= 0 and block_number < 'Infinity'::numeric),
   constraint settlements_commitment_format check (document_commitment ~ '^0x[0-9a-f]{64}$'),
   constraint settlements_payer_format check (payer ~ '^0x[0-9a-f]{40}$'),
   constraint settlements_payee_format check (payee ~ '^0x[0-9a-f]{40}$'),
-  constraint settlements_amount_positive check (amount_atomic > 0)
+  constraint settlements_amount_positive check (amount_atomic > 0 and amount_atomic < 'Infinity'::numeric)
 );
 
 create table public.receipt_documents (
@@ -541,7 +549,7 @@ create table public.receipt_documents (
   constraint receipt_documents_ready_time check ((state = 'ready') = (ready_at is not null)),
   constraint receipt_documents_artifact_group check (
     (storage_key is null and byte_length is null and content_type is null and content_hash is null and pdf_filename is null)
-    or (storage_key is not null and byte_length is not null and content_type = 'application/pdf' and content_hash is not null and pdf_filename is not null)
+    or (storage_key is not null and byte_length is not null and content_type is not null and content_type = 'application/pdf' and content_hash is not null and pdf_filename is not null)
   ),
   constraint receipt_documents_ready_artifact check (state <> 'ready' or storage_key is not null),
   constraint receipt_documents_storage_key_safe check (storage_key is null or (storage_key <> '' and storage_key !~ '(^/|(^|/)\.\.(/|$)|[[:cntrl:]])')),
@@ -627,7 +635,7 @@ create table public.reconciliation_cursors (
   primary key (chain_id, contract_address),
   constraint reconciliation_cursors_chain_positive check (chain_id > 0),
   constraint reconciliation_cursors_contract_format check (contract_address ~ '^0x[0-9a-f]{40}$'),
-  constraint reconciliation_cursors_next_block_nonnegative check (next_block >= 0)
+  constraint reconciliation_cursors_next_block_nonnegative check (next_block >= 0 and next_block < 'Infinity'::numeric)
 );
 
 create function public.payr_protect_frozen_invoice_version()
@@ -710,7 +718,7 @@ create function public.payr_allocate_invoice_sequence_v1(
   p_idempotency_key text,
   p_request_fingerprint text
 )
-returns table (outcome text, sequence_value bigint)
+returns table (outcome text, sequence_value text)
 language plpgsql
 security definer
 set search_path = ''
@@ -750,11 +758,11 @@ begin
     for update;
 
     if v_existing_fingerprint is distinct from p_request_fingerprint then
-      return query select 'conflict'::text, null::bigint;
+      return query select 'conflict'::text, null::text;
       return;
     end if;
 
-    return query select 'replayed'::text, (v_descriptor ->> 'state')::bigint;
+    return query select 'replayed'::text, (v_descriptor ->> 'state')::bigint::text;
     return;
   end if;
 
@@ -772,7 +780,7 @@ begin
     and request.operation = 'allocate_invoice_sequence'
     and request.idempotency_key = p_idempotency_key;
 
-  return query select 'allocated'::text, v_sequence_value;
+  return query select 'allocated'::text, v_sequence_value::text;
 end;
 $$;
 
@@ -1012,7 +1020,17 @@ begin
     raise exception using errcode = 'P0001', message = 'SETTLEMENT_FACTS_MISMATCH';
   end if;
 
-  if not public.payr_is_valid_deliveries(p_deliveries) then
+  -- Validate before numeric(78, 0) assignment can round fractional event facts.
+  -- PostgreSQL orders NaN above Infinity, so this bound excludes both.
+  if p_block_number is null
+     or p_block_number < 0
+     or p_block_number >= 'Infinity'::numeric
+     or p_block_number <> pg_catalog.trunc(p_block_number)
+  then
+    raise exception using errcode = '22023', message = 'SETTLEMENT_BLOCK_NUMBER_INVALID';
+  end if;
+
+  if public.payr_is_valid_deliveries(p_deliveries) is not true then
     raise exception using errcode = '22023', message = 'SETTLEMENT_DELIVERIES_INVALID';
   end if;
 

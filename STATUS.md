@@ -1,14 +1,14 @@
 # Status
 
-Last updated: 2026-09-05
+Last updated: 2026-09-06
 
 ## Stage
 
-R00 and R01 are merged and tagged through `v0.1.2`. R02 domain, keyed-token security, hardened schema, and workspace-scoped repositories are implemented and verified locally. The public deployment remains the health shell; no end-user invoicing or payment workflow is exposed yet.
+R00-R02 are released through `v0.1.3`. R03 identity and the responsive console are implemented and verified locally: wallet login, encrypted sessions, sender/client profiles, owner-signed payout changes, revocable connector credentials, and redacted activity. The public deployment remains the earlier health shell; hosted product activation is not claimed.
 
 ## Single current objective
 
-Complete the protected R02 `v0.1.3` release with the new database CI gate. After its tag and post-merge checks pass, freeze F2 before starting wallet authentication and the console foundation.
+Complete the protected R03 `v0.2.0` release. After its tag and post-merge checks pass, start R04 draft/revision lifecycle against the committed F2 identity contracts and the next F3 freeze.
 
 ## Selected concept
 
@@ -20,9 +20,9 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 
 ## Now
 
-- Release R02 through the protected `v0.1.3` PR/tag flow; evidence is in `docs/ops/r02-domain-database.md`.
+- Release R03 through the protected `v0.2.0` PR/tag flow; evidence is in `docs/ops/r03-identity-console.md`.
 - Keep `https://payrlink.xyz` and its secret-free health route as the intended public origin; `https://payr-sandy.vercel.app` is the verified fallback.
-- Keep all four R02 worktrees until the release tag and post-merge CI are green.
+- Keep R03 worktrees until the release tag and post-merge CI are green, then remove the merged branches with ordinary ancestry-safe deletion.
 - Confirm the exact submission cutoff time and timezone in the authenticated ETHGlobal dashboard.
 - Complete the remaining Resend, funded-wallet, receipt-inbox, and Claude connector human prerequisite checks.
 - Select and configure the intended hosted Supabase project before deployed product integration. Local Payr uses isolated `5732x` ports.
@@ -43,7 +43,7 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 ## Blockers
 
 - Exact submission cutoff time/timezone remains unverified.
-- No live product or sponsor integration has been exercised; local domain/database tests are not live payment or delivery evidence.
+- Real EOA signatures and identity transactions pass against local Supabase; they are not a live funded-wallet payment, Claude connector, or email delivery.
 - Resend sender-domain SPF/DKIM verification and two receipt-inbox tests are not yet proven.
 - The hosted Supabase project is not configured. Local config, migrations, reset, and hostile-access tests now pass.
 - Claude custom-connector availability and funded Arc deployment/payer balances require human confirmation.
@@ -54,8 +54,8 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 ## Repository
 
 - Public repository: `https://github.com/2manslkh/payr`.
-- R02 base release: annotated `v0.1.2` at `7b49d404659bec59e8c8a58a55d96c478346a66d`.
-- R02 integration branch: `integration/r02-domain-db-v0.1.3`.
+- R03 base release: annotated `v0.1.3` at `8fb6df58a5e07d4650da60a51a4158de63b4cda5`.
+- R03 integration branch: `integration/r03-identity-console-v0.2.0`.
 - Public shell: `https://payrlink.xyz`; health reports the deployed integration commit without configuration details.
 - The four approved `assets/brand/` reference files are part of R00.
 
@@ -63,10 +63,10 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 
 - Product: GREEN — the user, pain, promise, onchain necessity, and non-goals are approved.
 - Design: GREEN — `Commit Ledger`, the responsive surface model, and brand treatment are approved; implemented fidelity remains unproven.
-- Engineering: YELLOW - local domain/database gates pass, but auth, publication, document, payment, and deployed integration proof remain.
+- Engineering: YELLOW - local domain/database/auth/console gates pass; publication, document, payment, and hosted integration proof remain.
 - Demo: YELLOW — the causal three-minute sequence and honest fallback are defined, but unexercised.
 - Submission: RED — the public repository and health shell exist, but there is no implemented product demo, architecture graphic, video, or final submission.
 
 ## Next review gate
 
-R02 must be merged/tagged with `web`, `browser`, `database`, and release-metadata checks passing. F2 then freezes auth, session/origin, connector, and console interfaces; remaining human/live gates stay explicit.
+R03 must be merged/tagged with `web`, `browser`, `database`, and release-metadata checks passing. R04 consumes F2 without inventing alternate auth/session/profile contracts; remaining human/live gates stay explicit.

@@ -83,6 +83,37 @@ it("saves all sender fields without payout or owner data", async () => {
   expect(fetcher.mock.calls[0][1]).toMatchObject({ cache: "no-store", credentials: "same-origin" });
 });
 
+it("allows a new client alias to be corrected after a collision without losing edits", async () => {
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce(json({ error: { code: "CLIENT_ALIAS_CONFLICT" } }, 409))
+    .mockResolvedValueOnce(json({ client: { ...client, alias: "Available" } }));
+  vi.stubGlobal("fetch", fetcher);
+  render(<BillingForm kind="client" initial={null} onSaved={vi.fn()} />);
+  for (const [label, value] of Object.entries({
+    "Client alias": "Taken", "Business name": client.businessName, "Contact name": client.contactName,
+    "Contact email": client.contactEmail, "Address line 1": address.line1, City: address.city,
+    "Postal code": address.postalCode, "Country code (2 letters)": address.countryCode,
+  })) fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  fireEvent.click(screen.getByRole("button", { name: "Save client" }));
+  await screen.findByText(/That client alias is already in use/);
+  expect((screen.getByRole("button", { name: "Save client" }) as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.change(screen.getByLabelText("Client alias"), { target: { value: "Available" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save client" }));
+  await screen.findByText("Saved to your workspace.");
+  expect(JSON.parse(fetcher.mock.calls[1][1].body)).toMatchObject({ alias: "Available", businessName: client.businessName, id: null });
+});
+
+it("labels real payout signing events and successful outcomes without exposing extra data", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ events: [{
+    id: identity.workspaceId, tokenId: null, action: "auth.payout_nonce", outcome: "succeeded",
+    createdAt: "2026-09-05T00:00:00.000Z", signature: "PRIVATE_DATA",
+  }] })));
+  render(<Activity />);
+  await screen.findByText("Payout signing request");
+  expect(screen.getByText("Completed")).toBeTruthy();
+  expect(screen.queryByText("PRIVATE_DATA")).toBeNull();
+});
+
 it("preserves edits after failure and explicitly reviews a newer revision before retry", async () => {
   const fetcher = vi
     .fn()
@@ -256,7 +287,7 @@ it("renders actual audit events while excluding unexpected payloads and unknown 
           {
             id: "event1",
             action: "connector.create",
-            outcome: "success",
+            outcome: "succeeded",
             createdAt: connector.createdAt,
             tokenId: connector.id,
             requestBody: "PRIVATE_PAYLOAD",

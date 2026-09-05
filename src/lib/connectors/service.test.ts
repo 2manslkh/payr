@@ -67,7 +67,12 @@ it("generates independent secrets and IDs which authenticate through real crypto
     ...input, workspaceId: scope.workspaceId, createdAt: now.toISOString(), revokedAt: null, lastUsedAt: null, scopes: CONNECTOR_SCOPES,
   }));
   const findConnector = vi.fn<IdentityRepository["findConnector"]>(async (id) => records.find((record) => record.id === id) ?? null);
-  const admitConnector = vi.fn<IdentityRepository["admitConnector"]>(async ({ id }) => ({ outcome: "allowed", tokenId: id, workspaceId: records.find((record) => record.id === id)!.workspaceId }));
+  const admitConnector = vi.fn<IdentityRepository["admitConnector"]>(async ({ id }) => {
+    const record = records.find((candidate) => candidate.id === id)!;
+    return Date.parse(record.expiresAt) > Date.now()
+      ? { outcome: "allowed", tokenId: id, workspaceId: record.workspaceId }
+      : { outcome: "denied" };
+  });
   const auth = createConnectorAuthenticator({ findConnector, admitConnector } as unknown as IdentityRepository, config);
   for (const result of results) {
     await expect(auth.authenticate({ token: result.token, ip: "::ffff:192.0.2.128", action: "invoice:draft" })).resolves.toMatchObject({ tokenId: result.connector.id });
@@ -77,7 +82,7 @@ it("generates independent secrets and IDs which authenticate through real crypto
   await expect(wrongPepper.authenticate({ token: results[0].token, ip: "192.0.2.128", action: "invoice:draft" })).rejects.toMatchObject({ code: "CONNECTOR_INVALID" });
   vi.setSystemTime(new Date("2026-09-06T00:00:00.000Z"));
   await expect(auth.authenticate({ token: results[0].token, ip: "192.0.2.128", action: "invoice:draft" })).rejects.toMatchObject({ code: "CONNECTOR_INVALID" });
-  expect(admitConnector).toHaveBeenCalledTimes(2);
+  expect(admitConnector).toHaveBeenCalledTimes(3);
 });
 
 it("does not persist a credential if its endpoint cannot be constructed", async () => {

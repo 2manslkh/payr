@@ -97,5 +97,6 @@ it("composes real signatures, atomic nonce consumption, sessions, profiles and r
   await expect(authenticator.authenticate({ token: credentials.token, ip: "127.0.0.1", action: "invoice:status" })).rejects.toBeDefined();
   const activity = await listActivity(request("/api/activity"));
   expect(activity.status).toBe(200);
-  expect((await activity.json()).events.length).toBeGreaterThan(0);
+  const events = (await activity.json()).events;
+  expect(events.some((event: { action: string; outcome: string }) => event.action === "invoice:status" && event.outcome === "denied")).toBe(true);
 });

@@ -69,7 +69,7 @@ export function BillingForm(props: Props) {
       setSaved(true);
     } catch (failure) {
       setError(failure);
-      if (failure instanceof ConsoleError && (failure.status === 409 || failure.code === "REVISION_CONFLICT"))
+      if (failure instanceof ConsoleError && failure.code === "REVISION_CONFLICT")
         setConflict(true);
     } finally {
       setBusy(false);

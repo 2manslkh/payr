@@ -340,6 +340,8 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
       [stringToHex(message), identity.ownerWallet],
     );
     await noOverflow(page);
+    expect(await page.getByLabel("New payout wallet", { exact: true }).evaluate((input) => input.matches(":user-invalid"))).toBe(false);
+    await page.evaluate(() => window.scrollTo(0, 0));
     await testInfo.attach("settings", {
       body: await page.screenshot({ fullPage: true, path: testInfo.outputPath("settings.png") }),
       contentType: "image/png",
@@ -422,7 +424,7 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
             {
               id: identity.workspaceId,
               action: "connector.revoke",
-              outcome: "success",
+              outcome: "succeeded",
               tokenId: connection.id,
               createdAt: connection.createdAt,
               token: "PRIVATE_TOKEN",
@@ -437,17 +439,17 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
     await expect(page.getByText(/Platform access logs, CDN logs/)).toBeVisible();
     await page.getByLabel("Expires in (days)", { exact: true }).fill("1");
     await page.getByRole("button", { name: "Create credential" }).click();
-    await expect(page.getByLabel("Credential", { exact: true })).toHaveValue(token);
+    await expect(page.getByRole("textbox", { name: "Credential", exact: true })).toHaveValue(token);
     await page.getByRole("button", { name: "Copy endpoint URL" }).click();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(endpointUrl);
     expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).not.toContain(
       token,
     );
     await page.getByRole("button", { name: "I have saved it, hide credential" }).click();
-    await expect(page.getByLabel("Credential", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "Credential", exact: true })).toHaveCount(0);
     await page.reload();
     await expect(page.getByText("Active credential", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("Credential", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "Credential", exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Revoke credential", exact: true }).click();
     await page.getByRole("button", { name: "Confirm revoke" }).click();
     await expect(

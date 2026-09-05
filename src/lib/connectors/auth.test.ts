@@ -88,13 +88,22 @@ it.each([
   { tokenHash: `${tokenHash}\n` },
   // Same pepper and credential with the IP label must not verify as a credential.
   { tokenHash: "d935e2abb38f0cd021d34f614dbd8a318046491c175d69a604e8b939ba1531c5" },
-  { revokedAt: "2026-09-04T12:00:00.000Z" },
-  { expiresAt: "2026-09-05T00:00:00.000Z" }, { expiresAt: "2026-09-04T00:00:00.000Z" },
   { expiresAt: "invalid" }, { id: "00000000-0000-4000-8000-000000000002" },
-])("rejects a nonmatching, noncanonical, revoked, or expired stored credential (%#)", async (overrides) => {
+])("rejects a nonmatching or malformed stored credential (%#)", async (overrides) => {
   const { auth, admitConnector } = setup(overrides);
   await expect(auth.authenticate({ token, ip: "192.0.2.128", action: "invoice:draft" })).rejects.toMatchObject({ code: "CONNECTOR_INVALID", status: 401 });
   expect(admitConnector).not.toHaveBeenCalled();
+});
+
+it.each([
+  { revokedAt: "2026-09-04T12:00:00.000Z" },
+  { expiresAt: "2026-09-05T00:00:00.000Z" },
+  { expiresAt: "2026-09-04T00:00:00.000Z" },
+])("delegates valid but revoked/expired credentials to atomic denial and audit (%#)", async (overrides) => {
+  const { auth, admitConnector } = setup(overrides);
+  admitConnector.mockResolvedValue({ outcome: "denied" });
+  await expect(auth.authenticate({ token, ip: "192.0.2.128", action: "invoice:draft" })).rejects.toMatchObject({ code: "CONNECTOR_INVALID" });
+  expect(admitConnector).toHaveBeenCalledOnce();
 });
 
 it.each(["profile:save", "payout:change", "connector:create", "invoice:draft\n", token])("never admits management or unbounded actions (%#)", async (action) => {

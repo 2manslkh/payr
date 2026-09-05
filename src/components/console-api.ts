@@ -51,6 +51,8 @@ export function errorMessage(error: unknown): string {
     return "This signing request expired or was already used. Start again for a fresh request; check Activity if you already signed.";
   if (code === "SIGNATURE_INVALID" || code === "INVALID_SIGNATURE")
     return "The signature could not be verified. Check the selected wallet account and try again with a fresh request.";
+  if (code === "CLIENT_ALIAS_CONFLICT")
+    return "That client alias is already in use. Choose another alias and save again; your details are still here.";
   if (code === "REVISION_CONFLICT" || (error instanceof ConsoleError && error.status === 409))
     return "This record changed elsewhere. Review the latest saved version before applying your edits.";
   if (code === "NETWORK_ERROR")

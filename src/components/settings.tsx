@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { walletSchema, type NonceResponse, type SenderProfile } from "../lib/identity/contracts";
 import { useConsoleIdentity } from "./app-navigation";
 import { BillingForm } from "./billing-form";
@@ -41,6 +41,7 @@ export function PayoutChange({
   onSaved: (profile: SenderProfile) => void;
 }) {
   const session = useConsoleIdentity();
+  const form = useRef<HTMLFormElement>(null);
   const [newWallet, setNewWallet] = useState("");
   const [review, setReview] = useState<{ nonce: NonceResponse; from: string; to: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -86,6 +87,7 @@ export function PayoutChange({
       });
       onSaved(result.profile);
       setNewWallet("");
+      form.current?.reset();
       setStatus("Payout wallet updated. Sender form edits have not been changed.");
     } catch (failure) {
       setError(failure);
@@ -115,7 +117,7 @@ export function PayoutChange({
         The owner wallet authorizes this change, even when it is different from either payout wallet. Saving
         sender details never changes your payout address.
       </p>
-      <form onSubmit={prepare}>
+      <form ref={form} onSubmit={prepare}>
         <label className="field" htmlFor="new-payout-wallet">
           <span>New payout wallet</span>
           <input

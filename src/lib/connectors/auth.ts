@@ -25,7 +25,7 @@ export function createConnectorAuthenticator(repository: IdentityRepository, con
         const record = await repository.findConnector(id);
         if (!record || record.id !== id || !/^[0-9a-f]{64}$/.test(record.tokenHash)
           || !timingSafeEqual(Buffer.from(tokenHash, "hex"), Buffer.from(record.tokenHash, "hex"))
-          || record.revokedAt !== null || !(Date.parse(record.expiresAt) > Date.now())
+          || !Number.isFinite(Date.parse(record.expiresAt))
           || !record.scopes.some((scope) => scope === action)) {
           throw new IdentityError("CONNECTOR_INVALID", 401);
         }

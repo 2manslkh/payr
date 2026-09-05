@@ -298,7 +298,7 @@ In `docs/ops/preflight.md`, record `verified`, `blocked`, or `not configured` pl
 
 Start or continue Vercel DNS/TLS and Resend sender-domain verification in this step because both can propagate while implementation continues. Do not wait until Task 10 to initiate them.
 
-Kill gate: if Arc RPC/chain identity cannot be established, continue non-chain Tasks 2-5 but mark Task 6 blocked. If Vercel authentication fails, continue locally but mark Task 9/10 deployment blocked.
+Kill gate: if Arc RPC/chain identity cannot be established, continue non-chain Tasks 2-5 but mark Task 6 blocked. If Vercel authentication fails, continue locally but mark Task 9/10 deployment blocked. If Resend account or sender-domain access is unavailable, continue unrelated local work through Task 6 but mark Task 7 live delivery and Task 10 release proof blocked. These explicit external fallbacks permit unrelated local tasks to proceed while Task 1 remains operationally blocked; they do not permit a later task to claim its own live gate passed.
 
 - [ ] **1.3 Correct the test topology before feature work**
 

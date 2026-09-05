@@ -31,6 +31,7 @@ jobs:
 
   browser:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,7 +45,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec supabase start -o json > /dev/null
+      - run: pnpm db:reset
       - run: pnpm test:e2e
+      - if: always()
+        run: pnpm exec supabase stop --no-backup
 
   database:
     runs-on: ubuntu-latest

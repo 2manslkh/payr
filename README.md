@@ -4,7 +4,7 @@ Payr helps independent developers turn confirmed work into an invoice, then reco
 
 ## Status
 
-This repository contains the R03 wallet-authenticated console and the R02 domain/database foundation. Local functionality includes owner login, encrypted sessions, sender/client profiles, owner-signed payout changes, revocable connector credentials, and redacted activity. Invoice publication, wallet payments, contracts, PDFs, MCP, and email delivery remain later tasks. The public [payrlink.xyz](https://payrlink.xyz) deployment remains the earlier health shell; activating the new hosted console requires a configured Supabase project and identity runtime secrets.
+This repository contains the R04 draft/revision lifecycle on the wallet-authenticated console and hardened database foundation. Local functionality includes strict partial draft input, structured missing fields, immutable version append, stable idempotent replay, pending client proposals, and server-rendered overview/ledger/detail views. Owner login, profiles, signed payout changes, connector lifecycle, and redacted activity remain available. Publication, protected links, wallet payments, PDFs, MCP, and email delivery remain later tranches. The public [payrlink.xyz](https://payrlink.xyz) deployment remains the earlier health shell; hosted activation still requires the intended Supabase project and runtime secrets.
 
 ## Local development
 
@@ -23,10 +23,11 @@ pnpm typecheck
 pnpm test:unit
 pnpm build
 pnpm exec playwright install chromium
+pnpm db:start
 pnpm test:e2e
 ```
 
-`pnpm test` aliases `pnpm test:unit`. Unit discovery covers `.test.ts` and `.test.tsx` while excluding integration tests. Playwright runs separate desktop and mobile Chromium projects; set `PAYR_TEST_PORT` to isolate concurrent worktrees.
+`pnpm test` aliases `pnpm test:unit`. Unit discovery covers `.test.ts` and `.test.tsx` while excluding integration tests. Playwright runs separate desktop and mobile Chromium projects against a production build/start both locally and in CI; set `PAYR_TEST_PORT` to isolate concurrent worktrees. Browser tests now require the local Supabase stack because the invoice pages read real server-side projections. Run database and browser suites serially locally: they share test fixtures.
 
 ### Local database
 
@@ -42,7 +43,7 @@ pnpm exec supabase stop --no-backup
 
 Payr uses API port `57321`, Postgres `57322`, and shadow port `57320`. Reset is explicitly local and recreates the private PDF-only `documents` bucket. Only the active database steward may reset the shared stack during parallel work. Supabase's local services bind to all interfaces and use development credentials: do not expose these ports outside a trusted development network or use these credentials in production.
 
-`pnpm test:db:local` captures only the running local Payr project's URL, database URL, anon key, and service-role key for the test subprocess. It does not print keys, evaluate shell output, or write environment files. `pnpm test:db` remains the low-level suite and fails closed without local `SUPABASE_URL`, `SUPABASE_DB_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. Existing ignored `.env.test.local` configuration is supported; the launcher overrides inherited Supabase values. CI runs reset, lint, and the same launcher in a separate `database` job with no hosted credentials.
+`pnpm test:db:local` and `pnpm test:e2e` use `scripts/run-local-tests.mjs` to capture only the running local Payr project's URL, database URL, anon key, and service-role key for the subprocess. They do not print keys, evaluate shell output, or write environment files. `pnpm test:db` remains the low-level suite and fails closed without local `SUPABASE_URL`, `SUPABASE_DB_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. Existing ignored `.env.test.local` configuration is supported; the launcher overrides inherited Supabase values. CI provisions separate ephemeral local stacks for the `database` and `browser` jobs, never hosted credentials.
 
 To run the built application after `pnpm build`:
 
@@ -62,6 +63,14 @@ An injected externally owned Ethereum wallet signs a five-minute server challeng
 Connector credentials are shown once and expire within 30 days. The MCP endpoint is deliberately not functional yet. Revoke credentials after demos: Payr's application redaction cannot remove them from CDN/platform logs, browser or clipboard history, or Claude configuration. Nonce issuance and connector admission use atomic database limits; outside Vercel, nonce requests conservatively share one IP bucket instead of trusting forwarded headers.
 
 Browser tests generate ephemeral identity keys for their local server and workers, never reuse production secrets, and keep Secure cookies enabled. `pnpm test:db:local` also exercises the real signature-to-database route flow; browser API mocks are not the only integration evidence.
+
+### Drafts and revisions
+
+`POST /api/invoices/drafts` accepts authenticated, CSRF-protected partial draft requests. An incomplete request returns structured `MISSING_FIELDS` without creating a draft or consuming its idempotency key. Supply `draftId` and `expectedVersion` together to append a revision. Same-key retries reconstruct the original immutable result even if profiles, aliases, or later versions changed.
+
+The canonical service uses authoritative sender data and confirmed saved/proposed client facts. Proposed client edits remain on the draft until publication; no profile row is silently changed. The read-only `/app/invoices` ledger and detail show exact USDC amounts, separate commercial/payment state, defaults, provenance, and pending changes. There is no browser authoring or publication form. Claude MCP is not connected yet; publication and document generation are R05/R06 work.
+
+Country entry requires assigned ISO alpha-2 codes. Previously accepted non-ISO values remain editable, but drafts identify them as fields needing confirmation rather than reporting a provider failure.
 
 ## Versioning
 
@@ -84,4 +93,4 @@ Copy `.env.example` to `.env.local` and provide only the values needed for the f
 - The intended Vercel project runs Next.js on Node 22. `https://payrlink.xyz/api/health` and the stable public fallback `https://payr-sandy.vercel.app/api/health` return the deployed commit without environment details.
 - Local Supabase reset, privilege denial, and repository transactions are verified. A hosted Supabase project is not configured; funded Arc wallets, Resend delivery, Claude connector UI, receipt inboxes, and the authenticated ETHGlobal deadline still require operator work.
 
-Local R03 verification and release boundaries are in [`docs/ops/r03-identity-console.md`](docs/ops/r03-identity-console.md); R02 evidence remains in [`docs/ops/r02-domain-database.md`](docs/ops/r02-domain-database.md). Task 6 live deployment/payment remains gated on funded-wallet evidence, and later connector/email proof remains gated on Claude and Resend configuration. The historical external-prerequisite ledger is in [`docs/ops/preflight.md`](docs/ops/preflight.md).
+Local R04 verification and release boundaries are in [`docs/ops/r04-drafts.md`](docs/ops/r04-drafts.md). Prior R03/R02 evidence remains under `docs/ops/`. Task 6 live deployment/payment remains gated on funded-wallet evidence, and later connector/email proof remains gated on Claude and Resend configuration. The historical external-prerequisite ledger is in [`docs/ops/preflight.md`](docs/ops/preflight.md).

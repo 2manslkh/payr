@@ -2,6 +2,12 @@
 
 import { execFileSync, spawnSync } from "node:child_process";
 
+const mode = process.argv[2];
+if (mode !== "db" && mode !== "browser") {
+  console.error("Usage: node scripts/run-local-tests.mjs <db|browser> [test arguments]");
+  process.exit(1);
+}
+
 try {
   // Capture only the running local project's credentials; never evaluate CLI output as shell code.
   const status = JSON.parse(execFileSync("pnpm", ["exec", "supabase", "status", "-o", "json"], {
@@ -21,11 +27,13 @@ try {
   const environment = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith("SUPABASE_")),
   );
-  const result = spawnSync("pnpm", ["test:db", ...process.argv.slice(2)], {
+  delete environment.NODE_ENV;
+  const command = mode === "db" ? ["test:db"] : ["exec", "playwright", "test"];
+  const result = spawnSync("pnpm", [...command, ...process.argv.slice(3)], {
     stdio: "inherit",
     env: {
       ...environment,
-      NODE_ENV: "test",
+      ...(mode === "db" ? { NODE_ENV: "test" } : {}),
       SUPABASE_URL: status.API_URL,
       SUPABASE_DB_URL: status.DB_URL,
       SUPABASE_ANON_KEY: status.ANON_KEY,
@@ -34,6 +42,6 @@ try {
   });
   process.exitCode = result.status ?? 1;
 } catch {
-  console.error("Database tests require the running local Payr stack on 5732x ports. Run pnpm db:start first.");
+  console.error("Local database/browser tests require the running Payr stack on 5732x ports. Run pnpm db:start first.");
   process.exitCode = 1;
 }

@@ -16,6 +16,7 @@ When no version tag exists, treat the current `package.json` version on `origin/
 
 1. Inspect `git status --short --branch`, `git diff`, `git log --oneline -10`, and existing version tags. Account for every tracked change before proceeding.
 2. Work on a non-`main` integration branch based on current `origin/main`. Commit every intended file and remove unintended untracked files.
+   R04 and later browser gates use the local Payr database. Before preparing, run `pnpm db:start`, `pnpm db:reset`, `pnpm db:lint`, and `pnpm test:db:local`. Keep that stack running for the subsequent browser checks; do not run database and browser fixtures concurrently in one local project.
 3. Run `pnpm release:prepare -- <major|minor|patch|X.Y.Z>`. It validates tag ancestry and uniqueness, runs `pnpm verify` and `pnpm test:e2e`, updates only `package.json`, and creates final branch commit `chore: release vX.Y.Z`. It does not tag.
 4. Run `pnpm release:verify`. Push the integration branch and open or update a PR titled `[vX.Y.Z] <tranche summary>`.
 5. Record the base tag/SHA, included tickets, migrations, contract/schema changes, automated and live evidence, blockers, and forward-fix strategy in the PR body.

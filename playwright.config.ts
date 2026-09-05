@@ -29,9 +29,7 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: process.env.CI
-      ? `pnpm build && pnpm start --hostname localhost --port ${port}`
-      : `pnpm dev --hostname localhost --port ${port}`,
+    command: `pnpm build && pnpm start --hostname localhost --port ${port}`,
     url: baseURL,
     reuseExistingServer: false,
     env: identityEnvironment,

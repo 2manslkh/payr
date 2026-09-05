@@ -38,6 +38,7 @@ All lanes were integrated with merges. The database lane received coordinator co
 | Reset / SQL lint | Three migrations apply cleanly; no SQL lint errors |
 | Secret scan | Gitleaks over R04 history: no leaks found |
 | Preserved artifacts | No changes to released migrations or brand references |
+| Clean GitHub runner | Draft PR #5 run `33996615769` passed `web`, `browser`, and `database`; version metadata was deferred until the final release commit |
 
 The service/database flow uses actual route handlers and the real Supabase adapter. It proves missing-key non-consumption, no-op confirmation, cancelling pending changes without saving clients, original-version replay after profile changes, deterministic same-key races, renamed-client races, normalized URL provenance, and recovery of legacy country values. Raw-RPC tests separately exercise malicious JSON-null discriminants, authorization, snapshot consistency, precision, immutability, and rollback.
 

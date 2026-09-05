@@ -15,29 +15,46 @@ export type PayabilityFacts = Readonly<{
   payableUntil: Date;
 }>;
 
-export function derivePaymentStatus(_settlement: SettlementFacts | null): PaymentStatus {
-  throw new Error("F1 implementation pending");
+export function derivePaymentStatus(settlement: SettlementFacts | null): PaymentStatus {
+  return settlement === null ? "unpaid" : "paid";
 }
 
 export function deriveDisplayStatus(
-  _commercialState: CommercialState,
-  _settlement: SettlementFacts | null,
+  commercialState: CommercialState,
+  settlement: SettlementFacts | null,
 ): DisplayStatus {
-  throw new Error("F1 implementation pending");
+  if (settlement !== null) {
+    return "Paid";
+  }
+
+  const displayStatuses: Record<CommercialState, Exclude<DisplayStatus, "Paid">> = {
+    draft: "Draft",
+    published: "Published",
+    voided: "Voided",
+    expired: "Expired",
+  };
+
+  return displayStatuses[commercialState];
 }
 
 export function deriveEffectiveCommercialState(
-  _commercialState: CommercialState,
-  _now: Date,
-  _payableUntil: Date,
+  commercialState: CommercialState,
+  now: Date,
+  payableUntil: Date,
 ): CommercialState {
-  throw new Error("F1 implementation pending");
+  return commercialState === "published" && now.getTime() >= payableUntil.getTime()
+    ? "expired"
+    : commercialState;
 }
 
-export function isPayable(_facts: PayabilityFacts): boolean {
-  throw new Error("F1 implementation pending");
+export function isPayable(facts: PayabilityFacts): boolean {
+  return (
+    facts.commercialState === "published" &&
+    facts.settlement === null &&
+    facts.now.getTime() < facts.payableUntil.getTime()
+  );
 }
 
-export function deriveSettledAfterVoid(_voidedAt: Date | null, _settlement: SettlementFacts): boolean {
-  throw new Error("F1 implementation pending");
+export function deriveSettledAfterVoid(voidedAt: Date | null, settlement: SettlementFacts): boolean {
+  return voidedAt !== null && settlement.blockTime.getTime() > voidedAt.getTime();
 }

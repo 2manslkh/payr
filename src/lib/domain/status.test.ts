@@ -111,13 +111,23 @@ describe("buildInvoiceStatus", () => {
     expect(status.receipt).toEqual(facts.receiptDocument);
     expect(status.receiptEmail.state).toBe("manual_review");
     expect(status.receiptEmail.deliveries).toEqual(facts.deliveries);
+
+    expect(buildInvoiceStatus({ ...facts, receiptDocument: { state: "rendering" } }).receipt).toEqual({
+      state: "rendering",
+      pageUrl: null,
+      pdfUrl: null,
+      pdfFilename: null,
+      pdfContentHash: null,
+    });
   });
 
   it.each([
     [false, [], "not_applicable"],
+    [false, ["manual_review"], "not_applicable"],
     [true, [], "queued"],
     [true, ["sent", "sent"], "sent"],
     [true, ["sent", "pending"], "queued"],
+    [true, ["retry_wait"], "queued"],
     [true, ["retry_wait", "sending"], "sending"],
     [true, ["sending", "failed"], "failed"],
     [true, ["failed", "manual_review"], "manual_review"],
@@ -218,5 +228,28 @@ describe("buildInvoiceStatus", () => {
       receipt: status.receipt,
       receiptEmailState: "sent",
     });
+  });
+
+  it("rejects unpublished or incomplete status from the public projection", () => {
+    const status = buildInvoiceStatus({
+      invoiceId: "private-invoice-id",
+      invoiceVersion: 1,
+      invoiceNumber: "PAYR-2026-000001",
+      commercialState: "published",
+      payableUntil: "2026-09-10T00:00:00.000Z",
+      now: new Date("2026-09-09T00:00:00.000Z"),
+      voidedAt: null,
+      settlement: null,
+      explorer: null,
+      invoiceDocument: null,
+      receiptDocument: null,
+      deliveries: [],
+    });
+
+    expect(() => redactPublicInvoiceStatus({ ...status, invoiceNumber: null })).toThrow();
+    expect(() => redactPublicInvoiceStatus({ ...status, payableUntil: null })).toThrow();
+    expect(() =>
+      redactPublicInvoiceStatus({ ...status, commercialState: "draft", displayStatus: "Draft" }),
+    ).toThrow();
   });
 });

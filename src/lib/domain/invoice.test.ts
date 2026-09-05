@@ -20,6 +20,10 @@ describe("invoice state", () => {
     expect(deriveDisplayStatus("published", null)).toBe("Published");
     expect(deriveDisplayStatus("voided", settlement)).toBe("Paid");
     expect(deriveDisplayStatus("expired", null)).toBe("Expired");
+
+    for (const commercialState of ["published", "voided", "expired"] as const) {
+      expect(deriveDisplayStatus(commercialState, settlement)).toBe("Paid");
+    }
   });
 
   it("uses a half-open payable deadline", () => {

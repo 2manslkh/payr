@@ -1,4 +1,12 @@
-import type { CommercialState, DisplayStatus, PaymentStatus } from "./invoice";
+import {
+  deriveDisplayStatus,
+  deriveEffectiveCommercialState,
+  derivePaymentStatus,
+  deriveSettledAfterVoid,
+  type CommercialState,
+  type DisplayStatus,
+  type PaymentStatus,
+} from "./invoice";
 
 export type ReceiptDocumentState =
   | "not_applicable"
@@ -112,16 +120,96 @@ export type InvoiceStatusFacts = Readonly<{
 }>;
 
 export function deriveReceiptEmailState(
-  _hasSettlement: boolean,
-  _deliveries: ReadonlyArray<Pick<DeliveryStatus, "state">>,
+  hasSettlement: boolean,
+  deliveries: ReadonlyArray<Pick<DeliveryStatus, "state">>,
 ): ReceiptEmailState {
-  throw new Error("F1 implementation pending");
+  if (!hasSettlement) {
+    return "not_applicable";
+  }
+  if (deliveries.some(({ state }) => state === "manual_review")) {
+    return "manual_review";
+  }
+  if (deliveries.some(({ state }) => state === "failed")) {
+    return "failed";
+  }
+  if (deliveries.some(({ state }) => state === "sending")) {
+    return "sending";
+  }
+  if (deliveries.length > 0 && deliveries.every(({ state }) => state === "sent")) {
+    return "sent";
+  }
+  return "queued";
 }
 
-export function buildInvoiceStatus(_facts: InvoiceStatusFacts): InvoiceStatusResult {
-  throw new Error("F1 implementation pending");
+export function buildInvoiceStatus(facts: InvoiceStatusFacts): InvoiceStatusResult {
+  const hasSettlement = facts.settlement !== null;
+  const settlementFacts =
+    facts.settlement === null ? null : { blockTime: new Date(facts.settlement.blockTime) };
+  const commercialState =
+    facts.payableUntil === null
+      ? facts.commercialState
+      : deriveEffectiveCommercialState(facts.commercialState, facts.now, new Date(facts.payableUntil));
+  let receipt: ReceiptStatus;
+
+  if (!hasSettlement || facts.receiptDocument === null) {
+    receipt = {
+      state: "not_applicable",
+      pageUrl: null,
+      pdfUrl: null,
+      pdfFilename: null,
+      pdfContentHash: null,
+    };
+  } else if (facts.receiptDocument.state === "ready") {
+    receipt = facts.receiptDocument;
+  } else {
+    receipt = {
+      state: facts.receiptDocument.state,
+      pageUrl: null,
+      pdfUrl: null,
+      pdfFilename: null,
+      pdfContentHash: null,
+    };
+  }
+
+  return {
+    schemaVersion: "payr.invoice-status.v1",
+    invoiceId: facts.invoiceId,
+    invoiceVersion: facts.invoiceVersion,
+    invoiceNumber: facts.invoiceNumber,
+    commercialState,
+    paymentStatus: derivePaymentStatus(settlementFacts),
+    displayStatus: deriveDisplayStatus(commercialState, settlementFacts),
+    payableUntil: facts.payableUntil,
+    settlement: facts.settlement,
+    explorer: hasSettlement ? facts.explorer : null,
+    settledAfterVoid:
+      settlementFacts === null ? false : deriveSettledAfterVoid(facts.voidedAt, settlementFacts),
+    invoiceDocument: facts.invoiceDocument,
+    receipt,
+    receiptEmail: {
+      state: deriveReceiptEmailState(hasSettlement, facts.deliveries),
+      deliveries: hasSettlement ? facts.deliveries : [],
+    },
+  };
 }
 
-export function redactPublicInvoiceStatus(_status: InvoiceStatusResult): PublicInvoiceStatusResult {
-  throw new Error("F1 implementation pending");
+export function redactPublicInvoiceStatus(status: InvoiceStatusResult): PublicInvoiceStatusResult {
+  if (status.commercialState === "draft" || status.invoiceNumber === null || status.payableUntil === null) {
+    throw new Error("Public invoice status requires a published invoice number and payable deadline");
+  }
+
+  return {
+    schemaVersion: "payr.public-invoice-status.v1",
+    invoiceVersion: status.invoiceVersion,
+    invoiceNumber: status.invoiceNumber,
+    commercialState: status.commercialState,
+    paymentStatus: status.paymentStatus,
+    displayStatus: status.displayStatus,
+    payableUntil: status.payableUntil,
+    settlement: status.settlement,
+    explorer: status.explorer,
+    settledAfterVoid: status.settledAfterVoid,
+    receipt: status.receipt,
+    receiptEmailState: status.receiptEmail.state,
+  };
 }

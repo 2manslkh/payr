@@ -24,4 +24,31 @@ describe("canonicalJson", () => {
     expect(() => canonicalJson({ value: new Date(0) } as unknown as Parameters<typeof canonicalJson>[0])).toThrow();
     expect(() => canonicalJson({ value: 1n } as unknown as Parameters<typeof canonicalJson>[0])).toThrow();
   });
+
+  it("rejects runtime values that cannot be represented as deterministic JSON", () => {
+    const cycle: Record<string, unknown> = {};
+    cycle.self = cycle;
+
+    const sparseArray = new Array(1) as unknown[];
+    const symbolKeyed = { value: true } as Record<PropertyKey, unknown>;
+    symbolKeyed[Symbol("private")] = false;
+
+    class NonPlain {
+      value = true;
+    }
+
+    for (const value of [
+      undefined,
+      Symbol("value"),
+      () => true,
+      1n,
+      cycle,
+      sparseArray,
+      symbolKeyed,
+      new NonPlain(),
+      new Map([["value", true]]),
+    ]) {
+      expect(() => canonicalJson(value as Parameters<typeof canonicalJson>[0])).toThrow();
+    }
+  });
 });

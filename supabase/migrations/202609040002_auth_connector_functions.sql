@@ -33,6 +33,22 @@ alter table public.connector_ip_rate_limits enable row level security;
 revoke all on table public.connector_ip_rate_limits from public, anon, authenticated, service_role;
 grant select on table public.connector_ip_rate_limits to service_role;
 
+create table public.auth_nonce_rate_limits (
+  purpose text not null check (purpose in ('global', 'ip', 'wallet')),
+  subject_hash text not null check (subject_hash ~ '^[0-9a-f]{64}$'),
+  window_started_at timestamptz not null check (pg_catalog.isfinite(window_started_at)
+    and window_started_at = pg_catalog.date_trunc('minute', window_started_at)),
+  request_count integer not null check (request_count between 1 and
+    case purpose when 'wallet' then 5 when 'ip' then 30 else 300 end),
+  primary key (purpose, subject_hash, window_started_at),
+  check (purpose <> 'global' or subject_hash = pg_catalog.repeat('0', 64))
+);
+create index auth_nonce_rate_limits_window on public.auth_nonce_rate_limits (window_started_at);
+create index auth_nonces_expiry on public.auth_nonces (expires_at);
+alter table public.auth_nonce_rate_limits enable row level security;
+revoke all on table public.auth_nonce_rate_limits from public, anon, authenticated, service_role;
+grant select on table public.auth_nonce_rate_limits to service_role;
+
 create function public.payr_identity_object_v1(p_value jsonb, p_required text[], p_optional text[] default '{}'::text[])
 returns boolean language plpgsql immutable security definer set search_path = '' as $$
 begin
@@ -76,7 +92,10 @@ $$;
 create function public.payr_identity_protect_nonce_v1()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
-  if tg_op = 'DELETE' then raise exception using errcode = '55000', message = 'AUTH_NONCE_IMMUTABLE'; end if;
+  if tg_op = 'DELETE' then
+    if old.expires_at <= pg_catalog.clock_timestamp() then return old; end if;
+    raise exception using errcode = '55000', message = 'AUTH_NONCE_IMMUTABLE';
+  end if;
   if (pg_catalog.to_jsonb(new) - 'consumed_at') is distinct from (pg_catalog.to_jsonb(old) - 'consumed_at')
     or old.consumed_at is not null or new.consumed_at is null
     or new.consumed_at < new.issued_at or new.consumed_at >= new.expires_at then
@@ -87,6 +106,45 @@ end;
 $$;
 create trigger auth_nonces_immutable before update or delete on public.auth_nonces
   for each row execute function public.payr_identity_protect_nonce_v1();
+
+create function public.payr_admit_nonce_issuance_v1(p_wallet_hash text, p_ip_hash text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_now timestamptz; v_window timestamptz;
+  v_global_count integer; v_ip_count integer; v_wallet_count integer;
+begin
+  if p_wallet_hash is null or p_wallet_hash !~ '^[0-9a-f]{64}$'
+    or p_ip_hash is null or p_ip_hash !~ '^[0-9a-f]{64}$' then
+    raise exception using errcode = '22023', message = 'INVALID_INPUT';
+  end if;
+  -- One global lock serializes cleanup and all quotas, including previously unseen hashes.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('payr:nonce-issuance:v1', 0));
+  v_now := pg_catalog.clock_timestamp();
+  delete from public.auth_nonce_rate_limits where window_started_at < v_now - interval '10 minutes';
+  delete from public.auth_nonces where expires_at <= v_now;
+  -- Choose the database minute after any cleanup/lock waits, even on denial calls.
+  v_now := pg_catalog.clock_timestamp();
+  v_window := pg_catalog.date_trunc('minute', v_now);
+  select r.request_count into v_global_count from public.auth_nonce_rate_limits as r
+    where r.purpose = 'global' and r.subject_hash = pg_catalog.repeat('0', 64) and r.window_started_at = v_window;
+  select r.request_count into v_ip_count from public.auth_nonce_rate_limits as r
+    where r.purpose = 'ip' and r.subject_hash = p_ip_hash and r.window_started_at = v_window;
+  select r.request_count into v_wallet_count from public.auth_nonce_rate_limits as r
+    where r.purpose = 'wallet' and r.subject_hash = p_wallet_hash and r.window_started_at = v_window;
+  if coalesce(v_global_count, 0) >= 300 or coalesce(v_ip_count, 0) >= 30 or coalesce(v_wallet_count, 0) >= 5 then
+    return pg_catalog.jsonb_build_object('allowed', false, 'retryAfterSeconds',
+      greatest(1, least(60, pg_catalog.ceil(extract(epoch from (v_window + interval '1 minute' - v_now)))::integer)));
+  end if;
+  -- Denials never allocate buckets or increment any counter. Write global, IP, then wallet.
+  insert into public.auth_nonce_rate_limits (purpose, subject_hash, window_started_at, request_count)
+    values ('global', pg_catalog.repeat('0', 64), v_window, 1), ('ip', p_ip_hash, v_window, 1), ('wallet', p_wallet_hash, v_window, 1)
+    on conflict (purpose, subject_hash, window_started_at)
+    do update set request_count = public.auth_nonce_rate_limits.request_count + 1;
+  return pg_catalog.jsonb_build_object('allowed', true, 'retryAfterSeconds', 0);
+end;
+$$;
+revoke all on function public.payr_admit_nonce_issuance_v1(text, text) from public, anon, authenticated, service_role;
+grant execute on function public.payr_admit_nonce_issuance_v1(text, text) to service_role;
 
 create function public.payr_identity_protect_audit_v1()
 returns trigger language plpgsql security definer set search_path = '' as $$
@@ -213,7 +271,8 @@ begin
   end if;
   insert into public.workspaces (id, owner_wallet) values (pg_catalog.gen_random_uuid(), p_verified_wallet)
     on conflict (owner_wallet) do nothing;
-  select w.* into strict v_workspace from public.workspaces as w where w.owner_wallet = p_verified_wallet for update;
+  -- Serialize logins without blocking audit/profile foreign-key KEY SHARE locks.
+  select w.* into strict v_workspace from public.workspaces as w where w.owner_wallet = p_verified_wallet for no key update;
   insert into public.sender_profiles (id, workspace_id, payout_wallet)
     values (pg_catalog.gen_random_uuid(), v_workspace.id, p_verified_wallet)
     on conflict (workspace_id) do nothing;

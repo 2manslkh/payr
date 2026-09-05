@@ -41,7 +41,7 @@ function readRemoteTag(tag) {
 }
 
 function versionHistory(base, tip) {
-  const commits = capture("git", ["rev-list", "--reverse", `${base}..${tip}`, "--", "package.json"])
+  const commits = capture("git", ["rev-list", "--full-history", "--reverse", `${base}..${tip}`, "--", "package.json"])
     .split("\n")
     .filter(Boolean);
   return commits.map((commit) => ({
@@ -87,13 +87,12 @@ function validateReleaseCommit(commit, releaseTag) {
   if (secondParentFiles !== "package.json") fail("Merged release head's final commit must change only package.json");
 
   const previousTag = `v${firstParentPackage.version}`;
-  if (capture("git", ["cat-file", "-t", `refs/tags/${previousTag}`]) !== "tag") {
-    fail(`${previousTag} must be an annotated tag`);
-  }
-  if (capture("git", ["rev-list", "-n", "1", previousTag]) !== firstParent) {
+  const previousRemoteTag = readRemoteTag(previousTag);
+  if (!previousRemoteTag?.commit) fail(`Remote ${previousTag} must be an annotated tag`);
+  if (previousRemoteTag.commit !== firstParent) {
     fail(`${previousTag} must target the release merge's first parent exactly`);
   }
-  const previousPackage = JSON.parse(capture("git", ["show", `${previousTag}:package.json`]));
+  const previousPackage = JSON.parse(capture("git", ["show", `${previousRemoteTag.commit}:package.json`]));
   if (previousPackage.version !== firstParentPackage.version) {
     fail(`${previousTag} package version does not match first-parent version ${firstParentPackage.version}`);
   }

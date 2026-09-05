@@ -142,7 +142,7 @@ The PR body records the base tag/SHA, included tickets, migrations, contract or 
 2. Reconcile the governing documents and add PR-first release tooling.
 3. Run the complete R00 gate and independent reviews.
 4. Disable squash/rebase merges and enable automatic remote-branch cleanup in repository settings; retain local worktrees until their release is green.
-5. Create annotated baseline tag `v0.1.0` at the current remote `main` baseline, then protect version-tag creation/update/deletion with a GitHub Actions release bypass.
+5. Create annotated baseline tag `v0.1.0` at the current remote `main` baseline, then protect version-tag creation/update/deletion with GitHub Actions and narrowly scoped coordinator-recovery bypasses.
 6. Prepare `v0.1.1`, push the integration branch and baseline tag, and open the R00 PR.
 7. After the PR's check names exist, protect `main` with strict required PR checks before merging R00.
 8. Merge through GitHub with a merge commit, let CI tag that merge `v0.1.1`, and verify the tag and post-merge CI.

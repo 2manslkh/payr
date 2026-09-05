@@ -32,31 +32,37 @@ function run(command, args) {
   if (result.status !== 0) fail(`${command} ${args.join(" ")} failed with exit code ${result.status}`);
 }
 
-function remoteTagExists(tag) {
-  const result = spawnSync("git", ["ls-remote", "--exit-code", "--tags", "origin", `refs/tags/${tag}`], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  if (result.status === 0) return true;
-  if (result.status === 2) return false;
-  fail(result.stderr.trim() || `Unable to inspect remote tag ${tag}`);
+function readRemoteTag(tag) {
+  const output = capture("git", ["ls-remote", "--tags", "origin", `refs/tags/${tag}`, `refs/tags/${tag}^{}`]);
+  if (!output) return null;
+  const refs = new Map(output.split("\n").map((line) => line.split(/\s+/).reverse()));
+  return {
+    tagObject: refs.get(`refs/tags/${tag}`) ?? null,
+    commit: refs.get(`refs/tags/${tag}^{}`) ?? null,
+  };
+}
+
+function remoteVersionTags() {
+  return capture("git", ["ls-remote", "--tags", "origin", "refs/tags/v*"])
+    .split("\n")
+    .filter((line) => line && !line.endsWith("^{}"))
+    .map((line) => line.split(/\s+/)[1].replace("refs/tags/", ""));
 }
 
 function requireAnnotatedTagAt(tag, commit, expectedVersion) {
-  if (capture("git", ["cat-file", "-t", `refs/tags/${tag}`]) !== "tag") {
-    fail(`${tag} must be an annotated tag`);
-  }
-  if (capture("git", ["rev-list", "-n", "1", tag]) !== commit) {
+  const remoteTag = readRemoteTag(tag);
+  if (!remoteTag?.commit) fail(`Remote ${tag} must be an annotated tag`);
+  if (remoteTag.commit !== commit) {
     fail(`${tag} must target current origin/main before release preparation`);
   }
-  const taggedPackage = JSON.parse(capture("git", ["show", `${tag}:package.json`]));
+  const taggedPackage = JSON.parse(capture("git", ["show", `${remoteTag.commit}:package.json`]));
   if (taggedPackage.version !== expectedVersion) {
     fail(`${tag} package version ${taggedPackage.version} does not match ${expectedVersion}`);
   }
 }
 
 function versionHistory(base, tip) {
-  const commits = capture("git", ["rev-list", "--reverse", `${base}..${tip}`, "--", "package.json"])
+  const commits = capture("git", ["rev-list", "--full-history", "--reverse", `${base}..${tip}`, "--", "package.json"])
     .split("\n")
     .filter(Boolean);
   return commits.map((commit) => ({
@@ -109,15 +115,15 @@ if (compareVersions(nextVersion, packageJson.version) <= 0) {
 }
 
 const nextTag = `v${nextVersion}`;
-const tags = capture("git", ["tag", "--list"]).split("\n").filter(Boolean);
-const latestTag = latestVersionTag(tags);
+const localTags = capture("git", ["tag", "--list"]).split("\n").filter(Boolean);
+const latestTag = latestVersionTag(remoteVersionTags());
 if (!latestTag) fail("Create the annotated baseline tag on origin/main before preparing the first release");
 if (latestTag !== `v${packageJson.version}`) {
   fail(`Current package version ${packageJson.version} does not match latest tag ${latestTag}`);
 }
 requireAnnotatedTagAt(latestTag, baseCommit, basePackage.version);
 
-if (tags.includes(nextTag) || remoteTagExists(nextTag)) fail(`Tag ${nextTag} already exists`);
+if (localTags.includes(nextTag) || readRemoteTag(nextTag)) fail(`Tag ${nextTag} already exists`);
 
 if (dryRun) {
   console.log(`Release preparation dry run: ${packageJson.version} -> ${nextVersion} (${nextTag})`);

@@ -124,6 +124,27 @@ test("verifies a release PR and tags the resulting merge commit", () => {
     git(["tag", "--annotate", "--no-sign", "v0.1.0", "--message", "v0.1.0"]);
     git(["push", "origin", "main", "refs/tags/v0.1.0"]);
 
+    git(["switch", "-c", "integration/bad-history"]);
+    git(["switch", "-c", "test/temporary-version"]);
+    writePackage("9.0.0", "node baseline.mjs");
+    git(["add", "package.json"]);
+    git(["commit", "-m", "test: change version temporarily"]);
+    writePackage("0.1.0", "node baseline.mjs");
+    git(["add", "package.json"]);
+    git(["commit", "-m", "test: restore version"]);
+    git(["switch", "integration/bad-history"]);
+    git(["merge", "--no-ff", "test/temporary-version", "-m", "test: merge temporary version history"]);
+
+    const hiddenHistoryPreparation = spawnSync(
+      process.execPath,
+      ["scripts/prepare-release.mjs", "patch", "--dry-run"],
+      { cwd: repository, encoding: "utf8" },
+    );
+    assert.notEqual(hiddenHistoryPreparation.status, 0);
+    assert.match(hiddenHistoryPreparation.stderr, /contains 9\.0\.0/);
+
+    git(["switch", "main"]);
+    git(["branch", "-D", "integration/bad-history", "test/temporary-version"]);
     git(["switch", "-c", "integration/test"]);
     writePackage("0.1.0", "node feature.mjs");
     git(["add", "package.json"]);
@@ -151,6 +172,17 @@ test("verifies a release PR and tags the resulting merge commit", () => {
     git(["merge", "--no-ff", "integration/test", "-m", "Merge pull request #1 from integration/test"]);
     const mergeCommit = git(["rev-parse", "HEAD"]);
     git(["push", "origin", "main"]);
+
+    git(["push", "origin", ":refs/tags/v0.1.0"]);
+    const missingPreviousTag = spawnSync(process.execPath, ["scripts/tag-release.mjs"], {
+      cwd: repository,
+      encoding: "utf8",
+      env: { ...process.env, PAYR_RELEASE_COMMIT: mergeCommit },
+    });
+    assert.notEqual(missingPreviousTag.status, 0);
+    assert.match(missingPreviousTag.stderr, /Remote v0\.1\.0 must be an annotated tag/);
+    git(["push", "origin", "refs/tags/v0.1.0"]);
+
     git(["config", "--unset", "user.name"]);
     git(["config", "--unset", "user.email"]);
 

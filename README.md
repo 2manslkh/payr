@@ -4,7 +4,7 @@ Payr helps independent developers turn confirmed work into an invoice, then reco
 
 ## Status
 
-This repository contains the runnable application shell and the approved framing and 10-task implementation plan. The landing page identifies **Arc testnet**, but the product workflow remains **planned and unimplemented**: no profile management, invoices, wallets, contracts, PDFs, MCP, email, or sponsor integrations are available yet.
+This repository contains the runnable application shell, a public secret-free health deployment at [payrlink.xyz](https://payrlink.xyz), and the approved framing and 10-task implementation plan. The landing page identifies **Arc testnet**, but the product workflow remains **planned and unimplemented**: no profile management, invoices, wallets, contracts, PDFs, MCP, email, or sponsor integrations are available yet.
 
 ## Local development
 
@@ -49,12 +49,13 @@ Copy `.env.example` to `.env.local` and provide only the values needed for the f
 
 `pnpm verify:arc` reads `ARC_RPC_URL` and `ARC_CHAIN_ID`, calls `eth_chainId`, and compares the returned hexadecimal ID exactly. It does not print the RPC URL or credentials.
 
-### Verified prerequisite facts (2026-09-04)
+### Verified prerequisite facts (2026-09-05)
 
 - GitHub CLI authentication is active for the repository owner, and `origin` is `https://github.com/2manslkh/payr.git`.
 - Node `v22.22.0` and pnpm `10.19.0` are installed locally.
-- Foundry CLI (`forge`) and Supabase CLI are installed locally.
-- `ARC_RPC_URL` and `ARC_CHAIN_ID` are absent from the local environment. **Arc verification is BLOCKED** until both are supplied; no Arc chain value, wallet, or payment behavior has been assumed.
-- Funded Arc wallets, Supabase project credentials, Privy, Resend, Claude/Gmail connectors, Vercel, and the authenticated ETHGlobal deadline have not been verified in this task.
+- Foundry CLI (`forge`), Supabase CLI, and Docker are available locally.
+- Arc Testnet chain ID `5042002`, the official RPC/explorer, and native-USDC behavior were verified from official sources and live read-back. Runtime Arc variables and funded wallets are still intentionally absent.
+- The intended Vercel project runs Next.js on Node 22. `https://payrlink.xyz/api/health` and the stable public fallback `https://payr-sandy.vercel.app/api/health` return the deployed commit without environment details.
+- Supabase project configuration, funded Arc wallets, Resend delivery, Claude connector UI, receipt inboxes, and the authenticated ETHGlobal deadline remain unverified or human-required.
 
-Task 6 chain deployment and payment work remains gated on successful Arc verification. Tasks 2-5 can proceed without assuming unverified Arc values.
+Task 2 may proceed with Supabase initialization now that Docker is available. Task 6 live deployment/payment remains gated on funded-wallet evidence, and later live connector/email proof remains gated on Claude and Resend configuration. The full sanitized ledger is in [`docs/ops/preflight.md`](docs/ops/preflight.md).

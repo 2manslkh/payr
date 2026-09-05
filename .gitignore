@@ -1,6 +1,7 @@
 node_modules/
 .next/
 next-env.d.ts
+.worktrees/
 out/
 coverage/
 *.tsbuildinfo
@@ -17,3 +18,4 @@ contracts/out/
 contracts/broadcast/
 *.pdf
 .DS_Store
+.vercel/

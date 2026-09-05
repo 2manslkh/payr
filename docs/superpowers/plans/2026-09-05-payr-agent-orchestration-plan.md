@@ -41,7 +41,7 @@ Expected versions are planning labels after R00. The release coordinator selects
 
 - The primary worktree owns `integration/rNN-<name>` and release coordination.
 - Agent branches use `agent/rNN-<ticket>`.
-- Agent worktrees use sibling paths such as `../payr-worktrees/r02-domain` so they never appear as repository content.
+- Agent worktrees use ignored repository-root paths such as `.worktrees/r02-domain`. Worktrees never live outside Payr's root directory.
 - Every agent starts from a recorded integration-branch SHA.
 - At most four implementation agents run concurrently. More lanes increase shared-contract and integration risk without shortening the critical path.
 - Agents commit atomic changes on their branches. The coordinator alone pushes integration branches, opens release PRs, and changes versions. The trusted `publish-release-tag` CI job creates tags; the coordinator verifies or recovers them.
@@ -52,7 +52,7 @@ The coordinator records this manifest before dispatch:
 | Field | Required value |
 | --- | --- |
 | Tranche and ticket | Stable `RNN-TNN` identifier and short name |
-| Branch and path | Exact branch and sibling worktree path |
+| Branch and path | Exact branch and repository-root worktree path |
 | Base | Integration branch and full starting SHA |
 | Scope | One outcome with explicit exclusions |
 | Ownership | Writable files/directories and coordinator-owned files |
@@ -146,5 +146,5 @@ The PR body records the base tag/SHA, included tickets, migrations, contract or 
 6. Prepare `v0.1.1`, push the integration branch and baseline tag, and open the R00 PR.
 7. After the PR's check names exist, protect `main` with strict required PR checks before merging R00.
 8. Merge through GitHub with a merge commit, let CI tag that merge `v0.1.1`, and verify the tag and post-merge CI.
-9. Protect release-control paths from non-owner pushes; intentional changes require the owner's PR bypass and CODEOWNERS review visibility.
+9. Record GitHub's release-path protection limit: push rules are unavailable for this public user-owned source repository. Compensate with protected `main`, owner-only write authority, CODEOWNERS visibility, and the dedicated release-tag deploy key; reassess native path restrictions if repository ownership or visibility changes.
 10. Begin R01. Product worktree fanout starts only after R00 is complete.

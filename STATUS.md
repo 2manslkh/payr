@@ -4,11 +4,11 @@ Last updated: 2026-09-05
 
 ## Stage
 
-The Payr product framing, `Commit Ledger` design, 10-task test-first implementation plan, and multi-agent release-tranche orchestration are approved. R00 is establishing the protected PR-first release baseline; product implementation has not started.
+The Payr product framing, `Commit Ledger` design, 10-task test-first implementation plan, and multi-agent release-tranche orchestration are approved. R00 is merged and tagged as `v0.1.1`. R01 external evidence and the public Vercel health proof are being finalized; product implementation has not started.
 
 ## Single current objective
 
-Complete and tag the R00 bootstrap release, configure repository protections, then execute R01 prerequisite read-backs before Task 2 fanout.
+Review and tag the R01 preflight release as `v0.1.2`, then begin Task 2 domain/database work from that tagged release.
 
 ## Selected concept
 
@@ -20,11 +20,12 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 
 ## Now
 
-- Complete R00 through a versioned PR, merge-commit tag, and protected repository settings.
-- Execute R01 prerequisite evidence, then begin Task 2 from the tagged release.
+- Finalize R01 evidence and release it through the protected `v0.1.2` PR/tag flow.
+- Keep `https://payrlink.xyz` and its secret-free health route as the intended public origin; `https://payr-sandy.vercel.app` is the verified fallback.
+- Begin Task 2 from the tagged R01 release using repository-root `.worktrees/` lanes.
 - Confirm the exact submission cutoff time and timezone in the authenticated ETHGlobal dashboard.
-- Complete the live Task 1 Arc, DNS/TLS, Resend, Vercel, and connector prerequisite checks.
-- Verify Arc details/balances, `payrlink.xyz` HTTPS, Resend DNS, and Claude connector behavior before relying on them; keep the Privy spike outside the committed schedule.
+- Complete the remaining Resend, funded-wallet, receipt-inbox, and Claude connector human prerequisite checks.
+- Initialize the intended Supabase project/schema lane in Task 2; Docker is available locally.
 - Track the four approved `assets/brand/` reference files unchanged; derive production web assets separately.
 - Apply `DESIGN.md` as core interface work inside Tasks 3-8; do not defer the approved system to contingency polish.
 
@@ -43,15 +44,19 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 
 - Exact submission cutoff time/timezone remains unverified.
 - No product or sponsor integration has been exercised; only the application shell is runnable.
-- `payrlink.xyz` nameservers/A records have begun resolving, but HTTPS and Resend SPF/DKIM verification are not yet proven.
+- Resend sender-domain SPF/DKIM verification and two receipt-inbox tests are not yet proven.
+- The intended Supabase project and local `supabase/config.toml` are not configured.
+- Claude custom-connector availability and funded Arc deployment/payer balances require human confirmation.
 - Privy's optional policy-controlled EIP-712 signing and contract compatibility are unproven and are not a core blocker.
-- Arc testnet RPC, chain, explorer, funded wallets, and native-USDC behavior must pass Task 1/Task 6 live checks.
+- Arc testnet RPC, chain, explorer, and native-USDC behavior are verified; Task 6 live deployment/payment still requires funded-wallet evidence.
 - Arc mainnet-launch prize requires availability or deployment-readiness work through 30 September.
 
 ## Repository
 
 - Public repository: `https://github.com/2manslkh/payr`.
-- Active bootstrap branch: `integration/r00-bootstrap-v0.1.1`.
+- Current protected release: annotated `v0.1.1` at the R00 merge commit.
+- Active preflight branch: `integration/r01-preflight-v0.1.2`.
+- Public shell: `https://payrlink.xyz`; health reports the deployed integration commit without configuration details.
 - The four approved `assets/brand/` reference files are part of R00.
 
 ## Readiness
@@ -60,8 +65,8 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 - Design: GREEN — `Commit Ledger`, the responsive surface model, and brand treatment are approved; implemented fidelity remains unproven.
 - Engineering: YELLOW — the architecture, executable plan, and verified shell exist, but no product integration proof exists.
 - Demo: YELLOW — the causal three-minute sequence and honest fallback are defined, but unexercised.
-- Submission: RED — the public repository exists, but there is no deployed app, architecture graphic, video, or final submission.
+- Submission: RED — the public repository and health shell exist, but there is no implemented product demo, architecture graphic, video, or final submission.
 
 ## Next review gate
 
-R00 is merged, tagged, and protected; then every Task 1 external prerequisite has a recorded outcome. Task 2 may begin with Arc/Vercel blockers still explicit; a public preview is mandatory before Task 9 deployed connector proof and Task 10 release proof.
+R01 evidence passes review and is merged/tagged as `v0.1.2`; then Task 2 begins with Supabase configuration and all remaining human/live blockers explicit. Public Vercel/custom-domain health is already proven.

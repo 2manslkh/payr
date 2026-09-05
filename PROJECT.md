@@ -16,6 +16,19 @@ After completing work, the freelancer must gather client details, format and che
 
 One short instruction becomes a confirmed USDC invoice, protected payment link, downloadable PDF, QR code, and email-ready package; one verified Arc payment becomes paid status plus a receipt page/PDF delivered to both parties.
 
+## Product surfaces
+
+- Claude is the primary invoice creation, revision, publication, status, and voiding interface.
+- The authenticated web app is an operations companion for setup, clients, connector credentials, an overview, an invoice ledger, immutable invoice detail, redacted activity, and settlement/receipt proof. It does not duplicate invoice authoring.
+- The protected client surface presents the invoice, exact payment review, wallet-controlled Arc transaction, settlement progression, and receipt without requiring a Payr account.
+- Incoming Bills are a future product direction. They remain hidden from MVP navigation and add no batch or autonomous payment behavior.
+
+## Experience direction
+
+`Commit Ledger` is the approved design direction. Payr uses a cool, document-led workspace with restrained typography, aligned financial figures, shallow navigation, and concentrated deep-navy proof regions. The interface always presents commercial lifecycle and payment evidence as separate facts. The existing arrow-R monogram remains; the production wordmark is standardized as `Payr`.
+
+The durable visual rules are recorded in `DESIGN.md`. Surface-specific behavior and acceptance criteria remain in the approved framing design and implementation plan.
+
 ## Why Ethereum is necessary
 
 The invoice document can be generated offchain, but Arc provides direct ownership of settled USDC plus neutral, independently inspectable proof binding the payment to an invoice commitment. The contract enforces exact amount, payee, expiry, and single settlement.
@@ -62,6 +75,8 @@ The invoice document can be generated offchain, but Arc provides direct ownershi
 - Public invoice contents, invoice NFTs, or project tokens.
 - Dual-party EIP-712 invoice signatures.
 - Agent changes to sender identity or payout wallet.
+- Direct browser invoice authoring in the MVP.
+- Incoming Bills, batch payment, or autonomous accounts-payable workflows in the MVP.
 - Unsourced or automatically accepted web-search data.
 - Guaranteed Gmail PDF attachment; protected links are the required delivery path.
 - Sponsor integrations that do not improve the freelancer journey.
@@ -69,7 +84,7 @@ The invoice document can be generated offchain, but Arc provides direct ownershi
 ## Constraints
 
 - Event window: 4–16 September 2026; exact submission cutoff time/timezone still requires dashboard verification.
-- Team: Keng is product owner and sole engineer; Chanita owns administration and presentation.
+- Team: Keng is product owner and sole human operator; scoped implementation agents work under Keng's review, while Chanita owns administration and presentation.
 - Focused availability: 12–4 PM daily.
 - Engineering budget: approximately 44 focused hours from 4–14 September.
 - Code freeze: 15 September.
@@ -79,4 +94,4 @@ The invoice document can be generated offchain, but Arc provides direct ownershi
 
 ## Source of truth
 
-The approved design and acceptance criteria are in `docs/superpowers/specs/2026-09-04-payr-framing-design.md`.
+Newer dated entries in `DECISIONS.md` record explicit overrides. This charter owns product scope and non-goals; `docs/superpowers/specs/2026-09-04-payr-framing-design.md` owns behavior and acceptance criteria; `DESIGN.md` owns the visual contract; the implementation plan owns technical decomposition; and the orchestration plan owns worktree, integration, and release mechanics. Conflicts are reconciled in those documents before implementation continues.

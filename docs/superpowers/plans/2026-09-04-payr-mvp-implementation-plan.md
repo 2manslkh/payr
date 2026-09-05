@@ -6,13 +6,13 @@
 
 **Architecture:** One Next.js application owns the dashboard, canonical invoice service, stateless Streamable HTTP MCP endpoint, protected invoice and receipt routes, payment authorization, reconciliation, and database-backed workers. Supabase/PostgreSQL is the private system of record. A minimal Arc contract accepts exact native USDC and emits the event that creates settlement evidence. Commercial invoice state remains independent from settlement evidence. A `PaymentSigner` port uses a tightly guarded testnet-only local signer for the committed MVP; a policy-controlled Privy adapter is an optional out-of-schedule enhancement.
 
-**Source context:** Read `docs/superpowers/specs/2026-09-04-payr-framing-design.md` before execution. This plan applies the corrected implementation baseline where it is more precise than the framing document, especially for commercial state, settlement races, deterministic links, publication recovery, database hardening, and task order.
+**Source context:** Read `PROJECT.md`, `DECISIONS.md`, `docs/superpowers/specs/2026-09-04-payr-framing-design.md`, `DESIGN.md`, and `docs/superpowers/plans/2026-09-05-payr-agent-orchestration-plan.md` before execution. This plan owns technical decomposition and verification. It does not silently override product scope, acceptance criteria, design, or dated decisions; reconcile any conflict in the authoritative documents before implementation continues.
 
 ## Scope And Execution Rules
 
-- Keng is the sole engineer. The implementation budget is exactly 44 hours.
+- Keng is the sole human operator. Scoped GPT-5.6 Terra xhigh agents implement isolated tickets under the orchestration plan; the human engineering and live-operator budget remains exactly 44 hours.
 - The current repository already has a runnable Next.js shell. Inspect and adopt it. Do not run `pnpm init`, `create-next-app`, or another scaffold command.
-- Preserve the untracked `assets/` directory. Do not delete, move, modify, or stage it without explicit approval.
+- Track the four approved reference files under `assets/brand/` unchanged. Production web assets are separate derived files with `Payr` capitalization.
 - Before changing Next.js routes, cookies, caching, runtime configuration, or deployment behavior, read the relevant versioned guide under `node_modules/next/dist/docs/`. This repository's installed Next.js version is authoritative.
 - Use TDD for behavior: add one focused failing test, observe the intended failure, make the smallest implementation pass, then run the relevant broader suite.
 - Keep unit and database integration suites separate. Unit tests must include both `.test.ts` and `.test.tsx`; DB tests use `.integration.test.ts` or `.integration.test.tsx` and run only against local/CI Supabase.
@@ -20,8 +20,21 @@
 - Real Arc payment, Resend delivery, Claude connector, DNS, and Vercel checks are explicit manual/live operator tests. Any optional Privy policy spike is also manual/live. Never fold them into the default unit or Playwright commands.
 - Do not mark an external integration complete from mocks. Read back every external write from its authoritative API, chain, deployment, inbox, or dashboard.
 - Do not log secrets, raw connector path tokens, protected invoice/receipt slugs, authorization signatures, private keys, or provider credentials. Application logs and analytics must redact path credentials. The platform/CDN may still retain URL paths, as documented below.
-- No task requires a commit or push. End verification with `git diff --check` and `git status --short`. If a later user explicitly asks for a commit, inspect the worktree and stage intended files individually; never use `git add .`, `git add -A`, or broad directory paths that could capture unrelated docs or `assets/`. Push only when separately requested.
+- Agents commit only their owned ticket files in isolated worktrees. The coordinator integrates them into one versioned PR per tranche, stages intended paths explicitly, merges through protected `main`, and tags the resulting merge commit under `docs/ops/versioning.md`.
 - Claude Gmail execution, Gmail PDF attachment, host-agent web-search implementation, Privy, and Bazantic are outside the committed 44-hour schedule. The data contract still accepts confirmed `web_source` provenance. Optional spikes begin only after every core acceptance criterion passes early.
+
+## Approved Web Experience Contract
+
+`DESIGN.md` defines the approved `Commit Ledger` visual system. It is core implementation guidance for Tasks 3-8, not optional Task 10 polish. Implement the system as a document-led, responsive operations console with concentrated settlement-proof contrast and no Request/Plasma composition copying.
+
+- Claude remains the primary invoice creation, revision, publication, status, and voiding interface. Authenticated web surfaces manage configuration and inspect agent-created records; they contain no direct invoice-authoring form.
+- Desktop uses a compact dark workspace rail and open ledger canvas. Tablet collapses the rail. Mobile uses a concise top bar and bottom navigation for Overview, Invoices, Clients, and Activity; Connections and Settings remain in the account menu. Ledger rows preserve labels and protected payment actions remain reachable without hiding invoice facts.
+- `/` is the public landing page. Authenticated MVP surfaces live under `/app`: overview, invoices, invoice detail, clients, redacted activity, connections, and settings. `Open Claude` is the persistent creation action.
+- Overview shows receivables, ordered attention items, setup state only while relevant, and the latest verified settlement. Invoice lists use one toolbar and show commercial and payment state separately. Invoice detail pairs the immutable document with lifecycle, payment, settlement, receipt, and delivery proof.
+- Protected invoice/payment and receipt pages remove dashboard chrome and prioritize exact amount, payee, `USDC on Arc`, due date, technical authorization expiry where applicable, gas reserve, safe action, and server-derived progression.
+- Bills is future incoming-request scope. Hide it from MVP navigation and do not implement batch payment, autonomous spending, or a nonfunctional Bills placeholder.
+- Use approved brand capitalization `Payr`, retain the arrow-R monogram, and refine the production wordmark from the tracked reference assets without overwriting them.
+- Meet WCAG AA contrast, visible keyboard focus, semantic status text, 44px touch targets, reduced-motion preferences, and desktop/mobile verification. Semantic color never acts as the only state signal.
 
 ## Time Budget And Dependency Gates
 
@@ -64,7 +77,7 @@ export function deriveDisplayStatus(
 - A verified settlement row is immutable event evidence. Its presence always derives payment status `paid` and display status `Paid`, including when commercial state is `voided` or `expired`.
 - `settledAfterVoid` is `true` only when `voidedAt !== null` and the event block time is strictly later than `voidedAt`. Equality is not "after" and returns `false`.
 - Payability is half-open: an invoice is payable only while `commercialState === "published"`, no settlement exists, and `now < payableUntil`. At `now === payableUntil` it is expired and authorization is denied.
-- Each authorization uses `authorizationValidUntil = min(serverNow + 10 minutes, payableUntil - 1)`. The contract accepts through `authorizationValidUntil` but independently rejects `block.timestamp >= payableUntil`.
+- Chain-bound issue and deadline values are canonical integer Unix seconds. Each authorization uses `issuedAtSecond = floor(serverNow / 1000)` and `authorizationValidUntil = min(issuedAtSecond + 10 minutes, payableUntilSecond - 1)`, and requires `authorizationValidUntil > issuedAtSecond`. The contract accepts through `authorizationValidUntil` but independently rejects `block.timestamp >= payableUntil`.
 - A due date is commercial metadata. `payableUntil` is the technical deadline and defaults to 30 days after the due date.
 - Expiry may be projected lazily or by a job, but authorization always checks the timestamp directly. A delayed reconciler records a matching event whose block time precedes expiry even if commercial state has since become `expired`.
 - The reconciler validates configured chain, contract, event, and frozen invoice facts, then records every valid event regardless of current commercial state. It does not filter out `voided` or `expired` invoices.
@@ -175,6 +188,27 @@ export type InvoiceStatusResult = {
 
 `commercialState` is the effective value at read time, even if an expiry sweep has not persisted it yet. `paymentStatus` is `paid` if and only if `settlement` is non-null. Before settlement, receipt and receipt-email state are `not_applicable`. The connector may see only invoices in its workspace. Recipient values are the confirmed addresses needed for the freelancer's own status operation; public bearer routes never return receipt-delivery recipients.
 
+Public bearer status is an explicit redaction of this canonical result, never a second state model:
+
+```ts
+export type PublicInvoiceStatusResult = {
+  schemaVersion: "payr.public-invoice-status.v1";
+  invoiceVersion: number;
+  invoiceNumber: string;
+  commercialState: CommercialState;
+  paymentStatus: PaymentStatus;
+  displayStatus: DisplayStatus;
+  payableUntil: string;
+  settlement: InvoiceStatusResult["settlement"];
+  explorer: InvoiceStatusResult["explorer"];
+  settledAfterVoid: boolean;
+  receipt: InvoiceStatusResult["receipt"];
+  receiptEmailState: InvoiceStatusResult["receiptEmail"]["state"];
+};
+```
+
+It excludes internal invoice/workspace IDs, recipient addresses, per-delivery rows, provider message IDs, attempt counts, and scheduling metadata. All explicit null behavior is inherited from the canonical result.
+
 ### Exact Gmail-Ready Package
 
 Every successful publication response reconstructs this link-only package from frozen snapshots and deterministic links:
@@ -237,7 +271,7 @@ pnpm build
 pnpm test:e2e
 ```
 
-Expected: the existing health route and landing smoke pass. Record pre-existing failures before touching code. Confirm `assets/` remains untracked and unchanged. Do not run `pnpm init`.
+Expected: the existing health route and landing smoke pass. Record pre-existing failures before touching code. Confirm the four tracked `assets/brand/` references remain unchanged. Do not run `pnpm init`.
 
 - [ ] **1.2 Verify external prerequisites and start slow verification now**
 
@@ -276,7 +310,8 @@ Ensure scripts have these semantics:
   "test:unit": "vitest run --config vitest.config.ts",
   "test:db": "vitest run --config vitest.db.config.ts",
   "test:e2e": "playwright test",
-  "verify": "pnpm lint && pnpm typecheck && pnpm test:unit && pnpm build"
+  "test:release": "node --test scripts/release-utils.test.mjs",
+  "verify": "pnpm lint && pnpm typecheck && pnpm test:unit && pnpm test:release && pnpm build"
 }
 ```
 
@@ -328,7 +363,7 @@ git diff --check
 git status --short
 ```
 
-Expected: shell and CI topology are green and only intended files plus pre-existing `assets/` appear. Record the Vercel preview read-back when available; if Vercel remains blocked, retain the documented blocker and continue Tasks 2-5 under the Task 1.2 fallback. A public preview is mandatory before Task 9 deployed connector proof and Task 10 release proof, not before Task 2.
+Expected: shell and CI topology are green and only intended files appear. The tracked `assets/brand/` references remain byte-for-byte unchanged. Record the Vercel preview read-back when available; if Vercel remains blocked, retain the documented blocker and continue Tasks 2-5 under the Task 1.2 fallback. A public preview is mandatory before Task 9 deployed connector proof and Task 10 release proof, not before Task 2.
 
 ## Task 2: Domain And Hardened Database Contract
 
@@ -514,14 +549,17 @@ Expected: all money/state constraints hold in PostgreSQL, direct public access f
 - Create: `src/app/api/clients/route.ts`, `src/app/api/clients/route.test.ts`
 - Create: `src/app/api/connectors/route.ts`, `src/app/api/connectors/route.test.ts`
 - Create: `src/app/api/connectors/[id]/revoke/route.ts`
-- Create: `src/app/(dashboard)/layout.tsx`, `src/app/(dashboard)/settings/page.tsx`
-- Create: `src/app/(dashboard)/clients/page.tsx`, `src/app/(dashboard)/connectors/page.tsx`
+- Create: `src/app/(dashboard)/app/layout.tsx`, `src/app/(dashboard)/app/settings/page.tsx`
+- Create: `src/app/(dashboard)/app/clients/page.tsx`, `src/app/(dashboard)/app/connections/page.tsx`
+- Create: `src/app/(dashboard)/app/activity/page.tsx`
+- Create: `src/components/app-navigation.tsx`, `src/components/payr-wordmark.tsx`
 - Create: `src/components/wallet-login.tsx`, `src/components/profile-form.tsx`
 - Create: `src/components/client-form.tsx`, `src/components/connector-token.tsx`
 - Create: `supabase/migrations/202609040002_auth_connector_functions.sql`
+- Modify: `src/app/layout.tsx`, `src/app/globals.css`
 - Modify: `.env.example`, `src/config/env.ts`, `package.json`, `pnpm-lock.yaml`
 
-**Produces:** Wallet-authenticated freelancer sessions, authoritative sender/client profiles, owner-authorized payout changes, and fixed-scope connector credentials with create/show-once/revoke/expire/rate-limit/audit behavior.
+**Produces:** Wallet-authenticated freelancer sessions, the responsive `Commit Ledger` workspace shell, authoritative sender/client profiles, owner-authorized payout changes, and fixed-scope connector credentials with create/show-once/revoke/expire/rate-limit/audit behavior.
 
 - [ ] **3.1 Install and test the auth boundary**
 
@@ -603,6 +641,8 @@ Implement:
 
 The endpoint token in `/api/mcp/<token>` is an explicit hackathon/testnet shortcut. Document in the connector UI that platform access logs, CDN logs, browser history, clipboard history, and Claude connector configuration may retain it. Payr can redact only its own application logs and analytics. Rotate/revoke the demo token immediately after the demo. OAuth is post-MVP, not a Task 3 or Task 9 deliverable.
 
+The dashboard shell follows `DESIGN.md`: standardize the production wordmark as `Payr`, use the approved shallow destinations, expose `Open Claude` instead of a create-invoice form, omit Bills, preserve keyboard navigation at every breakpoint, and never use color alone for connector/profile state. Activity starts with safely redacted profile, auth, and connector audit events; later tasks add publication and settlement events without exposing request bodies, addresses, credentials, or protected URLs.
+
 - [ ] **3.5 Run the auth/connector gauntlet**
 
 ```bash
@@ -635,10 +675,14 @@ Expected: replay and concurrent nonce use produce one success; payout changes re
 - Create: `src/app/api/invoices/[id]/status/route.ts`, `src/app/api/invoices/[id]/status/route.test.ts`
 - Create: `src/app/api/invoices/[id]/void/route.ts`, `src/app/api/invoices/[id]/void/route.test.ts`
 - Create: `src/app/api/jobs/publications/route.ts`
+- Create: `src/app/(dashboard)/app/page.tsx`
+- Create: `src/app/(dashboard)/app/invoices/page.tsx`
+- Create: `src/app/(dashboard)/app/invoices/[id]/page.tsx`
+- Create: `tests/e2e/dashboard-invoices.spec.ts`
 - Create: `supabase/migrations/202609040003_publication_functions.sql`
 - Modify: `.env.example`, `src/config/env.ts`, `package.json`, `pnpm-lock.yaml`
 
-**Produces:** Strict partial draft/revision input, structured missing fields, stable error codes, exact status and Gmail package responses, idempotent publication reservation, and a crash-safe leased publication worker port.
+**Produces:** Strict partial draft/revision input, structured missing fields, stable error codes, exact status and Gmail package responses, idempotent publication reservation, a crash-safe leased publication worker port, and authenticated read-only overview/invoice management surfaces.
 
 - [ ] **4.1 Pin strict partial schemas and stable errors**
 
@@ -790,6 +834,15 @@ No link is externally usable until finalization. An object left by a crash is pr
 
 Add tests that instantiate a fresh service/keyring against persisted rows and prove retries/status/Gmail links are identical after a simulated process restart.
 
+Implement authenticated server-rendered management views from canonical service/repository projections, not a parallel frontend state model:
+
+- overview: receivables, ordered attention items, setup state only when incomplete, and latest settlement when one exists;
+- invoice ledger: one search/filter toolbar, aligned amounts, and distinct commercial/payment columns;
+- invoice detail: immutable version facts and safe actions, with lifecycle and payment state kept separate; settlement/receipt proof may remain empty until Task 7 supplies it; and
+- creation affordance: `Open Claude` only, with no browser draft or publication form.
+
+The pages must not render raw bearer links by default, expose connector credentials, include private recipient delivery rows beyond the authenticated status contract, or expose authorization signatures. An authenticated explicit Share or Copy action may materialize the current protected invoice/PDF URL on demand; never persist it in the dashboard projection or place it in activity, logs, analytics, screenshots, or evidence. Add desktop/mobile browser assertions for responsive navigation, empty/typical rows, state labels, explicit share behavior, and the absence of Bills/direct authoring.
+
 - [ ] **4.6 Run publication crash/race tests**
 
 Required cases:
@@ -897,7 +950,7 @@ Each protected HTML response generates a per-response nonce and sends a CSP equi
 
 The PDF route also returns `Content-Type: application/pdf`, `Content-Length` for the exact stored bytes, `X-Payr-Content-Hash: <pdfContentHash>`, safe content disposition using the immutable filename, and no redirect to storage. The bytes served by the route must be the exact stored bytes.
 
-A voided/expired link may return a minimal non-sensitive status page if product copy requires it, but it must reveal no names, addresses, line items, amount, payout wallet, or PDF. Use the same response shape for unknown links where practical to avoid an enumeration oracle.
+Malformed, unknown, wrong-purpose, expired, and revoked bearer credentials always return the same non-sensitive `404` response. Product copy does not create a distinguishable voided or expired credential response.
 
 - [ ] **5.5 Prove parity, embedded QR, bytes, and responsive behavior**
 
@@ -1018,7 +1071,8 @@ The authorization service:
 
 - resolves a valid invoice bearer link to the exact frozen version;
 - requires commercial `published`, no settlement, and `now < payableUntil`;
-- sets `authorizationValidUntil = min(now + 10 minutes, payableUntil - 1)` using integer Unix seconds and rejects if that value is earlier than the current second;
+- sets `issuedAtSecond = floor(now / 1000)` and `authorizationValidUntil = min(issuedAtSecond + 10 minutes, payableUntilSecond - 1)` using integer Unix seconds, then rejects unless the authorization deadline is strictly later than its issue second;
+- signs only the chain ID and settlement contract frozen on the published invoice version; a later deployment can be selected only by a future publication;
 - builds exactly the pinned domain/types/message;
 - calls `PaymentSigner`;
 - verifies the returned signature recovers the configured attestor;
@@ -1103,6 +1157,7 @@ Expected: local adversarial contract suite is green, deployment is read back, an
 - Create: `src/app/api/jobs/outbox/route.ts`
 - Create: `src/app/receipt/[slug]/page.tsx`
 - Create: `src/app/receipt/[slug]/pdf/route.ts`, `src/app/receipt/[slug]/pdf/route.test.ts`
+- Modify: `src/app/(dashboard)/app/page.tsx`, `src/app/(dashboard)/app/invoices/[id]/page.tsx`, `src/app/(dashboard)/app/activity/page.tsx`
 - Create: `scripts/run-workers.ts`
 - Create: `tests/e2e/receipt.spec.ts`
 - Create: `supabase/migrations/202609040004_reconciliation_workers.sql`
@@ -1170,6 +1225,8 @@ The receipt worker:
 
 Receipt page/PDF contains invoice number/version, exact amount, payer/payee, Arc, block time/number, transaction hash/explorer, invoice PDF hash, document commitment, and the same QR destination. It excludes publication salt, contact addresses not needed for display, and all credentials. Protected routes use deterministic receipt slugs and the Task 5 private headers. Page and PDF share `buildReceiptView`; route tests decode the QR from final served HTML and PDF bytes and require the exact receipt page URL.
 
+Apply the same settlement projection to authenticated management surfaces. Overview gains the latest verified-settlement proof region; invoice detail gains transaction, block, payee, commitment, receipt generation, and aggregate delivery progress; Activity gains safely redacted settlement, receipt, and delivery events. Use the strongest approved contrast only after a settlement exists. Never expose recipient addresses on public bearer routes or collapse the retained commercial state into the derived `Paid` display.
+
 - [ ] **7.4 Normalize/deduplicate recipients while retaining roles**
 
 Normalize confirmed issuer/client email addresses deterministically before uniqueness comparison. Store one logical `email_deliveries` row per `(settlement, message_kind, normalized_recipient)`. Store sorted roles separately/on the row, so an identical issuer/client address produces one delivery with `roles: ["issuer", "client"]`, not two messages and not a lost role.
@@ -1193,7 +1250,7 @@ Worker protocol:
 2. Do not send until receipt is `ready`; regenerate receipt/invoice links at send time after any process restart.
 3. Persist `provider_request_started_at` before calling Resend, then send with the same provider idempotency key for that logical row.
 4. On confirmed success, fenced-update to `sent` with provider message ID.
-5. On definite transient failure, fenced-update to `retry_wait` with `next_attempt_at = now + min(30s * 2^attempt, 30m)`.
+5. On definite transient failure, fenced-update to `retry_wait` with deterministic `next_attempt_at = now + min(30s * 2^attempt, 30m)`. The committed MVP adds no jitter so boundary and recovery behavior stay exact.
 6. A stale `sending` row whose provider request may have escaped is ambiguous. Retry automatically with the same key only while `now < first_provider_attempt_at + 24h`.
 7. At exactly or beyond that 24-hour boundary, an ambiguous row becomes `manual_review`; never blindly resend it because Resend's idempotency protection may have expired.
 8. A permanent provider rejection becomes `failed`. Receipt/settlement remain intact.
@@ -1275,6 +1332,8 @@ Add pinned compatible wagmi/query dependencies. Build chain configuration only f
 
 The payment review displays full payee, exact decimal amount, `USDC on Arc`, chain, commercial due date, technical authorization expiry, and estimated gas reserve separately. The QR remains the protected HTTPS invoice URL, never calldata.
 
+Follow the protected-surface rules in `DESIGN.md`: remove dashboard chrome, preserve document hierarchy, keep the exact amount/payee/network visible before every wallet action, and make the server-derived progression explicit. `Transaction submitted`, `Payment final; syncing receipt`, and `Paid` are distinct visual states. The primary payment action remains reachable on mobile without covering invoice facts, errors, or authorization expiry.
+
 - [ ] **8.3 Submit exact authorization and use existing reconciliation**
 
 On explicit Pay:
@@ -1316,7 +1375,7 @@ Expected: no-write assertions pass and both viewports are usable. A real externa
 - Create: `src/app/api/mcp/[token]/route.ts`, `src/app/api/mcp/[token]/route.test.ts`
 - Create: `skills/payr-create-invoice/SKILL.md`
 - Create: `docs/ops/mcp-claude-smoke.md`
-- Modify: `src/lib/invoices/schemas.ts`, `src/lib/invoices/gmail-package.ts`
+- Inspect/import without changing: `src/lib/invoices/schemas.ts`, `src/lib/invoices/gmail-package.ts`
 - Modify: `.env.example`, `src/config/env.ts`, `package.json`, `pnpm-lock.yaml`
 
 **Produces:** A Vercel-compatible stateless Streamable HTTP MCP server exposing exactly four canonical tools, a portable host workflow, and one deployed Claude connector smoke test.
@@ -1466,7 +1525,7 @@ Store only public/redacted evidence: deployment origin, invoice number, artifact
 
 - [ ] **10.4 Finish docs and rehearse twice**
 
-`README.md` and `docs/architecture.md` must match deployed behavior: freelancer is primary user, client controls payment, commercial state is independent, settlement is event-backed, documents are private/offchain, selected signer mode is honest, and Arc testnet/native-USDC limitations are explicit.
+`README.md`, `DESIGN.md`, and `docs/architecture.md` must match deployed behavior: freelancer is primary user, client controls payment, commercial state is independent, settlement is event-backed, documents are private/offchain, selected signer mode is honest, and Arc testnet/native-USDC limitations are explicit. Re-run the design-system documentation pass after implementation so `DESIGN.md` records actual tokens/components rather than an unverified seed.
 
 `docs/ops/demo-runbook.md` includes:
 
@@ -1479,6 +1538,8 @@ Store only public/redacted evidence: deployment origin, invoice number, artifact
 - token rotation/revocation immediately after demo.
 
 Rehearse the primary path twice under three minutes. Use one pre-funded payer and never depend on a faucet. Keep one prior real settlement/receipt/Resend proof for provider outages.
+
+Capture authenticated overview, invoice ledger/detail, protected payment, and receipt surfaces at desktop and mobile widths. Verify them against `DESIGN.md` for hierarchy, responsive behavior, keyboard focus, contrast, state language, agent-first creation, and the absence of Bills. Fix functional clarity and accessibility defects before rehearsal; visual embellishment never consumes contingency.
 
 ### Reserved Contingency: 2 Hours
 
@@ -1497,14 +1558,14 @@ Use contingency in this priority order only:
 
 At the start of the contingency window, freeze feature scope. If no blocker remains, use the time for another core rehearsal, backup evidence, token rotation, and rest; do not pull excluded enhancements into scope.
 
-- [ ] **10.6 Final non-committing verification**
+- [ ] **10.6 Final release-tranche verification**
 
 ```bash
 git diff --check
 git status --short --branch
 ```
 
-Inspect every modified/untracked path. Confirm `assets/` is still preserved and no unrelated docs/assets would be staged. Do not commit or push unless the executing user explicitly requests it.
+Inspect every modified/untracked path. Confirm the tracked `assets/brand/` references are preserved and no unrelated paths enter the integration branch. Finish through the versioned PR and merge-tag flow in the orchestration and versioning runbooks.
 
 ## Final Acceptance Matrix
 
@@ -1528,6 +1589,7 @@ Each core criterion appears exactly once below. A row is green only from the lis
 | C14 | Production lint, typecheck, unit, DB integration, desktop/mobile browser, build, and Foundry suites pass | Tasks 1, 10 | Local commands and green separate Supabase CI job plus other CI jobs |
 | C15 | Core live path fits under three minutes without Gmail or search | Task 10 | Two timed rehearsals with bypass-first runbook and real prior fallback |
 | C16 | Repository, architecture, demo, and submission tell the same implemented product story | Task 10 | Final README/architecture/runbook/evidence review against deployment |
+| C17 | The authenticated console and protected payment/receipt surfaces implement `Commit Ledger`, remain agent-first, separate commercial/payment state, and expose neither direct web authoring nor Bills | Tasks 3, 4, 7, 8, 10 | Desktop/mobile screenshots, browser assertions, keyboard/contrast checks, and final `DESIGN.md` reconciliation |
 
 ## Separate Enhancement Status
 
@@ -1540,6 +1602,7 @@ These are not core acceptance criteria and consume none of the committed 44 hour
 | Gmail PDF attachment | No | Explicitly excluded; the package has no attachment field |
 | Privy signer adapter and prize claim | No | Claim only after the one-hour live wire-shape, same-shape-deny, recovered-signature, and contract-simulation gate passes |
 | Bazantic | No | Explicitly excluded from this plan and sponsor claims |
+| Incoming Bills | No | Future incoming-request concept only; hide it from MVP navigation and do not implement batch or autonomous payment |
 
 The optional Privy spike starts only after every core acceptance criterion passes early and is capped at one hour outside the committed 44 hours. If attempted, add `scripts/privy-policy-spike.ts` and `docs/ops/privy-signer-evidence.md`, capture the credential-redacted actual SDK wire shape, and require: one valid pinned `PayrPayment` signature that recovers the Privy wallet, one same-shape policy denial for a supported constraint, and local contract verification/simulation. Also test a forbidden signing method when supported. If any gate fails or remains unknown at 60 minutes, stop, retain the guarded local signer, remove Privy claims, and never loosen policy to save the integration.
 

@@ -20,12 +20,12 @@ The remembered three-minute claim is:
 
 - ETHOnline 2026 runs from 4–16 September 2026.[1]
 - The exact submission cutoff time and timezone have not yet been verified from the participant dashboard. This must be confirmed before submission planning.
-- Keng is the sole engineer and owns product decisions.
+- Keng is the sole human operator and owns product decisions; scoped implementation agents work under Keng's review.
 - Chanita owns administration, presentation, and submission preparation.
 - Both have a focused 12–4 PM daily work block.
 - Code freezes on 15 September so the final period can be used for presentation and submission.
 - Keng has approximately 44 focused engineering hours from 4–14 September inclusive.
-- The workspace currently contains framing documents and brand assets, but no application code or runnable build.
+- The workspace contains approved planning documents, brand assets, and a runnable application shell; product implementation has not started.
 - The critical path may contain at most one difficult external integration at a time.
 - `payrlink.xyz` has been purchased through Vercel. Vercel nameservers and A records have begun resolving, but HTTPS and Resend sender-domain verification are not yet proven.
 
@@ -95,6 +95,28 @@ A normal database can generate an invoice but cannot provide direct ownership of
 
 Payr creates a generic commercial invoice/payment request. It does not claim jurisdiction-specific tax compliance or legal sufficiency.
 
+### Approved web experience
+
+`Commit Ledger` is the approved web direction. Payr treats each invoice as a versioned financial record moving through draft, publication, authorization, settlement, receipt generation, and delivery. The interface uses a restrained, document-led light workspace with concentrated deep-navy proof regions; it does not copy the supplied Request dashboard/table treatment or Plasma marketing compositions. `DESIGN.md` is the durable visual contract.
+
+The public landing page is `/`. The authenticated web app lives under `/app` and is an agent-first operations companion, not a second invoice-authoring product. Claude remains the primary creation/revision/publication surface. The web app provides:
+
+- a compact responsive workspace shell with `Open Claude` as the persistent creation action;
+- an overview showing receivables, ordered attention items, setup state when relevant, and the latest verified settlement;
+- one searchable/filterable invoice ledger with aligned financial data;
+- an immutable invoice detail surface with document facts, actions, lifecycle, settlement proof, and receipt/delivery progress;
+- a redacted activity surface for workspace, connector, publication, settlement, receipt, and delivery events;
+- settings, clients, connector lifecycle, and owner-authorized payout management; and
+- protected client invoice/payment and receipt surfaces without authenticated dashboard chrome.
+
+Commercial lifecycle and payment evidence are never collapsed into one stored or visual state. Invoice lists and details show `commercialState` separately from `paymentStatus`; derived `displayStatus` may summarize but never erase either fact. Settlement proof receives the strongest visual contrast and includes only safe public/redacted evidence.
+
+Invoice detail may materialize a current protected invoice/PDF URL only after an authenticated explicit Share or Copy action. It never renders that credential in the default page, persists it in a dashboard projection, or includes it in activity, logs, analytics, screenshots, or evidence.
+
+Incoming Bills are a future incoming-request inbox, not part of the committed vertical slice. MVP navigation must hide Bills and must not expose batch payment, agent-controlled spending, or a nonfunctional placeholder. The future concept may be retained in design artifacts only.
+
+The existing arrow-R monogram is retained. The wordmark is refined and standardized as `Payr`. Satoshi Variable is the approved interface type direction and Commit Mono is restricted to machine-verifiable evidence. Pinned self-hosted files require a recorded redistribution license; otherwise the documented system fallbacks are used without a network fetch. Semantic inks are frozen in `DESIGN.md` and must retain WCAG AA contrast on their intended light surfaces.
+
 ## 4. Scope
 
 ### Included in the vertical slice
@@ -140,6 +162,8 @@ Payr creates a generic commercial invoice/payment request. It does not claim jur
 - Dual-party EIP-712 invoice acknowledgment or a fake PDF "Sign here" control.
 - Automatic Gmail PDF attachment unless a live connector spike proves it.
 - Agent authority to change sender identity or payout wallet.
+- Direct browser invoice authoring; the web app manages and proves agent-created invoices.
+- Incoming Bills or a visible Bills placeholder in the MVP.
 - Unsourced or automatically accepted web-search data.
 - Privy integration that cannot demonstrate an enforced typed-data policy.
 
@@ -769,6 +793,8 @@ This test is mandatory because standard local EVM simulators cannot reproduce al
 - Decode QR images from the final served page and PDF bytes and prove they equal the appropriate protected page URL.
 - Verify protected response headers and prove unsigned direct private-storage GET/list requests fail.
 - Visually inspect invoice, payment, and receipt pages at desktop and mobile widths.
+- Visually inspect the authenticated overview, invoice ledger, and invoice detail at desktop and mobile widths against `DESIGN.md`; verify the compact navigation, agent-first action, separate commercial/payment state, and settlement-proof hierarchy.
+- Verify Bills is absent from MVP navigation and no browser invoice-authoring form exists.
 - Exercise wrong network, rejected wallet action, voided invoice, exact expiry boundary, reverted transaction, final-but-delayed reconciliation, and derived Paid receipt.
 - Verify one Resend logical delivery reaches each normalized confirmed test recipient and same-address parties produce one message with both roles; do not infer transport-level exactly-once.
 - Prove publication remains successful when Gmail is unavailable and inspect the exact `gmailLinkPackage` fields.
@@ -926,6 +952,7 @@ Each core criterion maps one-to-one to one required proof. Passing a related cri
 | AC-41 | The deployed production-origin smoke run uses HTTPS, configured Arc chain/contract, private storage, real database, and selected real signer implementation. | Release checklist with endpoint/transaction evidence. |
 | AC-42 | The core live path from Claude draft through derived Paid receipt fits under three minutes without Gmail, search, or Bazantic. | Uncut timed rehearsal recording. |
 | AC-43 | Repository documentation, architecture diagram, live demo, and submission use the same commercial-state/payment model. | Final release review checklist. |
+| AC-44 | Authenticated overview/invoice surfaces and protected payment/receipt surfaces follow the approved responsive `Commit Ledger` hierarchy, keep commercial and payment state distinct, and expose neither direct web authoring nor Bills. | Desktop/mobile screenshots, keyboard/contrast checks, and browser assertions against `DESIGN.md`. |
 
 Enhancement acceptance is separate and cannot satisfy any core AC:
 
@@ -940,6 +967,9 @@ Enhancement acceptance is separate and cannot satisfy any core AC:
 - Primary user: freelancer, not accounts-payable team.
 - Human client controls payment.
 - Claude is the demo interface; Payr remains API/MCP-first.
+- The web app is an agent-first operations companion with no direct invoice authoring; `Open Claude` is its creation action.
+- `Commit Ledger` is the approved responsive experience; `DESIGN.md` governs the visual system and settlement proof has the strongest contrast.
+- The arrow-R monogram remains, the wordmark is standardized as `Payr`, and incoming Bills remain hidden future scope.
 - Saved profiles are authoritative; host-agent memory only selects them.
 - Approved host-agent search may suggest sourced public client fields, but Payr accepts only confirmed `user_provided|web_source` values and never infers email/wallet addresses; `saved_profile` is server output only.
 - Sender identity and payout wallet are dashboard-only; the agent may save approved client-profile changes.

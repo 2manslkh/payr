@@ -83,7 +83,7 @@ export type PayrRepositories = Readonly<{
 
 export type RpcResult = Readonly<{
   data: unknown;
-  error: { code?: string; message: string } | null;
+  error: { code?: string; message: string; details?: string } | null;
 }>;
 
 export type RpcClient = Readonly<{

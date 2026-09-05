@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { stringToHex } from "viem";
 import { createSessionCodec } from "../../src/lib/auth/session";
+import { seedBrowserWorkspace } from "./workspace-fixture";
 import {
   SESSION_COOKIE,
   type ClientProfile,
@@ -159,6 +160,7 @@ test("login: verification sends only nonce and signature and recovers from expir
 
 test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", () => {
   test.beforeEach(async ({ context, baseURL }) => {
+    seedBrowserWorkspace(identity);
     expect(process.env.SESSION_ENCRYPTION_KEY).toBeTruthy();
     expect(process.env.CONNECTOR_TOKEN_PEPPER).toBeTruthy();
     expect(process.env.NEXT_PUBLIC_APP_URL).toBeTruthy();

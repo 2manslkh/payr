@@ -679,7 +679,8 @@ Expected: replay and concurrent nonce use produce one success; payout changes re
 - Create: `src/app/(dashboard)/app/invoices/page.tsx`
 - Create: `src/app/(dashboard)/app/invoices/[id]/page.tsx`
 - Create: `tests/e2e/dashboard-invoices.spec.ts`
-- Create: `supabase/migrations/202609040003_publication_functions.sql`
+- Create in R04: `supabase/migrations/202609040003_draft_functions.sql`
+- Create in R05: `supabase/migrations/202609040004_publication_functions.sql`
 - Modify: `.env.example`, `src/config/env.ts`, `package.json`, `pnpm-lock.yaml`
 
 **Produces:** Strict partial draft/revision input, structured missing fields, stable error codes, exact status and Gmail package responses, idempotent publication reservation, a crash-safe leased publication worker port, and authenticated read-only overview/invoice management surfaces.
@@ -1160,7 +1161,7 @@ Expected: local adversarial contract suite is green, deployment is read back, an
 - Modify: `src/app/(dashboard)/app/page.tsx`, `src/app/(dashboard)/app/invoices/[id]/page.tsx`, `src/app/(dashboard)/app/activity/page.tsx`
 - Create: `scripts/run-workers.ts`
 - Create: `tests/e2e/receipt.spec.ts`
-- Create: `supabase/migrations/202609040004_reconciliation_workers.sql`
+- Create: `supabase/migrations/202609040005_reconciliation_workers.sql`
 - Create/modify: `vercel.json`
 - Modify: `.env.example`, `src/config/env.ts`, `package.json`, `pnpm-lock.yaml`
 

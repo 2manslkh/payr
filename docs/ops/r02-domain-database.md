@@ -41,6 +41,8 @@ The first three lanes were integrated before repository dispatch. The interrupte
 | Launcher isolation | Hosted-looking inherited Supabase values ignored; local credentials selected instead |
 | Launcher failure | Refused execution outside the running local Payr project with a sanitized error |
 | Secret scan | Gitleaks over R02 history found one reviewed false positive: the deterministic UUID fixture in `src/lib/security/keyed-token.test.ts:6`; no real credential was identified |
+| GitHub clean runner | Draft PR #3 run `33970592493` passed `web`, `browser`, and `database`; release metadata was intentionally deferred until the final version-only commit |
+| Required database check | Active `main` ruleset `22322911` now requires `database` alongside `web`, `browser`, and `release-metadata`, with strict up-to-date checks and no bypass |
 
 Reproduce the database gate with `pnpm db:start`, `pnpm db:reset`, `pnpm db:lint`, then `pnpm test:db:local`. Only the active database steward runs the shared stack. API/Postgres/shadow ports are `57321`/`57322`/`57320`; other projects' occupied ports were left untouched.
 

@@ -214,7 +214,18 @@ describe("buildInvoiceStatus", () => {
       },
     } satisfies InvoiceStatusResult;
 
-    expect(redactPublicInvoiceStatus(status)).toEqual({
+    const enrichedStatus = {
+      ...status,
+      settlement: { ...status.settlement, workspaceId: "private-workspace-id" },
+      explorer: { ...status.explorer, providerSecret: "private-provider-secret" },
+      receipt: {
+        ...status.receipt,
+        normalizedRecipient: "private@example.test",
+        storageKey: "private/object.pdf",
+      },
+    };
+
+    expect(redactPublicInvoiceStatus(enrichedStatus)).toEqual({
       schemaVersion: "payr.public-invoice-status.v1",
       invoiceVersion: 2,
       invoiceNumber: "PAYR-2026-000001",

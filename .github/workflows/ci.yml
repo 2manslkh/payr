@@ -46,6 +46,29 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
 
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: pnpm exec supabase start -o json > /dev/null
+      - run: pnpm db:reset
+      - run: pnpm db:lint
+      - run: pnpm test:db:local
+      - if: always()
+        run: pnpm exec supabase stop --no-backup
+
   release-metadata:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

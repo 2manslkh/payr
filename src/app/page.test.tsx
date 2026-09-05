@@ -8,5 +8,6 @@ describe("HomePage", () => {
     render(<HomePage />);
 
     expect(screen.getByRole("heading", { name: "Invoice. Settle. Reconcile." })).toBeDefined();
+    expect(screen.getByRole("link", { name: "Sign in to Payr" }).getAttribute("href")).toBe("/login");
   });
 });

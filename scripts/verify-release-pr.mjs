@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 
 import {
   assertSingleVersionChange,
+  assertUnchangedVersionHistory,
   compareVersions,
   latestVersionTag,
   normalizeVersionTag,
@@ -33,6 +34,16 @@ function remoteTagExists(tag) {
   if (result.status === 0) return true;
   if (result.status === 2) return false;
   fail(`Unable to inspect remote tag ${tag}`);
+}
+
+function versionHistory(base, tip) {
+  const commits = capture("git", ["rev-list", "--reverse", `${base}..${tip}`, "--", "package.json"])
+    .split("\n")
+    .filter(Boolean);
+  return commits.map((commit) => ({
+    commit,
+    version: JSON.parse(capture("git", ["show", `${commit}:package.json`])).version,
+  }));
 }
 
 const baseBranch = process.env.GITHUB_BASE_REF || "main";
@@ -72,6 +83,7 @@ if (finalCommitFiles !== "package.json") fail("The final release commit must cha
 const parentPackageJson = capture("git", ["show", "HEAD^:package.json"]);
 const basePackageJson = capture("git", ["show", `${baseRef}:package.json`]);
 try {
+  assertUnchangedVersionHistory(basePackage.version, versionHistory(baseRef, "HEAD^"));
   assertSingleVersionChange(basePackageJson, parentPackageJson, currentPackageJson, expectedTag);
 } catch (error) {
   fail(error.message);
@@ -79,8 +91,9 @@ try {
 
 const tags = capture("git", ["tag", "--list"]).split("\n").filter(Boolean);
 const latestTag = latestVersionTag(tags);
+const expectedPreviousTag = `v${basePackage.version}`;
 if (!latestTag) fail("The current base must have an annotated baseline or release tag");
-if (latestTag !== `v${basePackage.version}`) {
+if (latestTag !== expectedPreviousTag) {
   fail(`Base package version ${basePackage.version} does not match latest tag ${latestTag}`);
 }
 if (capture("git", ["cat-file", "-t", `refs/tags/${latestTag}`]) !== "tag") {

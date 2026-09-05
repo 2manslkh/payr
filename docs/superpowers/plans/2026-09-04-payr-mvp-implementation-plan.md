@@ -20,7 +20,7 @@
 - Real Arc payment, Resend delivery, Claude connector, DNS, and Vercel checks are explicit manual/live operator tests. Any optional Privy policy spike is also manual/live. Never fold them into the default unit or Playwright commands.
 - Do not mark an external integration complete from mocks. Read back every external write from its authoritative API, chain, deployment, inbox, or dashboard.
 - Do not log secrets, raw connector path tokens, protected invoice/receipt slugs, authorization signatures, private keys, or provider credentials. Application logs and analytics must redact path credentials. The platform/CDN may still retain URL paths, as documented below.
-- Agents commit only their owned ticket files in isolated worktrees. The coordinator integrates them into one versioned PR per tranche, stages intended paths explicitly, merges through protected `main`, and tags the resulting merge commit under `docs/ops/versioning.md`.
+- Agents commit only their owned ticket files in isolated worktrees. The coordinator integrates them into one versioned PR per tranche, stages intended paths explicitly, and merges through protected `main`; trusted CI tags the resulting merge commit under `docs/ops/versioning.md`.
 - Claude Gmail execution, Gmail PDF attachment, host-agent web-search implementation, Privy, and Bazantic are outside the committed 44-hour schedule. The data contract still accepts confirmed `web_source` provenance. Optional spikes begin only after every core acceptance criterion passes early.
 
 ## Approved Web Experience Contract

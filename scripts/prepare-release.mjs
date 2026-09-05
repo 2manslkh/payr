@@ -4,6 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
 import {
+  assertUnchangedVersionHistory,
   bumpVersion,
   compareVersions,
   latestVersionTag,
@@ -54,6 +55,16 @@ function requireAnnotatedTagAt(tag, commit, expectedVersion) {
   }
 }
 
+function versionHistory(base, tip) {
+  const commits = capture("git", ["rev-list", "--reverse", `${base}..${tip}`, "--", "package.json"])
+    .split("\n")
+    .filter(Boolean);
+  return commits.map((commit) => ({
+    commit,
+    version: JSON.parse(capture("git", ["show", `${commit}:package.json`])).version,
+  }));
+}
+
 const argumentsList = process.argv.slice(2);
 if (argumentsList[0] === "--") argumentsList.shift();
 
@@ -78,6 +89,11 @@ if (packageJson.version !== basePackage.version) {
 
 const baseAncestor = spawnSync("git", ["merge-base", "--is-ancestor", baseRef, "HEAD"]);
 if (baseAncestor.status !== 0) fail("Integration branch is not based on current origin/main");
+try {
+  assertUnchangedVersionHistory(basePackage.version, versionHistory(baseRef, "HEAD"));
+} catch (error) {
+  fail(error.message);
+}
 
 let nextVersion;
 try {

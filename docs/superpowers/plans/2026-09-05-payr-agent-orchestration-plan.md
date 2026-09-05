@@ -44,7 +44,7 @@ Expected versions are planning labels after R00. The release coordinator selects
 - Agent worktrees use sibling paths such as `../payr-worktrees/r02-domain` so they never appear as repository content.
 - Every agent starts from a recorded integration-branch SHA.
 - At most four implementation agents run concurrently. More lanes increase shared-contract and integration risk without shortening the critical path.
-- Agents commit atomic changes on their branches. The coordinator alone pushes integration branches, opens release PRs, changes versions, and creates tags.
+- Agents commit atomic changes on their branches. The coordinator alone pushes integration branches, opens release PRs, and changes versions. The trusted `publish-release-tag` CI job creates tags; the coordinator verifies or recovers them.
 - Worktrees remain until the release tag and post-merge `main` CI are green.
 
 The coordinator records this manifest before dispatch:
@@ -74,7 +74,8 @@ The coordinator records this manifest before dispatch:
 | `contracts/**`, ABI generation | Contract lane |
 | `contracts/deployments/**` | Release coordinator after authoritative live read-back |
 | Root status, planning, and version documents | Release coordinator |
-| Package version and annotated tag | Release coordinator |
+| Package version | Release coordinator |
+| Annotated tag | Trusted `publish-release-tag` CI job; coordinator recovery |
 
 Dependency, environment, and migration requests are collected before fanout. If a new shared dependency becomes necessary, the lane stops while the coordinator updates the integration branch and distributes the new freeze SHA.
 
@@ -140,9 +141,10 @@ The PR body records the base tag/SHA, included tickets, migrations, contract or 
 1. Preserve the current local hardening commit and dirty approved work on `integration/r00-bootstrap-v0.1.1`.
 2. Reconcile the governing documents and add PR-first release tooling.
 3. Run the complete R00 gate and independent reviews.
-4. Disable squash/rebase merges and enable automatic branch cleanup in repository settings.
+4. Disable squash/rebase merges and enable automatic remote-branch cleanup in repository settings; retain local worktrees until their release is green.
 5. Create annotated baseline tag `v0.1.0` at the current remote `main` baseline, then protect version-tag creation/update/deletion with a GitHub Actions release bypass.
 6. Prepare `v0.1.1`, push the integration branch and baseline tag, and open the R00 PR.
 7. After the PR's check names exist, protect `main` with strict required PR checks before merging R00.
 8. Merge through GitHub with a merge commit, let CI tag that merge `v0.1.1`, and verify the tag and post-merge CI.
-9. Begin R01. Product worktree fanout starts only after R00 is complete.
+9. Protect release-control paths from non-owner pushes; intentional changes require the owner's PR bypass and CODEOWNERS review visibility.
+10. Begin R01. Product worktree fanout starts only after R00 is complete.

@@ -90,3 +90,15 @@ export function assertSingleVersionChange(baseJson, preReleaseJson, releaseJson,
 
   return assertReleasePackageChange(preReleaseJson, releaseJson, expectedTag);
 }
+
+export function assertUnchangedVersionHistory(baseVersion, entries) {
+  parseStableVersion(baseVersion, "Base package version");
+  for (const { commit, version } of entries) {
+    parseStableVersion(version, `Package version at ${commit}`);
+    if (version !== baseVersion) {
+      throw new Error(
+        `The package version may change only in the final release commit; ${commit} contains ${version}, expected ${baseVersion}`,
+      );
+    }
+  }
+}

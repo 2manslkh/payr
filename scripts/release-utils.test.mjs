@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import {
   assertReleasePackageChange,
   assertSingleVersionChange,
+  assertUnchangedVersionHistory,
   bumpVersion,
   compareVersions,
   latestVersionTag,
@@ -68,6 +69,17 @@ test("rejects a package version changed before the final release commit", () => 
   assert.throws(
     () => assertSingleVersionChange(base, preRelease, release, "v0.10.0"),
     /only in the final release commit/,
+  );
+});
+
+test("rejects a temporary version change that was restored before release", () => {
+  assert.throws(
+    () =>
+      assertUnchangedVersionHistory("0.8.0", [
+        { commit: "feature-a", version: "9.0.0" },
+        { commit: "feature-b", version: "0.8.0" },
+      ]),
+    /feature-a contains 9\.0\.0/,
   );
 });
 
@@ -139,10 +151,18 @@ test("verifies a release PR and tags the resulting merge commit", () => {
     git(["merge", "--no-ff", "integration/test", "-m", "Merge pull request #1 from integration/test"]);
     const mergeCommit = git(["rev-parse", "HEAD"]);
     git(["push", "origin", "main"]);
+    git(["config", "--unset", "user.name"]);
+    git(["config", "--unset", "user.email"]);
 
-    const tagging = spawnSync(process.execPath, ["scripts/tag-release.mjs", "v0.2.0"], {
+    const tagging = spawnSync(process.execPath, ["scripts/tag-release.mjs"], {
       cwd: repository,
       encoding: "utf8",
+      env: {
+        ...process.env,
+        GIT_COMMITTER_NAME: "github-actions[bot]",
+        GIT_COMMITTER_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com",
+        PAYR_RELEASE_COMMIT: mergeCommit,
+      },
     });
     assert.equal(tagging.status, 0, tagging.stderr);
     assert.match(tagging.stdout, /Published v0\.2\.0 at merge commit/);
@@ -151,10 +171,19 @@ test("verifies a release PR and tags the resulting merge commit", () => {
     assert.equal(remoteTarget, mergeCommit);
     assert.equal(JSON.parse(readFileSync(join(repository, "package.json"), "utf8")).version, "0.2.0");
 
+    git(["config", "user.name", "Release Test"]);
+    git(["config", "user.email", "release@example.test"]);
     writeFileSync(join(repository, "after-release.txt"), "later main state\n");
     git(["add", "after-release.txt"]);
     git(["commit", "-m", "test: advance main after release"]);
     git(["push", "origin", "main"]);
+
+    const unsafeCurrentTagging = spawnSync(process.execPath, ["scripts/tag-release.mjs"], {
+      cwd: repository,
+      encoding: "utf8",
+    });
+    assert.notEqual(unsafeCurrentTagging.status, 0);
+    assert.match(unsafeCurrentTagging.stderr, /does not target requested release commit/);
 
     const repeatedTagging = spawnSync(process.execPath, ["scripts/tag-release.mjs", "v0.2.0"], {
       cwd: repository,

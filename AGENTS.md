@@ -15,3 +15,4 @@ When the user says `cut new version`, read and execute `docs/ops/versioning.md`.
 ## Multi-agent implementation
 
 Before creating implementation worktrees or integrating agent branches, read and execute `docs/superpowers/plans/2026-09-05-payr-agent-orchestration-plan.md`.
+Create every project worktree under the repository-root `.worktrees/` directory.

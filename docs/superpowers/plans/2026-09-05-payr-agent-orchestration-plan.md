@@ -41,7 +41,7 @@ Expected versions are planning labels after R00. The release coordinator selects
 
 - The primary worktree owns `integration/rNN-<name>` and release coordination.
 - Agent branches use `agent/rNN-<ticket>`.
-- Agent worktrees use sibling paths such as `../payr-worktrees/r02-domain` so they never appear as repository content.
+- Agent worktrees use ignored repository-root paths such as `.worktrees/r02-domain`. Worktrees never live outside Payr's root directory.
 - Every agent starts from a recorded integration-branch SHA.
 - At most four implementation agents run concurrently. More lanes increase shared-contract and integration risk without shortening the critical path.
 - Agents commit atomic changes on their branches. The coordinator alone pushes integration branches, opens release PRs, and changes versions. The trusted `publish-release-tag` CI job creates tags; the coordinator verifies or recovers them.

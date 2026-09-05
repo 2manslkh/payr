@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": 1,
+      "url": "https://ethglobal.com/events",
+      "title": "ETHGlobal Events",
+      "accessed": "2026-09-04"
+    },
+    {
+      "id": 2,
+      "url": "https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp",
+      "title": "Claude custom connectors using remote MCP",
+      "accessed": "2026-09-04"
+    },
+    {
+      "id": 3,
+      "url": "https://platform.claude.com/docs/en/agents-and-tools/mcp-connector",
+      "title": "Claude MCP connector documentation",
+      "accessed": "2026-09-04"
+    },
+    {
+      "id": 5,
+      "url": "https://docs.arc.io/arc/references/evm-differences.md",
+      "title": "Arc EVM differences",
+      "accessed": "2026-09-04"
+    },
+    {
+      "id": 8,
+      "url": "https://ethglobal.com/events/ethonline2026/prizes",
+      "title": "ETHOnline 2026 prizes",
+      "accessed": "2026-09-04"
+    },
+    {
+      "id": 10,
+      "url": "https://support.claude.com/en/articles/10166901-use-google-workspace-connectors",
+      "title": "Claude Google Workspace connector capabilities",
+      "accessed": "2026-09-04"
+    },
+    {
+      "id": 11,
+      "url": "https://docs.privy.io/recipes/agent-integrations/x402-sanctions-screening",
+      "title": "Privy EIP-712 wallet policy enforcement",
+      "accessed": "2026-09-04"
+    }
+  ]
+}

@@ -11,7 +11,7 @@
       "id": 2,
       "url": "https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp",
       "title": "Claude custom connectors using remote MCP",
-      "accessed": "2026-09-04"
+      "accessed": "2026-09-05"
     },
     {
       "id": 3,
@@ -39,9 +39,57 @@
     },
     {
       "id": 11,
-      "url": "https://docs.privy.io/recipes/agent-integrations/x402-sanctions-screening",
-      "title": "Privy EIP-712 wallet policy enforcement",
-      "accessed": "2026-09-04"
+      "url": "https://docs.privy.io/controls/policies/example-policies/ethereum.md",
+      "title": "Privy Ethereum policy examples",
+      "accessed": "2026-09-05"
+    },
+    {
+      "id": 12,
+      "url": "https://docs.arc.io/arc/concepts/deterministic-finality.md",
+      "title": "Arc deterministic finality and settlement",
+      "accessed": "2026-09-05"
+    },
+    {
+      "id": 13,
+      "url": "https://docs.privy.io/wallets/using-wallets/ethereum/sign-typed-data.md",
+      "title": "Privy sign typed data (EIP-712)",
+      "accessed": "2026-09-05"
+    },
+    {
+      "id": 14,
+      "url": "https://resend.com/docs/dashboard/emails/idempotency-keys",
+      "title": "Resend idempotency keys",
+      "accessed": "2026-09-05"
+    },
+    {
+      "id": 15,
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie",
+      "title": "MDN Set-Cookie header",
+      "accessed": "2026-09-05"
+    },
+    {
+      "id": 16,
+      "url": "https://www.postgresql.org/docs/current/sql-createfunction.html",
+      "title": "PostgreSQL CREATE FUNCTION",
+      "accessed": "2026-09-05"
+    },
+    {
+      "id": 17,
+      "url": "https://supabase.com/docs/guides/database/functions",
+      "title": "Supabase database functions and privileges",
+      "accessed": "2026-09-05"
+    },
+    {
+      "id": 18,
+      "url": "https://vercel.com/docs/logs/runtime",
+      "title": "Vercel runtime logs",
+      "accessed": "2026-09-05"
+    },
+    {
+      "id": 19,
+      "url": "https://www.postgresql.org/docs/current/sql-alterdefaultprivileges.html",
+      "title": "PostgreSQL ALTER DEFAULT PRIVILEGES",
+      "accessed": "2026-09-05"
     }
   ]
 }

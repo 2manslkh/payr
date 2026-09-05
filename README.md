@@ -4,7 +4,7 @@ Payr helps independent developers turn confirmed work into an invoice, then reco
 
 ## Status
 
-This repository currently provides only the runnable application shell. The landing page identifies **Arc testnet**, but all chain and payment behavior is **planned and unimplemented**: no profile management, invoices, wallets, contracts, PDFs, MCP, email, or sponsor integrations are available yet.
+This repository contains the runnable application shell and the approved framing and 10-task implementation plan. The landing page identifies **Arc testnet**, but the product workflow remains **planned and unimplemented**: no profile management, invoices, wallets, contracts, PDFs, MCP, email, or sponsor integrations are available yet.
 
 ## Local development
 
@@ -15,16 +15,18 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-The verified local quality commands are:
+The local quality commands are:
 
 ```bash
 pnpm lint
 pnpm typecheck
-pnpm test
+pnpm test:unit
 pnpm build
 pnpm exec playwright install chromium
 pnpm test:e2e
 ```
+
+`pnpm test` aliases `pnpm test:unit`. Unit discovery covers `.test.ts` and `.test.tsx` while excluding integration tests. `pnpm test:db` is reserved for the Supabase-backed integration suite introduced in Task 2 and fails closed when local Supabase credentials or integration tests are absent. Put local test credentials in ignored `.env.test.local` or export them in the shell; Next.js intentionally excludes `.env.local` in test mode. Playwright runs separate desktop and mobile Chromium projects.
 
 To run the built application after `pnpm build`:
 
@@ -49,4 +51,4 @@ Copy `.env.example` to `.env.local` and provide only the values needed for the f
 - `ARC_RPC_URL` and `ARC_CHAIN_ID` are absent from the local environment. **Arc verification is BLOCKED** until both are supplied; no Arc chain value, wallet, or payment behavior has been assumed.
 - Funded Arc wallets, Supabase project credentials, Privy, Resend, Claude/Gmail connectors, Vercel, and the authenticated ETHGlobal deadline have not been verified in this task.
 
-Task 2 and later chain-dependent work remains gated on successful Arc verification.
+Task 6 chain deployment and payment work remains gated on successful Arc verification. Tasks 2-5 can proceed without assuming unverified Arc values.

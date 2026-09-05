@@ -189,3 +189,29 @@ it("replays when an identical revision commits between the initial lookup and co
     expect((await repository.getInvoiceDetail(actor, first.draftId))!.history).toHaveLength(2);
   } finally { releaseContext(); await follower.catch(() => {}); }
 });
+
+it("replays if a saved client alias changes after the initial lookup", async () => {
+  const service = createInvoiceDraftService(repository);
+  const request = input();
+  request.client!.alias = client.alias;
+  let sawLookup!: () => void;
+  let releaseContext!: () => void;
+  const lookedUp = new Promise<void>((resolve) => { sawLookup = resolve; });
+  const gate = new Promise<void>((resolve) => { releaseContext = resolve; });
+  const follower = createInvoiceDraftService({
+    ...repository,
+    async findReplay(...args) { const result = await repository.findReplay(...args); sawLookup(); return result; },
+    async getContext(...args) { await gate; return repository.getContext(...args); },
+  }).createDraft(actor, request);
+  await lookedUp;
+  try {
+    const winner = await service.createDraft(actor, request);
+    await createIdentityRepository(createSupabaseAdminClient()).saveClient(identity, {
+      id: client.id, expectedRevision: client.revision, alias: "renamed", businessName: client.businessName,
+      billingAddress: client.billingAddress, contactName: client.contactName, contactEmail: client.contactEmail,
+    });
+    releaseContext();
+    expect(await follower).toEqual(winner);
+    expect((await repository.getOverview(actor)).invoiceCount).toBe(1);
+  } finally { releaseContext(); await follower.catch(() => {}); }
+});

@@ -4,11 +4,11 @@ Last updated: 2026-09-06
 
 ## Stage
 
-R00-R02 are released through `v0.1.3`. R03 identity and the responsive console are implemented and verified locally: wallet login, encrypted sessions, sender/client profiles, owner-signed payout changes, revocable connector credentials, and redacted activity. The public deployment remains the earlier health shell; hosted product activation is not claimed.
+R00-R03 are released through `v0.2.0`. R04 draft creation/revision, immutable snapshots, idempotent replay, pending client proposals, and server-rendered invoice projections are implemented and verified locally. Publication and real documents remain later tranches. The public deployment remains the earlier health shell; hosted product activation is not claimed.
 
 ## Single current objective
 
-Complete the protected R03 `v0.2.0` release. After its tag and post-merge checks pass, start R04 draft/revision lifecycle against the committed F2 identity contracts and the next F3 freeze.
+Complete the protected R04 `v0.3.0` release. After its tag and post-merge checks pass, freeze the remaining F3 publication transactions and start R05 crash-safe publication.
 
 ## Selected concept
 
@@ -20,9 +20,9 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 
 ## Now
 
-- Release R03 through the protected `v0.2.0` PR/tag flow; evidence is in `docs/ops/r03-identity-console.md`.
+- Release R04 through the protected `v0.3.0` PR/tag flow; evidence is in `docs/ops/r04-drafts.md`.
 - Keep `https://payrlink.xyz` and its secret-free health route as the intended public origin; `https://payr-sandy.vercel.app` is the verified fallback.
-- Keep R03 worktrees until the release tag and post-merge CI are green, then remove the merged branches with ordinary ancestry-safe deletion.
+- Keep R04 worktrees until the release tag and post-merge CI are green, then remove the merged branches with ordinary ancestry-safe deletion.
 - Confirm the exact submission cutoff time and timezone in the authenticated ETHGlobal dashboard.
 - Complete the remaining Resend, funded-wallet, receipt-inbox, and Claude connector human prerequisite checks.
 - Select and configure the intended hosted Supabase project before deployed product integration. Local Payr uses isolated `5732x` ports.
@@ -54,8 +54,8 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 ## Repository
 
 - Public repository: `https://github.com/2manslkh/payr`.
-- R03 base release: annotated `v0.1.3` at `8fb6df58a5e07d4650da60a51a4158de63b4cda5`.
-- R03 integration branch: `integration/r03-identity-console-v0.2.0`.
+- R04 base release: annotated `v0.2.0` at `400fe13841cef8d54d0f7cd4ee11d92146ccdb4c`.
+- R04 integration branch: `integration/r04-drafts-v0.3.0`.
 - Public shell: `https://payrlink.xyz`; health reports the deployed integration commit without configuration details.
 - The four approved `assets/brand/` reference files are part of R00.
 
@@ -63,10 +63,10 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 
 - Product: GREEN — the user, pain, promise, onchain necessity, and non-goals are approved.
 - Design: GREEN — `Commit Ledger`, the responsive surface model, and brand treatment are approved; implemented fidelity remains unproven.
-- Engineering: YELLOW - local domain/database/auth/console gates pass; publication, document, payment, and hosted integration proof remain.
+- Engineering: YELLOW - local domain/database/auth/draft/console gates pass; publication, document, payment, and hosted integration proof remain.
 - Demo: YELLOW — the causal three-minute sequence and honest fallback are defined, but unexercised.
 - Submission: RED — the public repository and health shell exist, but there is no implemented product demo, architecture graphic, video, or final submission.
 
 ## Next review gate
 
-R03 must be merged/tagged with `web`, `browser`, `database`, and release-metadata checks passing. R04 consumes F2 without inventing alternate auth/session/profile contracts; remaining human/live gates stay explicit.
+R04 must be merged/tagged with `web`, `browser`, `database`, and release-metadata checks passing. R05 consumes the immutable draft/version contract and adds fenced publication without changing its identity or replay guarantees; remaining human/live gates stay explicit.

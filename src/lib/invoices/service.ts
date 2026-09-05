@@ -162,7 +162,7 @@ export function createInvoiceDraftService(repository: DraftRepository, now: () =
         }));
       } catch (error) {
         // An identical request may commit after the first replay lookup but before resolution.
-        if (error instanceof DraftError && ["VERSION_CONFLICT", "PROFILE_CONFLICT", "MISSING_FIELDS", "INVALID_INPUT", "DRAFT_NOT_EDITABLE"].includes(error.code)) {
+        if (error instanceof DraftError && ["VERSION_CONFLICT", "PROFILE_CONFLICT", "MISSING_FIELDS", "INVALID_INPUT", "DRAFT_NOT_EDITABLE", "NOT_FOUND"].includes(error.code)) {
           const completed = await repository.findReplay(actor, idempotencyKey, requestFingerprint);
           if (completed) return draftResult(completed);
         }

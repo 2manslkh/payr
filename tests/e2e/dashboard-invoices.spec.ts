@@ -136,7 +136,7 @@ test("immutable current version SSR shows defaults, provenance and pending diff 
   const clients = await workspace.rpc<ClientProfile[]>("payr_list_clients_v1", workspace.scope);
   expect(clients.find((client) => client.id === savedClient.id)?.contactEmail).toBe("original@example.com");
   await accessibleLayout(page);
-  await testInfo.attach("invoice-detail", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+  await testInfo.attach("invoice-detail", { body: await page.screenshot({ fullPage: true, path: testInfo.outputPath("invoice-detail.png") }), contentType: "image/png" });
 });
 
 test("real overview excludes draft value and removes only completed setup steps", async ({ page, workspace }) => {
@@ -178,7 +178,7 @@ test("ledger GET search, state and pagination read real SSR data on desktop and 
     expect(await amount.evaluate((element) => getComputedStyle(element, "::before").content)).toBe('"Amount (USDC)"');
   }
   await accessibleLayout(page);
-  await testInfo.attach("invoice-ledger", { body: await page.screenshot(), contentType: "image/png" });
+  await testInfo.attach("invoice-ledger", { body: await page.screenshot({ path: testInfo.outputPath("invoice-ledger.png") }), contentType: "image/png" });
   await page.getByRole("link", { name: "Next page" }).click();
   await expect(page).toHaveURL(/search=North&state=draft&offset=50$/);
   await expect(page.locator(".invoice-table tbody tr")).toHaveCount(1);

@@ -188,6 +188,8 @@ test("ledger GET search, state and pagination read real SSR data on desktop and 
   await expect(page).not.toHaveURL(/offset=/);
   await expect(page.getByRole("heading", { name: "No matching invoices" })).toBeVisible();
   await page.getByRole("link", { name: "Clear filters" }).click();
+  await expect(page).toHaveURL(/\/app\/invoices$/);
+  await expect(search).toHaveValue("");
   await search.fill("no-such-client");
   await page.getByRole("button", { name: "Apply filters" }).click();
   await expect(page.getByRole("heading", { name: "No matching invoices" })).toBeVisible();
@@ -214,5 +216,5 @@ test("owner scope and strict read queries hide foreign invoices from API and SSR
   await expect(page.getByRole("heading", { name: "Invoice not found" })).toBeVisible();
   await expect(page.getByText("North Studio")).toHaveCount(0);
   await page.goto("/app/invoices?state=paid");
-  await expect(page.getByRole("alert")).toContainText("Invalid invoice filters");
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("Invalid invoice filters");
 });

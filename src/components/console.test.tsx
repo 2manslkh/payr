@@ -83,6 +83,18 @@ it("saves all sender fields without payout or owner data", async () => {
   expect(fetcher.mock.calls[0][1]).toMatchObject({ cache: "no-store", credentials: "same-origin" });
 });
 
+it("keeps a legacy country value editable and explains the required ISO correction", async () => {
+  const fetcher = vi.fn().mockResolvedValue(json({ profile }));
+  vi.stubGlobal("fetch", fetcher);
+  render(<BillingForm kind="sender" initial={{ ...profile, billingAddress: { ...address, countryCode: "UK" } }} onSaved={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Save sender details" }));
+  await screen.findByText(/Use GB rather than UK/);
+  expect(fetcher).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText("Country code (2 letters)"), { target: { value: "GB" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save sender details" }));
+  await screen.findByText("Saved to your workspace.");
+});
+
 it("allows a new client alias to be corrected after a collision without losing edits", async () => {
   const fetcher = vi.fn()
     .mockResolvedValueOnce(json({ error: { code: "CLIENT_ALIAS_CONFLICT" } }, 409))

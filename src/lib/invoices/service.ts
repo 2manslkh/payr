@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { canonicalJson } from "../domain/canonical-json";
 import { formatNativeAtomicAmount, parseUsdcAmount } from "../domain/money";
+import { isCountryCode } from "../domain/country";
 import { IdentityError, walletSchema } from "../identity/contracts";
 import type {
   AppliedDefault, ClientBilling, CreateInvoiceDraftInput, DraftContext, DraftRepository, DraftResult, DraftSnapshot, DraftVersion, InvoiceActor, ProposedClientFields,
@@ -36,6 +37,7 @@ function buildCompleteDraftSnapshot(input: CreateInvoiceDraftInput, context: Dra
   for (const field of [...clientFields, "payoutWallet", "invoicePrefix"] as const) {
     if (!sender?.[field]) missing(`sender.${field}`);
   }
+  if (sender?.billingAddress && !isCountryCode(sender.billingAddress.countryCode)) missing("sender.billingAddress.countryCode", "confirmation_required");
   const selected = Boolean(input.client?.id || input.client?.alias);
   const previousClient = selected ? undefined : previous;
   const client = selected ? context.client : null;
@@ -67,6 +69,7 @@ function buildCompleteDraftSnapshot(input: CreateInvoiceDraftInput, context: Dra
     }
     if (!billing[field]) missing(`client.${field}`);
   }
+  if (billing.billingAddress && !isCountryCode(billing.billingAddress.countryCode)) missing("client.billingAddress.countryCode", "confirmation_required");
 
   const appliedDefaults: AppliedDefault[] = (previous?.appliedDefaults ?? []).filter((entry) =>
     (entry.field === "issueDate" && input.issueDate === undefined) ||

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isCountryCode } from "../domain/country";
 
 export const CONNECTOR_SCOPES = ["invoice:draft", "invoice:publish", "invoice:status", "invoice:void"] as const;
 export const SESSION_COOKIE = "__Host-payr-session";
@@ -12,7 +13,7 @@ export const addressSchema = z.object({
   city: z.string().trim().min(1).max(100),
   region: z.string().trim().max(100).optional(),
   postalCode: z.string().trim().min(1).max(32),
-  countryCode: z.string().regex(/^[A-Z]{2}$/),
+  countryCode: z.string().refine(isCountryCode, "Use an assigned ISO alpha-2 country code"),
 }).strict();
 export type BillingAddress = z.infer<typeof addressSchema>;
 

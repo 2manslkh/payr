@@ -7,6 +7,8 @@ const wallet = z.string().regex(/^0x[0-9a-f]{40}$/);
 const revision = z.number().int().positive().max(2147483647);
 // Keep timestamp strings intact, including PostgreSQL microseconds. Never round via Date.
 const timestamp = z.iso.datetime({ offset: true });
+// Existing F2 rows may contain non-ISO uppercase pairs; keep them editable while writes use the stricter input schema.
+const storedAddress = addressSchema.extend({ countryCode: z.string().regex(/^[A-Z]{2}$/) });
 const session = z.object({ workspaceId: uuid, ownerWallet: wallet }).strict();
 const nonce = z.object({
   id: uuid, workspaceId: uuid.nullable(), wallet, purpose: z.enum(["payr-login-v1", "payr-payout-change-v1"]),
@@ -20,14 +22,14 @@ const nonce = z.object({
   : value.workspaceId !== null && value.payoutFrom !== null && value.payoutTo !== null
     && value.payoutFrom !== value.payoutTo && value.profileRevision !== null);
 const profile = z.object({
-  id: uuid, revision, businessName: z.string().min(1).max(200).nullable(), billingAddress: addressSchema.nullable(),
+  id: uuid, revision, businessName: z.string().min(1).max(200).nullable(), billingAddress: storedAddress.nullable(),
   contactName: z.string().min(1).max(200).nullable(), contactEmail: z.email().max(254).nullable(),
   payoutWallet: wallet, invoicePrefix: z.string().regex(/^[A-Z0-9][A-Z0-9-]{0,31}$/).nullable(),
   defaultPaymentTermsDays: z.number().int().min(0).max(365).nullable(),
 }).strict();
 const clientProfile = z.object({
   id: uuid, revision, alias: z.string().min(1).max(100), businessName: z.string().min(1).max(200),
-  billingAddress: addressSchema, contactName: z.string().min(1).max(200), contactEmail: z.email().max(254),
+  billingAddress: storedAddress, contactName: z.string().min(1).max(200), contactEmail: z.email().max(254),
   provenance: z.record(z.string().regex(/^(alias|businessName|billingAddress|contactName|contactEmail)$/),
     z.object({ kind: z.literal("user_provided"), confirmed: z.literal(true) }).strict()),
 }).strict();

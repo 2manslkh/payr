@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { COMMERCIAL_STATES, deriveDisplayStatus } from "../domain/invoice";
+import { isCountryCode } from "../domain/country";
 import type { DraftRepository, DraftSnapshot, InvoiceActor } from "../invoices/contracts";
 import { DraftError } from "../invoices/errors";
 import type { RpcClient } from "./repositories";
@@ -11,9 +12,8 @@ const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const timestamp = z.iso.datetime({ offset: true });
 const text = (max: number, min = 1) => z.string().min(min).max(max).refine((value) => value.trim() === value);
 const email = text(254).pipe(z.email()).refine((value) => value === value.toLowerCase());
-const countries = new Set("AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW".split(" "));
 const address = z.object({ line1: text(200), line2: text(200, 0).optional(), city: text(100),
-  region: text(100, 0).optional(), postalCode: text(32), countryCode: z.string().refine((value) => countries.has(value)),
+  region: text(100, 0).optional(), postalCode: text(32), countryCode: z.string().refine(isCountryCode),
 }).strict();
 const billing = z.object({ businessName: text(200), billingAddress: address, contactName: text(200), contactEmail: email }).strict();
 const sender = z.object({ id: uuid, revision, businessName: text(200).nullable(), billingAddress: address.nullable(),
@@ -98,7 +98,9 @@ const summary = z.object({ id: uuid, invoiceNumber: text(100).nullable(), versio
 }).strict().refine((value) => (value.amountDecimal === null ? value.amountAtomic === null : money.safeParse(value).success)
   && value.displayStatus === deriveDisplayStatus(value.commercialState, value.paymentStatus === "paid" ? { blockTime: new Date(0) } : null));
 const history = z.array(z.object({ id: uuid, version: revision, createdAt: timestamp }).strict());
-const context = z.object({ sender: sender.nullable(), client: billing.extend({ id: uuid, revision, alias: text(100),
+// F2 admitted any uppercase pair. Surface those stored values as actionable draft omissions, not provider failures.
+const storedAddress = address.extend({ countryCode: z.string().regex(/^[A-Z]{2}$/) });
+const context = z.object({ sender: sender.extend({ billingAddress: storedAddress.nullable() }).nullable(), client: billing.extend({ billingAddress: storedAddress, id: uuid, revision, alias: text(100),
   provenance: z.record(z.string().regex(/^(alias|businessName|billingAddress|contactName|contactEmail)$/),
     z.object({ kind: z.literal("user_provided"), confirmed: z.literal(true) }).strict()),
 }).nullable(), previous: version.nullable(), commercialState: commercial.nullable() }).strict();

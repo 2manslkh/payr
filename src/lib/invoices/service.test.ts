@@ -137,6 +137,20 @@ it("does not turn an unknown saved ID into a new client even with a complete pro
   expect(repository.saveDraft).not.toHaveBeenCalled();
 });
 
+it("identifies invalid stored country fields as actionable omissions instead of persisting them", async () => {
+  const { service, repository, context } = setup();
+  context.sender = { ...sender, billingAddress: { ...address, countryCode: "UK" } };
+  context.client = { ...client, billingAddress: { ...address, countryCode: "ZZ" } };
+  await expect(service.createDraft(actor, input)).rejects.toMatchObject({
+    code: "MISSING_FIELDS", status: 422,
+    details: { missingFields: expect.arrayContaining([
+      { path: "sender.billingAddress.countryCode", reason: "confirmation_required" },
+      { path: "client.billingAddress.countryCode", reason: "confirmation_required" },
+    ]) },
+  });
+  expect(repository.saveDraft).not.toHaveBeenCalled();
+});
+
 it("requires simultaneous client selectors to match the same case-sensitive saved record", async () => {
   const { service, repository } = setup();
   await expect(service.createDraft(actor, { ...input, client: { id: clientId, alias: "studio" } })).rejects.toMatchObject({ code: "INVALID_INPUT", details: { fieldIssues: [{ path: "client", reason: "invalid_value" }] } });

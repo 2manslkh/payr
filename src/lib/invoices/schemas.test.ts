@@ -85,6 +85,12 @@ it.each(["http://example.com/contact", "https://example.com/contact?q=1#source"]
   expect(parseDraftInput({ idempotencyKey: "key", ...proposed("contactName", confirmed("Client", { kind: "web_source", url })) }).client?.proposed?.contactName?.provenance).toEqual({ kind: "web_source", url });
 });
 
+it("normalizes valid URL spellings before fingerprinting and persistence", () => {
+  expect(parseDraftInput({ idempotencyKey: "key", ...proposed("contactName", confirmed("Client", {
+    kind: "web_source", url: "https://EXAMPLE.com:000443/contact",
+  })) }).client?.proposed?.contactName?.provenance).toEqual({ kind: "web_source", url: "https://example.com/contact" });
+});
+
 it.each(["ZZ", "UK", "EU", "XK", "AA", "gb", " GB "])("requires actual uppercase ISO alpha-2 country membership (%s)", (countryCode) => {
   expectInvalid({ idempotencyKey: "key", ...proposed("billingAddress", confirmed({ ...address, countryCode })) });
 });

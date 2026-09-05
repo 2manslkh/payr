@@ -97,6 +97,15 @@ it("cancels a pending change without saving the client and replays the original 
   expect(await replay.json()).toEqual(first);
 });
 
+it.each(["https://EXAMPLE.com:000443/contact", "https://source_name.example.test/contact"])("persists schema-valid normalized provenance from %s", async (url) => {
+  const request = input();
+  request.client!.proposed = { contactEmail: { value: "alternate@example.test", confirmed: true, provenance: { kind: "web_source", url } } };
+  const response = await post(request);
+  expect(response.status).toBe(200);
+  const result = await response.json() as DraftResult;
+  expect(result.preview.clientProvenance.contactEmail).toEqual({ kind: "web_source", url: new URL(url).href });
+});
+
 it("replays when an identical revision commits between the initial lookup and context read", async () => {
   const service = createInvoiceDraftService(repository);
   const first = await service.createDraft(actor, input());

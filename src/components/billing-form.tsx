@@ -50,7 +50,7 @@ export function BillingForm(props: Props) {
           invoicePrefix: text("invoicePrefix"),
           defaultPaymentTermsDays: Number(text("defaultPaymentTermsDays")),
         });
-        if (!parsed.success) throw new ConsoleError("VALIDATION_ERROR", 400);
+        if (!parsed.success) throw new ConsoleError(parsed.error.issues.some((issue) => issue.path.join(".") === "billingAddress.countryCode") ? "INVALID_COUNTRY_CODE" : "VALIDATION_ERROR", 400);
         const { profile } = await consoleApi<{ profile: SenderProfile }>("/api/profile", parsed.data);
         setRevision(profile.revision);
         props.onSaved(profile);
@@ -61,7 +61,7 @@ export function BillingForm(props: Props) {
           expectedRevision: revision,
           alias: text("alias"),
         });
-        if (!parsed.success) throw new ConsoleError("VALIDATION_ERROR", 400);
+        if (!parsed.success) throw new ConsoleError(parsed.error.issues.some((issue) => issue.path.join(".") === "billingAddress.countryCode") ? "INVALID_COUNTRY_CODE" : "VALIDATION_ERROR", 400);
         const { client } = await consoleApi<{ client: ClientProfile }>("/api/clients", parsed.data);
         setRevision(client.revision);
         props.onSaved(client);

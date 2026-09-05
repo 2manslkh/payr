@@ -37,6 +37,7 @@ Agent branches were integrated with merges, preserving ancestry for ordinary pos
 | Production browser tests | 26 passed across desktop and mobile Chromium, no skipped authenticated cases |
 | Reset / SQL lint | Both migrations applied cleanly; no SQL lint errors |
 | Brand/core migration preservation | No diff against `v0.1.3` |
+| Clean GitHub runner | Draft PR #4 run `33982572962` passed `web`, `browser`, and `database`; version metadata was intentionally deferred until the final release commit |
 
 The unmocked `src/lib/auth/flow.integration.test.ts` calls actual route handlers with real viem signatures and local Supabase. It proves one winner for concurrent nonce verification, a usable encrypted session, profile/client persistence, owner-only payout changes, connector authentication/revocation, and denial audit. PostgreSQL fixtures are local only; application operations use the service-role RPC adapter.
 

@@ -52,6 +52,10 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 - Arc testnet RPC, chain, explorer, and native-USDC behavior are verified; Task 6 live deployment/payment still requires funded-wallet evidence.
 - Arc mainnet-launch prize requires availability or deployment-readiness work through 30 September.
 
+## Known Risks
+
+Known reliability risk: pre-release nonce issuance twice returned `400` locally; one failure reached the existing strict timestamp guard. Subsequent 21 isolated auth-flow runs and a fresh complete 406-test database gate passed. Transient cross-runtime clock sensitivity is suspected, not proven; keep strict auth checks and stop release preparation on recurrence. Details: `docs/ops/r05-publication.md`.
+
 ## Repository
 
 - Public repository: `https://github.com/2manslkh/payr`.

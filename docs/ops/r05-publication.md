@@ -55,7 +55,13 @@ Browser tests validate real SSR/RSC exclusion of credentials, explicit sharing, 
 - Protected credential-bearing test responses from trace/DOM artifact capture.
 - Completed refresh feedback and moved successful-void focus/announcement outside permission-keyed controls.
 
-Standards, specification, worker/lifecycle security, and SQL locking/atomicity reviews have no remaining high/medium findings. The bounded visual pass accepted the established design; its two feedback/focus findings were corrected and verified with unit and browser assertions. No new visual language or unlicensed assets were introduced.
+Standards, specification, worker/lifecycle security, and SQL locking/atomicity reviews found no remaining high/medium publication findings. The bounded visual pass accepted the established design; its two feedback/focus findings were corrected and verified with unit and browser assertions. No new visual language or unlicensed assets were introduced.
+
+## Pre-Release Timing Risk
+
+A later local reset/run returned `400` for login nonce issuance; its isolated rerun returned `400` for payout nonce issuance. The second failure's redacted PostgreSQL context identifies the combined timestamp guard in released migration `0002` (`payr_issue_auth_nonce_v1`, function line 46). This is consistent with transient application/database clock differences, but the earlier clock delta and exact failing predicate were not captured. The auth implementation is unchanged from `v0.3.0`; the risk is pre-existing, not a demonstrated R05 regression.
+
+Code-only assertion diagnostics were added without logging challenges, signatures, or cookies. One isolated run followed by 20 fresh-process auth-flow runs passed without production changes. Another complete reset, SQL lint, and all 406 database tests then passed. Independent review accepted these diagnostics and fresh gates under the existing strict timing contract, while retaining clock sensitivity as an unresolved availability risk. No sleeps, test retries, backdating, or relaxed expiry/future-issued checks were introduced. A recurrence during release gates must stop release preparation for failure-time timing evidence and an additive, reviewed repair if needed.
 
 ## Remaining Boundaries
 

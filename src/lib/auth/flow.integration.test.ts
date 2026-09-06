@@ -33,7 +33,7 @@ it("composes real signatures, atomic nonce consumption, sessions, profiles and r
   });
 
   const challengeResponse = await issue(request("/api/auth/nonce", { purpose: "payr-login-v1", wallet: owner.address }));
-  expect(challengeResponse.status).toBe(200);
+  expect(challengeResponse.status, challengeResponse.ok ? undefined : (await challengeResponse.json()).error.code).toBe(200);
   const challenge = await challengeResponse.json();
   const signature = await owner.signMessage({ message: challenge.message });
   const attempts = await Promise.all([1, 2].map(() => verify(request("/api/auth/verify", { nonceId: challenge.nonceId, signature }))));
@@ -57,7 +57,7 @@ it("composes real signatures, atomic nonce consumption, sessions, profiles and r
   const payoutChallenge = await issue(request("/api/auth/nonce", {
     purpose: "payr-payout-change-v1", newPayoutWallet: replacement.address, expectedRevision: savedProfile.revision,
   }));
-  expect(payoutChallenge.status).toBe(200);
+  expect(payoutChallenge.status, payoutChallenge.ok ? undefined : (await payoutChallenge.json()).error.code).toBe(200);
   const payout = await payoutChallenge.json();
   const wrongSigner = await verify(request("/api/auth/verify", {
     nonceId: payout.nonceId, signature: await replacement.signMessage({ message: payout.message }),

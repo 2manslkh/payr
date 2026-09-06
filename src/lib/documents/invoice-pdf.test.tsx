@@ -71,7 +71,7 @@ it("paginates 100 long items, long names, multiline addresses and the complete w
   // Safe performance evidence only; never log invoice URLs, snapshots, or bytes.
   console.info(JSON.stringify({ benchmark: "100-item invoice", pages: inspected.pageCount, bytes: bytes.byteLength,
     renderMs: Math.round(rendered - start), rasterQrMs: Math.round(verified - rendered), totalMs: Math.round(verified - start) }));
-}, 40000);
+}, 60000);
 
 it("keeps a maximum-width exact amount and a long noncredential URL within the page and decodes that URL", async () => {
   const document = testInvoiceDocument();

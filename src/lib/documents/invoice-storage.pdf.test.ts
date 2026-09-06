@@ -201,7 +201,7 @@ it("accepts all 100 ordered items across real page footers and wrapped material 
   const port = createInvoiceDocumentPort({ read: async () => ({ bytes, byteLength: bytes.length, contentType: "application/pdf" }), create: vi.fn() },
     { storageState: async () => "stored" });
   expect((await port.createOrRead({ ...input, canonicalInvoiceJson: canonicalJson(document) })).bytes).toBe(bytes);
-}, 60000);
+}, 100000);
 
 it("verifies an unwrapped total on a different page from the last indexed row", async () => {
   const document = testInvoiceDocument();

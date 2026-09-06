@@ -16,7 +16,7 @@ it.runIf(!!process.env.PAYR_TEST_PDF_PACKAGE_DIR).each([1, 18])(
     expect(result.textItems.length).toBeGreaterThan(0);
     expect(new Set(result.textItems.map((item: { page: number }) => item.page)).size).toBe(pageCount);
     expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(2097152);
-  }, 40000);
+  }, 60000);
 
 it.runIf(!!process.env.PAYR_TEST_PDF_PACKAGE_DIR).each([
   "empty-qr-candidate", "binary-qr-candidate", "chunk-qr-candidate",
@@ -136,7 +136,7 @@ it.each(["timeout", "error"])("awaits real worker termination before settling a 
   try {
     let settled = false;
     const result = inspectInvoicePdf(bytes).catch((error: unknown) => error).then((value) => { settled = true; return value; });
-    if (mode === "timeout") await vi.advanceTimersByTimeAsync(30001);
+    if (mode === "timeout") await vi.advanceTimersByTimeAsync(45001);
     await terminated;
     expect(settled).toBe(false);
     release();

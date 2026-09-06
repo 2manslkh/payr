@@ -25,10 +25,12 @@ The verifier supports the restricted current producer profile, not arbitrary PDF
 | Decoded stream | 4 MiB each |
 | Aggregate decoded streams | 16 MiB |
 | Aggregate image pixels | 4 million |
-| Worker timer | 30 seconds; termination is awaited |
+| Worker timer | 45 seconds; termination is awaited, with the original 60-second publication fence |
 | Positioned text / inspection output | 10,000 items / 2 MiB |
 
 The worker/resource checks are not an OS-enforced RSS sandbox. Missing native producer packages, bindings, fonts, or other infrastructure failures are unavailable/retryable; invalid document proof is terminal. Reserved invoice numbers remain consumed, including after terminal failure.
+
+Clean Linux runner attempts `34038270355` and `34038912522` passed database/browser checks but exceeded the original 30-second inspection budget on valid 100-item PDFs. Isolating native PDF tests from UI workers did not eliminate the timeout. The inspection budget is now 45 seconds; all byte/decoded-resource limits and the 60-second live fence are unchanged. Tests that perform two independent inspections have a separate longer harness deadline. Clean-runner confirmation remains required before version preparation.
 
 Runtime requires Node `>=22.13 <23`, pnpm `10.19.0`, and frozen dependencies: `@react-pdf/renderer 4.9.0`, `qrcode 1.5.4`, `pdfjs-dist 6.3.289`, `@napi-rs/canvas 1.0.8`, `jsqr 1.4.0` (`@types/qrcode 1.5.6`). New publication requires real configured chain/contract binding, retained/active link keys, and Supabase. No browser authoring or production fake-provider switch exists. Keep the configured app origin fixed while active attempts or published artifacts reference it; changing QR destinations must fail verification, not mutate stored PDFs.
 

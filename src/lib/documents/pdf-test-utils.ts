@@ -192,7 +192,7 @@ export async function probePackagedInvoicePdf(parent: string, fault?: "missing-j
     const bytes = inputBytes ?? await fixturePdf({ destinations: [testInvoiceUrl] });
     const run = () => {
       const result = spawnSync(process.execPath, ["--input-type=commonjs", "-e", probe, JSON.stringify(chunks), fault ?? ""], {
-        cwd: directory, env: { NODE_ENV: "production" }, input: bytes, encoding: "utf8", timeout: 30000, maxBuffer: 262144,
+        cwd: directory, env: { NODE_ENV: "production" }, input: bytes, encoding: "utf8", timeout: 60000, maxBuffer: 262144,
       });
       if (result.error || result.status !== 0) throw new Error("Isolated PDF package probe failed");
       return JSON.parse(result.stdout);

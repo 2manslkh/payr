@@ -442,7 +442,7 @@ export async function inspectInvoicePdf(bytes: Uint8Array): Promise<PdfInspectio
         if (result?.status === "ok") resolve(result.inspection);
         else reject(result?.status === "invalid" ? new DocumentVerificationError() : new DocumentUnavailableError());
       };
-      const timer = setTimeout(() => { void finish(); }, 30000);
+      const timer = setTimeout(() => { void finish(); }, 45000);
       worker.once("message", (result: WorkerResult) => { void finish(result); });
       worker.once("error", () => { void finish(); });
       worker.once("exit", () => { void finish(); });

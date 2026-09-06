@@ -30,7 +30,7 @@ export async function consoleApi<T>(path: string, body?: unknown, signal?: Abort
   }
   const data = await response.json().catch(() => null);
   if (!response.ok)
-    throw new ConsoleError(typeof data?.error?.code === "string" ? data.error.code : "REQUEST_FAILED", response.status);
+    throw new ConsoleError(typeof data?.code === "string" ? data.code : typeof data?.error?.code === "string" ? data.error.code : "REQUEST_FAILED", response.status);
   if (!data) throw new ConsoleError("INVALID_RESPONSE");
   return data as T;
 }

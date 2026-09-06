@@ -219,7 +219,7 @@ The main demo starts after setup with one sender and one client already saved. M
 ### Client payment
 
 1. Client opens the link without creating a Payr account.
-2. The page and protected PDF are rendered from the same immutable view model and display the same invoice number, parties, line items, payee wallet, exact USDC amount, dates, Arc network, commitment, and QR destination.
+2. The page and protected PDF are rendered from the same immutable view model and display the same invoice number, parties, line items, payee wallet, exact USDC amount, dates, Arc network, and QR destination. The invoice PDF's final content hash and commitment appear on the protected HTML page and subsequent receipt, not inside the invoice PDF whose exact bytes they hash (user-approved 2026-09-06 clarification).
 3. The QR code contains the protected HTTPS invoice URL, not raw transaction calldata. It opens the responsive payment page for a supported mobile EVM wallet flow.
 4. Client connects an existing wallet.
 5. The page computes effective commercial status at request time and requests a short-lived EIP-712 authorization only when status is `published` and server time is strictly before `payableUntil`.
@@ -683,7 +683,7 @@ Arc's deterministic finality means a successful receipt in one committed block i
 
 ### Artifact delivery controls
 
-- Invoice HTML/PDF and receipt HTML/PDF each consume the same canonical immutable view model for their artifact kind. Parity tests extract and compare invoice number, parties, line items, dates, amount, asset/network, payee, commitment, settlement proof where applicable, and QR destination.
+- Invoice HTML/PDF and receipt HTML/PDF each consume the same canonical immutable view model for their artifact kind. Parity tests extract and compare invoice number, parties, line items, dates, amount, asset/network, payee, settlement proof where applicable, and QR destination. The invoice PDF omits its own final hash and commitment to avoid self-reference; those proof fields are displayed on invoice HTML and subsequent receipts without changing the frozen hashing formula.
 - `pdfContentHash` is `keccak256` of the exact bytes read back during finalization and served by the protected PDF route. The route streams that immutable object without regeneration or byte transformation and returns `Content-Length` plus `X-Payr-Content-Hash: <pdfContentHash>`.
 - The invoice QR is embedded in both invoice page and PDF and decodes exactly to `paymentUrl`; the receipt QR is embedded in both receipt page and PDF and decodes exactly to its receipt page URL. Verification decodes each image from final served HTML and PDF bytes rather than trusting renderer input.
 - Protected page/PDF responses set `Cache-Control: private, no-store, max-age=0`, `Pragma: no-cache`, `X-Robots-Tag: noindex, nofollow, noarchive`, `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`, `Cross-Origin-Resource-Policy: same-origin`, and `Permissions-Policy: camera=(), microphone=(), geolocation=()`.

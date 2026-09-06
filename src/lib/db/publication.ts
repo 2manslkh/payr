@@ -128,6 +128,7 @@ const errorStatuses: Readonly<Record<string, number>> = {
   IDEMPOTENCY_CONFLICT: 409, DRAFT_NOT_EDITABLE: 409, PUBLICATION_IN_PROGRESS: 409, PUBLICATION_RETRYABLE: 503,
   CONFIGURATION_ERROR: 503, PUBLICATION_ARTIFACT_CONFLICT: 409, PUBLICATION_NOT_STORED: 409, INVOICE_NOT_VOIDABLE: 409,
 };
+export { snapshot as publicationSnapshotSchema, attempt as publicationAttemptSchema, statusData as publicationStatusDataSchema };
 // Admission failures use the frozen HTTP vocabulary; terminal worker failures travel in the DTO.
 const errorCodes: Readonly<Record<string, string>> = {
   CLIENT_CONFLICT: "PROFILE_CONFLICT", DEADLINE_EXPIRED: "DRAFT_NOT_EDITABLE", INVOICE_ALREADY_SETTLED: "INVOICE_NOT_VOIDABLE",

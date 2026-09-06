@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@10.19.0",
   "engines": {
-    "node": ">=22 <23",
+    "node": ">=22.13 <23",
     "pnpm": "10.19.0"
   },
   "scripts": {
@@ -31,9 +31,14 @@
     "release:tag": "node scripts/tag-release.mjs"
   },
   "dependencies": {
+    "@napi-rs/canvas": "1.0.8",
+    "@react-pdf/renderer": "4.9.0",
     "@supabase/supabase-js": "2.115.0",
     "jose": "6.2.12",
+    "jsqr": "1.4.0",
     "next": "16.3.4",
+    "pdfjs-dist": "6.3.289",
+    "qrcode": "1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "viem": "2.56.3",
@@ -44,6 +49,7 @@
     "@playwright/test": "1.62.1",
     "@testing-library/react": "latest",
     "@types/node": "latest",
+    "@types/qrcode": "1.5.6",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "latest",

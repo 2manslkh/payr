@@ -32,8 +32,9 @@ it("renders immutable commercial facts and the exact 18-decimal amount with a vi
   const text = inspected.text.replace(/\s+/g, " ");
   const facts = [view.invoiceNumber, `Version ${view.invoiceVersion}`, view.issueDate, view.dueDate, view.payableUntil,
     ...[view.sender, view.client].flatMap((party) => [party.businessName, party.contactName, party.contactEmail, ...party.addressLines]),
-    ...view.items.flatMap((item) => [item.description, item.amountDecimal, item.amountAtomic]),
-    view.amountDecimal, view.amountAtomic, view.memo, view.payoutWallet, view.asset, view.network, view.invoiceUrl];
+    ...view.items.flatMap((item) => [item.description, `Line amount: ${item.amountDecimal} ${view.asset}`, `Atomic units: ${item.amountAtomic} atomic units`]),
+    `Total due ${view.amountDecimal} ${view.asset}`, `Atomic units: ${view.amountAtomic} atomic units`,
+    view.memo, view.payoutWallet, view.asset, view.network, view.invoiceUrl];
   for (const fact of facts) expect(text).toContain(fact);
   for (const privateField of [document.invoiceId, document.invoiceKey, "publicationSalt", "pdfContentHash", "documentCommitment", "tax compliant"]) {
     expect(text).not.toContain(privateField);
@@ -50,6 +51,8 @@ it("paginates 100 long items, long names, multiline addresses and the complete w
   expect(inspected.qrDestinations).toEqual([testInvoiceUrl]);
   const compact = (text: string) => text.replace(/\s+/g, "");
   const text = compact(inspected.text);
+  expect(text.split("Lineamount:").length - 1).toBe(100);
+  expect(text.split("Atomicunits:").length - 1).toBe(101);
   for (const fact of [view.invoiceNumber, view.payoutWallet, view.memo, view.invoiceUrl, view.amountDecimal, view.amountAtomic,
     ...[view.sender, view.client].flatMap((party) => [party.businessName, party.contactName, party.contactEmail, ...party.addressLines]),
     ...view.items.map((item) => item.description)]) expect(text.includes(compact(fact)), "material fact parity").toBe(true);

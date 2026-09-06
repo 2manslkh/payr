@@ -104,8 +104,8 @@ export function createInvoiceDocumentPort(storage: PrivateDocumentStorage, repos
           ...party.addressLines, party.contactName, party.contactEmail]),
         "Issue date", view.issueDate, "Due date", view.dueDate, "Technical payable deadline (UTC)", view.payableUntil,
         "Description", `Amount (${view.asset})`,
-        ...view.items.flatMap((item) => [item.description, `${item.amountDecimal} ${view.asset}`, `${item.amountAtomic} atomic units`]),
-        "Total due", `${view.amountDecimal} ${view.asset}`, `${view.amountAtomic} atomic units`,
+        ...view.items.flatMap((item) => [item.description, `Line amount: ${item.amountDecimal} ${view.asset}`, `Atomic units: ${item.amountAtomic} atomic units`]),
+        "Total due", `${view.amountDecimal} ${view.asset}`, `Atomic units: ${view.amountAtomic} atomic units`,
         ...(view.memo ? ["Memo", view.memo] : []), "Payment destination", view.payoutWallet, `${view.asset} on ${view.network}`,
         "Open the protected invoice page to review and pay.", view.invoiceUrl];
       if (footerCount !== inspection.pageCount || compact(materialText) !== compact(fields.join("\n"))) throw new DocumentVerificationError();

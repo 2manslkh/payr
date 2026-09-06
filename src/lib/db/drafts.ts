@@ -113,7 +113,7 @@ const actorSchema = z.object({ workspaceId: uuid, ownerWallet: wallet.nullable()
   .refine((value) => (value.ownerWallet === null) !== (value.connectorId === null));
 const errorStatuses: Readonly<Record<string, number>> = {
   INVALID_INPUT: 400, NOT_FOUND: 404, VERSION_CONFLICT: 409, PROFILE_CONFLICT: 409,
-  IDEMPOTENCY_CONFLICT: 409, DRAFT_NOT_EDITABLE: 409,
+  IDEMPOTENCY_CONFLICT: 409, DRAFT_NOT_EDITABLE: 409, PUBLICATION_IN_PROGRESS: 409,
 };
 
 export function createDraftRepository(client: RpcClient): DraftRepository {

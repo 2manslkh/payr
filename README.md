@@ -4,11 +4,13 @@ Payr helps independent developers turn confirmed work into an invoice, then reco
 
 ## Status
 
-This repository contains the R05 crash-safe publication protocol on the draft/revision, identity, and database foundation. It implements permanent invoice numbering, leases/fences, artifact verification, atomic finalization, approved client changes, status/Gmail reconstruction, explicit sharing, and settlement-safe voiding. Deterministic documents are injected only in tests: new production publication fails closed until R06 installs the real PDF/QR/storage adapter. Protected document routes, wallet payments, MCP, and email delivery remain later tranches. No hosted rollout is claimed by this release.
+R05 is released as `v0.4.0`. R06 adds real invoice PDF/QR generation, immutable private storage, and protected HTML/PDF routes to the crash-safe publication protocol. Real compiled publication is verified locally, but the final structural money-row binding repair and complete release gates remain pending. The intended release is `v0.5.0`; package metadata remains `0.4.0` and no R06 release PR exists at this snapshot. No hosted rollout or live payment proof is claimed.
+
+**PDF text limitation:** invoice fields support printable ASCII plus LF line breaks only. Accented text, Thai, emoji, and other unsupported characters fail closed. Payr does not silently drop characters, transliterate names, or invent legal details. Confirm accurate supported facts before publication; an invalid document after reservation can permanently consume an invoice number.
 
 ## Local development
 
-Requires Node 22 and pnpm 10.19.0.
+Requires Node `>=22.13 <23` and pnpm `10.19.0`. Use the frozen lockfile; PDF/native dependency versions are pinned for the current producer and verification profile.
 
 ```bash
 pnpm install --frozen-lockfile
@@ -21,13 +23,17 @@ The local quality commands are:
 pnpm lint
 pnpm typecheck
 pnpm test:unit
+pnpm test:release
 pnpm build
+pnpm test:documents:package
 pnpm exec playwright install chromium
 pnpm db:start
 pnpm test:e2e
 ```
 
-`pnpm test` aliases `pnpm test:unit`. Unit discovery covers `.test.ts` and `.test.tsx` while excluding integration tests. Playwright runs separate desktop and mobile Chromium projects against a production build/start both locally and in CI; set `PAYR_TEST_PORT` to isolate concurrent worktrees. Browser tests now require the local Supabase stack because the invoice pages read real server-side projections. Run database and browser suites serially locally: they share test fixtures.
+`pnpm test` aliases `pnpm test:unit`. Unit discovery covers `.test.ts` and `.test.tsx` while excluding integration tests. `pnpm verify` runs lint, typecheck, unit/release tests, build, then `pnpm test:documents:package`; the required CI `web` check also runs this post-build gate. Pre-build unit tests alone do not exercise the isolated traced-package/native/font cases.
+
+Playwright runs separate desktop and mobile Chromium projects against a production build/start both locally and in CI; set `PAYR_TEST_PORT` to isolate concurrent worktrees. Browser tests require the local Supabase stack and exercise real compiled publication and protected routes. Run database and browser suites serially locally: they share test fixtures.
 
 ### Local database
 
@@ -76,11 +82,21 @@ Country entry requires assigned ISO alpha-2 codes. Previously accepted non-ISO v
 
 Publication binds the configured `ARC_CHAIN_ID` and nonzero `NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS` once per attempt. New reservations also require `LINK_ACTIVE_KEY_VERSION` and matching `LINK_TOKEN_KEY_V<n>` material. Retain old key versions for existing links; replay and read paths use stored versions, never the current active key as a substitute.
 
-`POST /api/invoices/[id]/publish` accepts exact version, explicit approval, and idempotency key. It rejects duplicate JSON properties. A number is permanently consumed at successful reservation; workers recover the same attempt/object with an increased fence after lease expiry. No link is exposed before verified finalization, and a terminal failure requires a new approved idempotency key. The runtime intentionally returns `DOCUMENTS_NOT_CONFIGURED` before new reservation/claim while R06 is pending; there is no production fake-provider switch.
+`POST /api/invoices/[id]/publish` accepts exact version, explicit approval, and idempotency key. It rejects duplicate JSON properties. A number is permanently consumed at successful reservation; workers recover the same attempt/object with an increased fence after lease expiry. No link is exposed before verified finalization, and a terminal failure requires a new approved idempotency key. R06 installs the real document adapter; publication requires configured chain/contract binding, link keys, and Supabase. There is no production fake-provider switch or browser authoring form. Native producer/package/font and storage infrastructure failures are retryable; invalid document proof is terminal and does not restore a consumed number.
 
 Canonical status, link-only Gmail packages, and Share/Copy reconstruct existing finalized artifacts from retained keys. Gmail data is not send approval and no email provider is called. Finalized replay does not need current reservation binding or a document provider. Voiding and void replay do not need link/explorer configuration; they atomically revoke invoice access while preserving immutable records and any later valid settlement.
 
 Cron publication processing requires a timing-safe `CRON_SECRET` bearer. UI sharing is explicit, holds links only in component memory, and clears them on hide/navigation/void. Publication browser tests verify actual share responses in Node memory and redact credentials before browser artifacts, with trace/video/automatic screenshots disabled for that scenario.
+
+### Immutable documents
+
+`/invoice/[slug]` and `/invoice/[slug]/pdf` expose finalized invoices through live bearer credentials. HTML and PDF share immutable invoice facts and the exact QR destination. By the approved self-reference exception, the PDF's own final hash and commitment appear on protected HTML and subsequent receipts, not inside that invoice PDF. Receipts are R08 work, not delivered by R06.
+
+The private `documents` bucket uses create-only `upsert:false` uploads and migration `0005` guards the stored object pointer against the observed concurrent-create race. Publication verifies downloaded PDF bytes, material text, and raster-decoded QR before hashing/finalization. Downloads serve the stored bytes after hash and access revalidation, never a signed Storage URL or redirect. Existing objects are not overwritten; known stored/finalized missing objects are not regenerated. Keep `NEXT_PUBLIC_APP_URL` fixed while published artifacts or active attempts reference it.
+
+Protected responses use fresh nonce CSP and private/no-store, noindex, no-referrer, and other security headers. Credentials that are malformed, wrong-purpose, expired, or revoked receive the same generic true `404` at admission; commercial invoice expiry still allows a live bearer to read, while voiding revokes it. HMAC-keyed database-minute admission limits are 120/IP, 60/verified token, and 600/global. Document access reads `CONNECTOR_TOKEN_PEPPER` independently of session configuration.
+
+Verification accepts only the restricted current PDF producer profile, not general PDF uploads: 10 MiB input, 24 pages, 4 MiB per decoded stream, 16 MiB aggregate decoded streams, and 4 million aggregate image pixels. A 20-second worker timer awaits termination; this is not an OS-enforced RSS sandbox. The pending money-row repair, response-verification gap, and provisional gate evidence are recorded in [`docs/ops/r06-documents.md`](docs/ops/r06-documents.md).
 
 ## Versioning
 
@@ -101,6 +117,6 @@ Copy `.env.example` to `.env.local` and provide only the values needed for the f
 - Foundry CLI (`forge`), Supabase CLI, and Docker are available locally.
 - Arc Testnet chain ID `5042002`, the official RPC/explorer, and native-USDC behavior were verified during R01. Current runtime endpoints and funded wallets must still be verified before live use. The preserved `.env.example` RPC default uses an unverified `.network` hostname; current official documentation lists `https://rpc.testnet.arc.io`.
 - The intended Vercel project runs Next.js on Node 22. `https://payrlink.xyz/api/health` and the stable public fallback `https://payr-sandy.vercel.app/api/health` return the deployed commit without environment details.
-- Local Supabase reset, privilege denial, and repository transactions are verified. A hosted Supabase project is not configured; funded Arc wallets, Resend delivery, Claude connector UI, receipt inboxes, and the authenticated ETHGlobal deadline still require operator work.
+- Local Supabase reset, privilege denial, and repository transactions are verified. Hosted Supabase and deployment configuration are unverified by this tranche, not asserted to be absent. Funded-wallet, Resend, Claude connector, and receipt-inbox proof remain separate operator/live gates; current submission planning is maintained separately.
 
-Local R05 verification and release boundaries are in [`docs/ops/r05-publication.md`](docs/ops/r05-publication.md). Prior tranche evidence remains under `docs/ops/`. Live deployment/payment, document delivery, Claude connection, and email proof remain explicit gates. The historical external-prerequisite ledger is in [`docs/ops/preflight.md`](docs/ops/preflight.md).
+Local R06 evidence and remaining release gates are in [`docs/ops/r06-documents.md`](docs/ops/r06-documents.md); R05 protocol evidence remains in [`docs/ops/r05-publication.md`](docs/ops/r05-publication.md). Wallet authorization/payment belongs to R07/R09, receipts and durable email delivery to R08, and Claude MCP to R09. Hosted document delivery, live payment, connector, and email proof remain explicit gates. The historical external-prerequisite ledger is in [`docs/ops/preflight.md`](docs/ops/preflight.md).

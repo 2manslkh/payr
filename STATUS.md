@@ -4,11 +4,11 @@ Last updated: 2026-09-06
 
 ## Stage
 
-R00-R04 are released through `v0.3.0`. R05 publication reservation/recovery, fenced artifact verification/finalization, status/Gmail reconstruction, explicit sharing, and atomic voiding are implemented and tested locally. Production has no synthetic document adapter: R06 must supply real PDF/QR/storage before new publication is enabled. Hosted rollout is not claimed.
+R00-R05 are released through `v0.4.0`. R06 real invoice PDF/QR, immutable private Storage, protected HTML/PDF routes, and compiled publication are integrated and verified locally before the final geometry repair. One medium security finding on structural money-row binding remains pending implementation/verification. Prior standards/specification findings are closed; this is not an all-reviews-clean or release-ready claim. Hosted rollout is not claimed.
 
 ## Single current objective
 
-Complete the protected R05 `v0.4.0` release, then start R06 immutable documents and protected surfaces after tag and post-merge checks pass.
+Complete and verify the final R06 money-row binding repair, rerun the complete gates, then prepare the protected `v0.5.0` release. Package metadata is still `0.4.0`; no R06 release PR exists at this snapshot.
 
 ## Selected concept
 
@@ -20,10 +20,11 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 
 ## Now
 
-- Release R05 through the protected `v0.4.0` PR/tag flow; evidence is in `docs/ops/r05-publication.md`.
+- Finish the `agent/r06-storage` structural repair against freeze `7a8a8e7`; pre-geometry evidence and coordinator placeholders are in `docs/ops/r06-documents.md`.
+- Replace provisional counts after the complete post-repair gate. Required `web` and local `pnpm verify` include `pnpm test:documents:package` after build, not only pre-build units.
 - Keep `https://payrlink.xyz` and its secret-free health route as the intended public origin; `https://payr-sandy.vercel.app` is the verified fallback.
-- Keep R05 worktrees until the release tag and post-merge CI are green, then remove the merged branches with ordinary ancestry-safe deletion.
-- Confirm the exact submission cutoff time and timezone in the authenticated ETHGlobal dashboard.
+- Keep R06 worktrees until the release tag and post-merge CI are green, then remove the merged branches with ordinary ancestry-safe deletion.
+- Submission calendar and roadmap are owned by the user's separate current planning, not this R06 release snapshot; concurrent planning/branding/email/diagram edits are not imported here.
 - Complete the remaining Resend, funded-wallet, receipt-inbox, and Claude connector human prerequisite checks.
 - Verify the intended hosted Supabase configuration before deployed product integration. Local Payr uses API `57321`, Postgres `58322`, and shadow port `57320`.
 - Track the four approved `assets/brand/` reference files unchanged; derive production web assets separately.
@@ -42,11 +43,11 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 
 ## Blockers
 
-- Exact submission cutoff time/timezone remains unverified.
 - Real EOA signatures and identity transactions pass against local Supabase; they are not a live funded-wallet payment, Claude connector, or email delivery.
 - Resend sender-domain SPF/DKIM verification and two receipt-inbox tests are not yet proven.
 - Hosted Supabase and deployment configuration remain unverified by this tranche. Local config, migrations, reset, and hostile-access tests pass.
-- Real document generation/storage and protected routes remain R06 work; no new production publication is enabled through a fake adapter.
+- R06's final structural money-row verification and complete release gate remain open. Real publication requires configured chain/contract/link keys and Supabase; no fake adapter or browser authoring is provided.
+- PDF fields support printable ASCII plus LF only; unsupported text fails closed without transliteration or invented legal facts. Receipts are R08, wallet authorization/payment R07/R09, and MCP R09; R06 does not deliver payments, receipts, or email.
 - Claude custom-connector availability and funded Arc deployment/payer balances require human confirmation.
 - Privy's optional policy-controlled EIP-712 signing and contract compatibility are unproven and are not a core blocker.
 - Arc testnet RPC, chain, explorer, and native-USDC behavior are verified; Task 6 live deployment/payment still requires funded-wallet evidence.
@@ -54,24 +55,26 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 
 ## Known Risks
 
-Known reliability risk: pre-release nonce issuance twice returned `400` locally; one failure reached the existing strict timestamp guard. Subsequent 21 isolated auth-flow runs and a fresh complete 406-test database gate passed. Transient cross-runtime clock sensitivity is suspected, not proven; keep strict auth checks and stop release preparation on recurrence. Details: `docs/ops/r05-publication.md`.
+Unchanged R05 reliability risk: pre-release nonce issuance twice returned `400` locally; one failure reached the existing strict timestamp guard. Subsequent 21 isolated auth-flow runs and a fresh complete 406-test database gate passed. Transient cross-runtime clock sensitivity remains unresolved and suspected, not proven; keep strict auth checks and stop release preparation on recurrence. Details: `docs/ops/r05-publication.md`.
+
+Protected HTML has a remaining verification gap for denial-status uniformity if a credential becomes invalid after live admission. This is not an established confidentiality bypass: the request was live at admission. PDF post-download access revalidation is covered. Details and the separate pending money-row finding: `docs/ops/r06-documents.md`.
 
 ## Repository
 
 - Public repository: `https://github.com/2manslkh/payr`.
-- R05 base release: annotated `v0.3.0` at `57638dcbfc34342ea680d42acfba9b3988ee2ad6`.
-- R05 integration branch: `integration/r05-publication-v0.4.0`.
+- R06 base release: `v0.4.0` at `6761096fba1ed2900d5fedfc91416d1b270dafdd`.
+- R06 integration branch: `integration/r06-documents-v0.5.0`, isolated in `.worktrees/r06-integration`; documentation handoff baseline `7a8a8e7`.
 - Public shell: `https://payrlink.xyz`; health reports the deployed integration commit without configuration details.
 - The four approved `assets/brand/` reference files are part of R00.
 
 ## Readiness
 
-- Product: GREEN — the user, pain, promise, onchain necessity, and non-goals are approved.
-- Design: GREEN — `Commit Ledger`, the responsive surface model, and brand treatment are approved; implemented fidelity remains unproven.
-- Engineering: YELLOW - local publication protocol and recovery gates pass; real document, payment, and hosted integration proof remain.
-- Demo: YELLOW — the causal three-minute sequence and honest fallback are defined, but unexercised.
-- Submission: RED — the public repository and health shell exist, but there is no implemented product demo, architecture graphic, video, or final submission.
+- Product: GREEN - the user, pain, promise, onchain necessity, and non-goals are approved.
+- Design: GREEN - `Commit Ledger`, the responsive surface model, and brand treatment are approved; implemented fidelity remains unproven.
+- Engineering: YELLOW - pre-geometry local document/publication gates pass provisionally; final security repair, complete gates, live payment, and hosted integration proof remain.
+- Demo: YELLOW - the causal three-minute sequence and honest fallback are defined, but unexercised by this tranche.
+- Submission: RED - R06 does not establish a live product demo, final architecture graphic, video, or submission; separate user artifact work is outside this snapshot.
 
 ## Next review gate
 
-R05 must be merged/tagged with `web`, `browser`, `database`, and release-metadata checks passing. R06 installs the real document adapter and protected routes without weakening frozen byte/hash/QR checks or recovery/fence guarantees; remaining human/live gates stay explicit.
+Close the final money-row security finding with positioned per-row evidence, then rerun lint/typecheck/unit, release-tool, build/post-build package, database, desktop/mobile browser, reset/SQL lint, and secret checks. The coordinator must replace provisional evidence, finish review sign-off, and prepare the version before the release PR passes `web`, `browser`, `database`, and `release-metadata`. Trusted CI tags the merge; verify the tag and post-merge checks. Remaining human/live gates stay explicit.

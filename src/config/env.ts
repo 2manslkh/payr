@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { DocumentAccessConfig } from "../lib/documents/contracts";
 import type { IdentityConfig } from "../lib/identity/contracts";
 import type { PublicationConfig, PublicationLinkConfig } from "../lib/invoices/publication-contracts";
 
@@ -103,6 +104,23 @@ export function createPublicationLinkEnv(value: unknown = process.env): Publicat
     throw new Error("Invalid explorer origin");
   }
   return { appOrigin: parsed.NEXT_PUBLIC_APP_URL, explorerOrigin: explorer.origin, keys };
+}
+
+export function createDocumentAccessEnv(value: unknown = process.env): DocumentAccessConfig {
+  const links = createPublicationLinkEnv(value);
+  const parsed = z.object({
+    CONNECTOR_TOKEN_PEPPER: identityEnvSchema.shape.CONNECTOR_TOKEN_PEPPER,
+  }).parse(value);
+  const pepper = Uint8Array.from(atob(parsed.CONNECTOR_TOKEN_PEPPER.replace(/-/g, "+").replace(/_/g, "/")), (char) => char.charCodeAt(0));
+  return { ...links, pepper };
+}
+
+export function createDocumentRpcOrigins(value: unknown = process.env): string[] {
+  const parsed = z.object({ ARC_RPC_URL: z.string().url().optional() }).parse(value);
+  if (parsed.ARC_RPC_URL === undefined) return [];
+  const url = new URL(parsed.ARC_RPC_URL);
+  if (url.username || url.password || !isAllowedAppUrl(url.origin)) throw new Error("Invalid document RPC origin");
+  return [url.origin];
 }
 
 export function createPublicationEnv(value: unknown = process.env): PublicationConfig {

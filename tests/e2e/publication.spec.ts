@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { expect, test as base } from "@playwright/test";
-import { createPublicationLinkEnv } from "../../src/config/env";
+import { createPublicationEnv, createPublicationLinkEnv } from "../../src/config/env";
 import { createSessionCodec } from "../../src/lib/auth/session";
 import { createPublicationRepository } from "../../src/lib/db/publication";
 import { createDraftRepository } from "../../src/lib/db/drafts";
@@ -75,21 +75,29 @@ const test = base.extend<{ workspace: ReturnType<typeof publicationFixture> }>({
 });
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
-test("real publication route fails closed without the R06 document provider and leaves the draft untouched", async ({ page, workspace }) => {
+test("real publication route requires a deployment binding before reserving and finalizes when configured", async ({ page, context, workspace, baseURL }) => {
+  test.setTimeout(60_000);
+  const configured = Boolean(process.env.NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS);
+  if (configured) createPublicationEnv();
   const draft = await workspace.draft();
   await page.goto(`/app/invoices/${draft.draftId}`);
   await expect(page.getByRole("heading", { name: "Pending client changes" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Share links|Void invoice|Publish invoice/ })).toHaveCount(0);
-  const response = await page.evaluate(async ({ id, version, key }) => {
-    const result = await fetch(`/api/invoices/${id}/publish`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expectedVersion: version, approval: true, idempotencyKey: key }),
-    });
-    return { status: result.status, body: await result.json() };
-  }, { id: draft.draftId, version: draft.version, key: randomUUID() });
-  expect(response.status).toBe(503);
-  expect(["DOCUMENTS_NOT_CONFIGURED", "CONFIGURATION_ERROR"]).toContain(response.body.code);
+  // Keep real publication credentials in Node memory, outside browser state and artifacts.
+  const response = await context.request.post(`/api/invoices/${draft.draftId}/publish`, {
+    headers: { Origin: new URL(baseURL!).origin },
+    data: { expectedVersion: draft.version, approval: true, idempotencyKey: randomUUID() },
+  });
+  expect(response.status()).toBe(configured ? 200 : 503);
   const data = await workspace.repository.statusData(workspace.actor, draft.draftId);
+  if (configured) {
+    expect(data?.commercialState).toBe("published");
+    expect(data?.invoiceNumber).toMatch(/^INV-\d{4}-\d{6,}$/);
+    expect(data?.attempt?.state).toBe("finalized");
+    expect(data?.attempt?.artifact?.qrVerified).toBe(true);
+    return;
+  }
+  expect((await response.json()).code).toBe("CONFIGURATION_ERROR");
   expect(data?.commercialState).toBe("draft");
   expect(data?.invoiceNumber).toBeNull();
   expect(data?.attempt).toBeNull();
@@ -129,7 +137,7 @@ test("real finalized fixture keeps credentials out of SSR/RSC, shares stable lin
   await expect(page.getByText("Publication finalized", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Approved client changes" })).toBeVisible();
   await expect(page.getByText(/Applied at publication/)).toBeVisible();
-  await expect(page.getByText(/Protected payment pages and PDF downloads are not yet available/).first()).toBeVisible();
+  await expect(page.getByText(/Protected invoice pages and PDF downloads are available\. Payment is not yet available/).first()).toBeVisible();
   expect(shareRequests).toBe(0);
   await expect(page.locator(".publication-links")).toHaveCount(0);
   await page.getByRole("button", { name: "Refresh record" }).click();

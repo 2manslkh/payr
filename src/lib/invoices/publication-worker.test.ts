@@ -2,6 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { encodeAbiParameters, keccak256, toHex } from "viem";
 import { expect, it, vi } from "vitest";
+import { DocumentUnavailableError, DocumentVerificationError } from "../documents/contracts";
 import { createKeyedTokenCodec } from "../security/keyed-token";
 import { createPublicationWorker } from "./publication-worker";
 import type { InvoiceDocumentPort, PublicationAttempt, PublicationLinkConfig, PublicationRepository } from "./publication-contracts";
@@ -101,6 +102,44 @@ it.each(["store", "finalize", "fail"] as const)("maps a null fenced %s to lease_
   expect(await worker.run(attempt.id)).toEqual({ outcome: "lease_lost", attemptId: attempt.id });
   if (method !== "finalize") expect(repository.finalize).not.toHaveBeenCalled();
   if (method !== "fail") expect(repository.fail).not.toHaveBeenCalled();
+});
+
+it.each(["rendering", "stored"] as const)("terminally fails a %s document verification error using the current lease fence", async (state) => {
+  const { worker, repository, attempt, createOrRead } = setup();
+  attempt.state = state;
+  createOrRead.mockRejectedValue(new DocumentVerificationError());
+  expect(await worker.run(attempt.id)).toEqual({ outcome: "failed", attemptId: attempt.id });
+  expect(repository.fail).toHaveBeenCalledExactlyOnceWith({
+    attemptId: attempt.id, leaseOwner: vi.mocked(repository.claim).mock.calls[0][1],
+    fence: "9007199254740993", failureCode: "ARTIFACT_VERIFICATION_FAILED",
+  });
+  expect(repository.store).not.toHaveBeenCalled();
+  expect(repository.finalize).not.toHaveBeenCalled();
+});
+
+it.each(["lease_lost", "retryable"] as const)("reports %s when the fenced document verification failure cannot be confirmed", async (outcome) => {
+  const { worker, repository, attempt, createOrRead } = setup();
+  createOrRead.mockRejectedValue(new DocumentVerificationError());
+  if (outcome === "lease_lost") vi.mocked(repository.fail).mockResolvedValue(null);
+  else vi.mocked(repository.fail).mockRejectedValue(new Error("SECRET provider response"));
+  expect(await worker.run(attempt.id)).toEqual({ outcome, attemptId: attempt.id });
+  expect(repository.fail).toHaveBeenCalledOnce();
+  expect(repository.store).not.toHaveBeenCalled();
+  expect(repository.finalize).not.toHaveBeenCalled();
+});
+
+it.each([
+  new DocumentUnavailableError(),
+  Object.assign(new Error("ARTIFACT_VERIFICATION_FAILED"), { name: "DocumentVerificationError" }),
+  { name: "DocumentVerificationError", message: "SECRET provider response" },
+  "SECRET provider response",
+])("keeps unavailable and unknown document errors retryable without persisting diagnostics: %s", async (error) => {
+  const { worker, repository, attempt, createOrRead } = setup();
+  createOrRead.mockRejectedValue(error);
+  expect(await worker.run(attempt.id)).toEqual({ outcome: "retryable", attemptId: attempt.id });
+  expect(repository.fail).not.toHaveBeenCalled();
+  expect(repository.store).not.toHaveBeenCalled();
+  expect(repository.finalize).not.toHaveBeenCalled();
 });
 
 it.each(["claim", "store", "finalize", "fail", "document"] as const)("keeps generic %s failures retryable with no terminal fallback", async (method) => {

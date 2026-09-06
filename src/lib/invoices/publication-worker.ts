@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { encodeAbiParameters, keccak256, toHex } from "viem";
 import { z } from "zod";
+import { DocumentVerificationError } from "../documents/contracts";
 import { canonicalJson } from "../domain/canonical-json";
 import { PublicationError, type InvoiceDocumentPort, type PublicationArtifact, type PublicationLinkConfig, type PublicationRepository, type PublicationWorker } from "./publication-contracts";
 import { canonicalPublicationJson, publicationLink } from "./publication-links";
@@ -26,10 +27,17 @@ export function createPublicationWorker(repository: PublicationRepository, confi
       const fence = { attemptId: attempt.id, leaseOwner, fence: attempt.fence };
       const invoiceUrl = publicationLink(attempt.link, "invoice-bearer", config);
       const canonicalInvoiceJson = canonicalPublicationJson(attempt);
-      const proof = await documents.createOrRead({
-        storageKey: attempt.storageKey, canonicalInvoiceJson, invoiceNumber: attempt.invoiceNumber,
-        invoiceUrl, publicationSalt: attempt.publicationSalt,
-      });
+      let proof;
+      try {
+        proof = await documents.createOrRead({
+          storageKey: attempt.storageKey, canonicalInvoiceJson, invoiceNumber: attempt.invoiceNumber,
+          invoiceUrl, publicationSalt: attempt.publicationSalt,
+        });
+      } catch (error) {
+        if (!(error instanceof DocumentVerificationError)) throw error;
+        const failed = await repository.fail({ ...fence, failureCode: "ARTIFACT_VERIFICATION_FAILED" });
+        return { outcome: failed ? "failed" : "lease_lost", attemptId: claimedId };
+      }
       let artifact: PublicationArtifact | null = null;
       // The port's claims are evidence to check, not authority to publish.
       if (proof?.bytes instanceof Uint8Array && proof.bytes.byteLength > 0 && proof.bytes.byteLength <= 10 * 1024 * 1024

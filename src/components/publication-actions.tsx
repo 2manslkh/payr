@@ -148,7 +148,7 @@ function PublicationControls({ invoiceId, version, state, failureCode, canShare,
       <p className={state === "failed" ? "publication-error" : undefined}>{state ? stateLabels[state] : "Not published"}</p>
       {state === "failed" && <p className="publication-error">{failureCode ? failureMessages[failureCode] : "Publication did not complete."} Review the saved version before a new publication approval.</p>}
       {state && state !== "finalized" && state !== "failed" && <p>No links are available while publication is in progress. Refresh to check for an update.</p>}
-      {canShare && <p className="muted">Protected payment pages and PDF downloads are not yet available in this release. A shared link is not evidence of document delivery.</p>}
+      {canShare && <p className="muted">Protected invoice pages and PDF downloads are available. Payment is not yet available in this release. A shared link is not evidence of document delivery.</p>}
       {canShare && !completed && !voidAttempted && <div className="actions">
         <button ref={shareButton} className="button" type="button" disabled={blocked || confirming} onClick={() => perform("share")}>{busy === "share" ? "Getting links..." : error?.action === "share" ? "Retry share" : "Share links"}</button>
       </div>}

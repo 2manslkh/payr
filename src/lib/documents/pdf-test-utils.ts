@@ -2,8 +2,10 @@ import { createElement as h } from "react";
 import { Document, Image, Page, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { createCanvas, loadImage } from "@napi-rs/canvas";
 import QRCode from "qrcode";
-import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { copyFile, lstat, mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import { dirname, join, relative, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { deflateSync } from "node:zlib";
 import { testPublicationSnapshot } from "../invoices/publication.test-support";
 import type { CanonicalInvoiceDocument } from "./contracts";
 import { buildPublishedInvoiceView } from "./invoice-view";
@@ -46,16 +48,42 @@ export function rawFixturePdf(content: string, options: { catalog?: string; stre
     `<< /Length ${Buffer.byteLength(content)} ${options.stream ?? ""} >>\nstream\n${content}\nendstream`,
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
   ];
-  let pdf = "%PDF-1.7\n";
+  return fixturePdfObjects(objects);
+}
+
+function fixturePdfObjects(objects: Array<string | Uint8Array>): Uint8Array {
+  const parts = [Buffer.from("%PDF-1.7\n")];
+  let length = parts[0].length;
   const offsets = [0];
   for (const [index, object] of objects.entries()) {
-    offsets.push(Buffer.byteLength(pdf));
-    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+    offsets.push(length);
+    const part = Buffer.concat([Buffer.from(`${index + 1} 0 obj\n`), typeof object === "string" ? Buffer.from(object) : object, Buffer.from("\nendobj\n")]);
+    parts.push(part); length += part.length;
   }
-  const xref = Buffer.byteLength(pdf);
-  pdf += `xref\n0 ${offsets.length}\n0000000000 65535 f \n`;
+  let pdf = `xref\n0 ${offsets.length}\n0000000000 65535 f \n`;
   pdf += offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`).join("");
-  return new Uint8Array(Buffer.from(pdf + `trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`));
+  parts.push(Buffer.from(pdf + `trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${length}\n%%EOF\n`));
+  return new Uint8Array(Buffer.concat(parts));
+}
+
+export function resourceFixturePdf(options: { count?: number; decodedBytes?: number; images?: boolean; filter?: string;
+  repeatedContents?: number; repeatedDrawing?: number } = {}): Uint8Array {
+  const count = options.count ?? 1;
+  const decoded = options.images ? Buffer.alloc(256 * 256 * 3) : Buffer.alloc(options.decodedBytes ?? 32, 32);
+  const compressed = deflateSync(decoded);
+  const references = Array.from({ length: count }, (_, index) => `${index + 6} 0 R`);
+  const drawing = "BT /F1 10 Tf 42 780 Td (Safe fixture) Tj ET\n" + (options.images
+    ? references.map((_, index) => `q 10 0 0 10 42 700 cm /I${index} Do Q\n`.repeat(options.repeatedDrawing ?? 1)).join("") : "");
+  return fixturePdfObjects([
+    "<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> /XObject << ${options.images
+      ? references.map((ref, index) => `/I${index} ${ref}`).join(" ") : ""} >> >> /Contents [5 0 R ${options.images ? ""
+        : options.repeatedContents ? Array(options.repeatedContents).fill(references[0]).join(" ") : references.join(" ")}] >>`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    `<< /Length ${Buffer.byteLength(drawing)} >>\nstream\n${drawing}\nendstream`,
+    ...references.map(() => Buffer.concat([Buffer.from(`<< /Length ${compressed.length} ${options.filter ?? "/Filter /FlateDecode"} ${options.images
+      ? "/Type /XObject /Subtype /Image /Width 256 /Height 256 /BitsPerComponent 8 /ColorSpace /DeviceRGB" : ""} >>\nstream\n`), compressed, Buffer.from("\nendstream")])),
+  ]);
 }
 
 export async function rasterizeTestPdf(bytes: Uint8Array) {
@@ -94,6 +122,67 @@ export async function writeInvoiceTestEvidence(directory: string) {
       renderMs: Math.round(rendered - start), rasterQrMs: Math.round(inspected - rendered), totalMs: Math.round(inspected - start) });
   }
   return measurements;
+}
+
+export async function probePackagedInvoicePdf(parent: string, fault?: "missing-jsqr" | "broken-worker" | "missing-font" | "missing-native", inputBytes?: Uint8Array) {
+  const root = process.cwd(), directory = await mkdtemp(join(parent, "r06-pdf-trace-"));
+  try {
+    const tracePath = join(root, ".next/server/app/api/jobs/publications/route.js.nft.json");
+    const trace: { files: string[] } = JSON.parse(await readFile(tracePath, "utf8"));
+    const chunks: string[] = [];
+    for (const entry of trace.files) {
+      const source = resolve(dirname(tracePath), entry), name = relative(root, source);
+      if (name.startsWith("..") || name.split("/").some((part) => part.startsWith(".env"))) throw new Error("Unsafe trace entry");
+      const target = join(directory, name), stat = await lstat(source);
+      await mkdir(dirname(target), { recursive: true });
+      if (stat.isSymbolicLink()) {
+        const destination = relative(root, resolve(dirname(source), await readlink(source)));
+        if (destination.startsWith("..")) throw new Error("Trace symlink escapes the package");
+        await symlink(relative(dirname(target), join(directory, destination)), target);
+      } else if (stat.isFile()) await copyFile(source, target);
+      if (/^\.next\/server\/chunks\/[^/]+\.js$/.test(name) && !name.endsWith("[turbopack]_runtime.js")) chunks.push(name);
+    }
+    // Only traced files are copied. No root node_modules, TS loader, NODE_PATH,
+    // source-module fallback, or application environment enters this process.
+    const probe = String.raw`
+      const fs = require("node:fs"), path = require("node:path");
+      for (const name of process.argv[2] ? [] : ["pdfjs-dist/package.json", "pdfjs-dist/legacy/build/pdf.mjs", "pdfjs-dist/legacy/build/pdf.worker.mjs", "@napi-rs/canvas", "jsqr"]) {
+        try {
+          if (!require.resolve(name).startsWith(process.cwd() + path.sep)) throw new Error("Escaping dependency");
+        } catch { process.stdout.write(JSON.stringify({ missingPackagedDependency: name })); process.exit(0); }
+      }
+      const runtime = require("./.next/server/chunks/[turbopack]_runtime.js")("pdf-package-probe");
+      let id;
+      for (const chunk of JSON.parse(process.argv[1])) {
+        const factories = require(path.resolve(chunk));
+        if (!Array.isArray(factories)) continue;
+        runtime.c(chunk.slice(".next/".length));
+        factories.forEach((factory, index) => {
+          if (typeof factory === "function" && /\.s\(\["inspectInvoicePdf"/.test(factory.toString())) id = factories[index - 1];
+        });
+      }
+      if (id === undefined) throw new Error("Compiled inspector was not traced");
+      runtime.m(id).exports.inspectInvoicePdf(new Uint8Array(fs.readFileSync(0))).then(
+        result => process.stdout.write(JSON.stringify(result)),
+        error => process.stdout.write(JSON.stringify({ name: error.name, message: error.message })));
+    `;
+    if (fault === "missing-jsqr") await rm(join(directory, "node_modules/jsqr/dist/jsQR.js"));
+    if (fault === "missing-font") await rm(join(directory, "node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf"));
+    if (fault === "missing-native") for (const entry of trace.files.filter((entry) => entry.includes("canvas") && entry.endsWith(".node"))) {
+      await rm(join(directory, relative(root, resolve(dirname(tracePath), entry))), { force: true });
+    }
+    if (fault === "broken-worker") await writeFile(join(directory, "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"),
+      'throw new Error("test-only bootstrap failure");');
+    const bytes = inputBytes ?? await fixturePdf({ destinations: [testInvoiceUrl] });
+    const run = () => {
+      const result = spawnSync(process.execPath, ["--input-type=commonjs", "-e", probe, JSON.stringify(chunks), fault ?? ""], {
+        cwd: directory, env: { NODE_ENV: "production" }, input: bytes, encoding: "utf8", timeout: 30000, maxBuffer: 262144,
+      });
+      if (result.error || result.status !== 0) throw new Error("Isolated PDF package probe failed");
+      return JSON.parse(result.stdout);
+    };
+    return run();
+  } finally { await rm(directory, { recursive: true, force: true }); }
 }
 
 export async function fixturePdf(options: {

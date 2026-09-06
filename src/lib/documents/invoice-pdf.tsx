@@ -1,7 +1,7 @@
 import { Document, Image as PdfImage, Page, StyleSheet, Text, View, renderToBuffer, type TextProps } from "@react-pdf/renderer";
 import QRCode from "qrcode";
 import { Children, type PropsWithChildren } from "react";
-import { DocumentVerificationError, type PublishedInvoiceView } from "./contracts";
+import { DocumentUnavailableError, DocumentVerificationError, type PublishedInvoiceView } from "./contracts";
 
 const styles = StyleSheet.create({
   page: { paddingTop: 40, paddingHorizontal: 42, paddingBottom: 48, fontFamily: "Helvetica", fontSize: 10,
@@ -45,9 +45,11 @@ export async function invoiceQrDataUrl(invoiceUrl: string): Promise<string> {
     const url = new URL(invoiceUrl);
     if (invoiceUrl.length > 512 || !["https:", "http:"].includes(url.protocol) || url.username || url.password
       || url.hash || url.search || url.href !== invoiceUrl || !url.pathname.startsWith("/invoice/")) throw new DocumentVerificationError();
+  } catch { throw new DocumentVerificationError(); }
+  try {
     return await QRCode.toDataURL(invoiceUrl, { errorCorrectionLevel: "M", margin: 4, width: 600,
       color: { dark: "#071B3B", light: "#FFFFFF" } });
-  } catch { throw new DocumentVerificationError(); }
+  } catch { throw new DocumentUnavailableError(); }
 }
 
 export async function renderInvoicePdf(view: PublishedInvoiceView): Promise<Uint8Array> {
@@ -138,5 +140,8 @@ export async function renderInvoicePdf(view: PublishedInvoiceView): Promise<Uint
     ));
     if (bytes.byteLength < 5 || bytes.byteLength > 10485760) throw new DocumentVerificationError();
     return bytes;
-  } catch { throw new DocumentVerificationError(); }
+  } catch (error) {
+    if (error instanceof DocumentVerificationError) throw error;
+    throw new DocumentUnavailableError();
+  }
 }

@@ -1,10 +1,20 @@
 // @vitest-environment node
 import { expect, it, vi } from "vitest";
+import QRCode from "qrcode";
 import { buildPublishedInvoiceView } from "./invoice-view";
 import { invoiceQrDataUrl, renderInvoicePdf } from "./invoice-pdf";
 import { inspectInvoicePdf } from "./pdf-verification";
 import { longTestInvoiceDocument, rasterizeTestPdf, testInvoiceDocument, testInvoiceUrl } from "./pdf-test-utils";
-import { DocumentVerificationError } from "./contracts";
+import { DocumentUnavailableError, DocumentVerificationError } from "./contracts";
+
+it("keeps operational QR failures retryable through the renderer without changing invoice validation errors", async () => {
+  const failure = vi.spyOn(QRCode, "toDataURL").mockImplementation(() => { throw new Error("test-only QR runtime failure"); });
+  try {
+    await expect(invoiceQrDataUrl(testInvoiceUrl)).rejects.toBeInstanceOf(DocumentUnavailableError);
+    await expect(renderInvoicePdf(buildPublishedInvoiceView(testInvoiceDocument(), testInvoiceUrl)))
+      .rejects.toBeInstanceOf(DocumentUnavailableError);
+  } finally { failure.mockRestore(); }
+});
 
 it("renders immutable commercial facts and the exact 18-decimal amount with a visible payment-page QR", async () => {
   const document = testInvoiceDocument();

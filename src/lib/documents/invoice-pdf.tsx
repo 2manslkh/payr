@@ -18,9 +18,11 @@ const styles = StyleSheet.create({
   dateRow: { flexDirection: "row", justifyContent: "space-between" },
   ledgerHeader: { flexDirection: "row", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "#DDE2E6", paddingBottom: 5 },
   row: { borderBottomWidth: 1, borderBottomColor: "#DDE2E6", paddingVertical: 10, flexShrink: 0 },
-  item: { flexDirection: "row", justifyContent: "space-between", gap: 16 },
+  item: { flexDirection: "row", justifyContent: "space-between", gap: 2 },
+  lineIndex: { width: 12, fontSize: 7 },
   description: { width: 305 },
-  amount: { width: 190, textAlign: "right" },
+  // PDF.js advances for a wrapped caption can extend half a point beyond its glyphs.
+  amount: { width: 190, textAlign: "right", paddingRight: 0.5 },
   atomic: { fontSize: 7, color: "#68717D", textAlign: "right" },
   total: { paddingVertical: 16, alignItems: "flex-end" },
   totalAmount: { fontFamily: "Helvetica-Bold", fontSize: 20 },
@@ -107,6 +109,7 @@ export async function renderInvoicePdf(view: PublishedInvoiceView): Promise<Uint
           </View>
           {view.items.map((item, index) => <View key={index} style={styles.row} wrap={false}>
             <View style={styles.item}>
+              <InvoiceText style={styles.lineIndex}>{String(index + 1)}</InvoiceText>
               <InvoiceText style={styles.description}>{item.description}</InvoiceText>
               <View style={styles.amount}>
                 {/* Fixed prefixes and unit suffixes isolate money from adjacent free-form descriptions. */}

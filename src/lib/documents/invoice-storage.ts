@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { InvoiceDocumentPort } from "../invoices/contracts";
 import { DocumentUnavailableError, DocumentVerificationError, type DocumentRepository, type PrivateDocumentStorage,
-  type PublishedInvoiceView, type StoredDocument } from "./contracts";
+  type PdfTextItem, type PublishedInvoiceView, type StoredDocument } from "./contracts";
 
 const maxBytes = 10485760;
 const uuid = z.string().uuid().refine((value) => value === value.toLowerCase());
@@ -104,11 +104,54 @@ export function createInvoiceDocumentPort(storage: PrivateDocumentStorage, repos
           ...party.addressLines, party.contactName, party.contactEmail]),
         "Issue date", view.issueDate, "Due date", view.dueDate, "Technical payable deadline (UTC)", view.payableUntil,
         "Description", `Amount (${view.asset})`,
-        ...view.items.flatMap((item) => [item.description, `Line amount: ${item.amountDecimal} ${view.asset}`, `Atomic units: ${item.amountAtomic} atomic units`]),
+        ...view.items.flatMap((item, index) => [String(index + 1), item.description, `Line amount: ${item.amountDecimal} ${view.asset}`, `Atomic units: ${item.amountAtomic} atomic units`]),
         "Total due", `${view.amountDecimal} ${view.asset}`, `Atomic units: ${view.amountAtomic} atomic units`,
         ...(view.memo ? ["Memo", view.memo] : []), "Payment destination", view.payoutWallet, `${view.asset} on ${view.network}`,
         "Open the protected invoice page to review and pay.", view.invoiceUrl];
       if (footerCount !== inspection.pageCount || compact(materialText) !== compact(fields.join("\n"))) throw new DocumentVerificationError();
+      const measured = inspection.textItems;
+      if (!Array.isArray(measured) || measured.length < 1 || measured.length > 10000 || measured.some((item) =>
+        !item || typeof item.text !== "string" || !item.text.trim() || !Number.isInteger(item.page)
+        || item.page < 1 || item.page > inspection.pageCount || ![item.x, item.y, item.width, item.height].every(Number.isFinite)
+        || item.width <= 0 || item.height <= 0 || item.x < 0 || item.x + item.width > 595.5 || item.y < item.height || item.y > 842.5)) {
+        throw new DocumentVerificationError();
+      }
+      const size = (item: PdfTextItem, points: number) => Math.abs(item.height - points) < 0.05;
+      const order = (a: PdfTextItem, b: PdfTextItem) => a.page - b.page || a.y - b.y || a.x - b.x;
+      const right = (item: PdfTextItem) => item.x >= 363 && item.x + item.width <= 553.5;
+      const cellText = (items: PdfTextItem[], points: number) => compact(items.filter((item) => size(item, points))
+        .sort(order).map((item) => item.text).join(""));
+      // The narrow 7pt index column cannot be supplied by 10pt description text.
+      const anchors = measured.filter((item) => Math.abs(item.x - 42) < 0.25 && size(item, 7)
+        && item.width <= 12.25 && /^[1-9][0-9]{0,2}$/.test(item.text)).sort(order);
+      const totals = measured.filter((item) => right(item) && size(item, 9) && item.text === "Total due");
+      const payments = measured.filter((item) => Math.abs(item.x - 42) < 0.25 && size(item, 9) && item.text === "Payment destination");
+      if (anchors.length !== view.items.length || totals.length !== 1 || payments.length !== 1) throw new DocumentVerificationError();
+      const total = totals[0], payment = payments[0];
+      if (order(anchors[anchors.length - 1], total) >= 0 || total.page > anchors[anchors.length - 1].page + 1
+        || order(total, payment) >= 0) throw new DocumentVerificationError();
+      for (const [index, anchor] of anchors.entries()) {
+        const next = anchors[index + 1] ?? total;
+        const end = next.page === anchor.page ? next.y - next.height : 794;
+        if (anchor.text !== String(index + 1) || anchor.y < 40 || anchor.y >= end
+          || next.page > anchor.page + 1) throw new DocumentVerificationError();
+        // Rows never wrap. On a page transition the next row starts a fresh region;
+        // the 8pt footer below the 794pt content edge is never amount evidence.
+        const row = measured.filter((item) => item.page === anchor.page && item.y >= anchor.y - 1 && item.y < end);
+        const description = row.filter((item) => item.x >= 55.9 && item.x + item.width <= 361.5);
+        const money = row.filter(right), expected = view.items[index];
+        if (description.some((item) => !size(item, 10)) || cellText(description, 10) !== compact(expected.description)
+          || money.some((item) => !size(item, 10) && !size(item, 7))
+          || cellText(money, 10) !== compact(`Line amount: ${expected.amountDecimal} ${view.asset}`)
+          || cellText(money, 7) !== compact(`Atomic units: ${expected.amountAtomic} atomic units`)) throw new DocumentVerificationError();
+      }
+      // The total is an unwrapped 20pt decimal / 7pt atomic block. A memo (10pt),
+      // row, payment section or other page cannot lend it a matching amount.
+      const totalMoney = measured.filter((item) => item.page === total.page && item.y > total.y
+        && item.y < (payment.page === total.page ? payment.y - payment.height : 794) && (size(item, 20) || size(item, 7)));
+      if (totalMoney.some((item) => item.x < 42 || item.x + item.width > 553.5 || size(item, 7) && !right(item))
+        || cellText(totalMoney, 20) !== compact(`${view.amountDecimal} ${view.asset}`)
+        || cellText(totalMoney, 7) !== compact(`Atomic units: ${view.amountAtomic} atomic units`)) throw new DocumentVerificationError();
       const { computeDocumentCommitment } = await import("../domain/commitment");
       return { bytes: stored.bytes, contentType: "application/pdf", byteLength: stored.byteLength,
         ...computeDocumentCommitment(input.canonicalInvoiceJson, stored.bytes, input.publicationSalt),

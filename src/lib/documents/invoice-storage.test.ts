@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { canonicalJson } from "../domain/canonical-json";
 import { testPublicationSnapshot } from "../invoices/publication.test-support";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { PublishedInvoiceView, StoredDocument } from "./contracts";
+import type { PdfTextItem, PublishedInvoiceView, StoredDocument } from "./contracts";
 import { DocumentUnavailableError, DocumentVerificationError } from "./contracts";
 import { createInvoiceDocumentPort, createPrivateDocumentStorage } from "./invoice-storage";
 
@@ -30,11 +30,21 @@ From Test & Studio 1 Test Road London N1 1AA United Kingdom Owner owner@example.
 Bill to Test Client 1 Test Road London N1 1AA United Kingdom Client client@example.test
 Issue date 2030-01-01 Due date 2030-01-31 Technical payable deadline (UTC) 2030-03-02T00:00:00.000Z
 Description Amount (USDC)
-Confirmed work Line amount: 1.23 USDC Atomic units: 1230000000000000000 atomic units
+1 Confirmed work Line amount: 1.23 USDC Atomic units: 1230000000000000000 atomic units
 Total due 1.23 USDC Atomic units: 1230000000000000000 atomic units
 Payment destination 0x2222222222222222222222222222222222222222 USDC on Arc
 Open the protected invoice page to review and pay. https://example.test/invoice/test-only-destination
 Commercial invoice / payment request | Page 1 of 1`;
+const textItems: PdfTextItem[] = [
+  { page: 1, text: "1", x: 42, y: 346.4, width: 3.892, height: 7 },
+  { page: 1, text: "Confirmed work", x: 56.14, y: 349.1, width: 70.31, height: 10 },
+  { page: 1, text: "Line amount: 1.23 USDC", x: 442.62, y: 349.1, width: 110.66, height: 10 },
+  { page: 1, text: "Atomic units: 1230000000000000000 atomic units", x: 398.377, y: 357.4, width: 154.903, height: 7 },
+  { page: 1, text: "Total due", x: 516.839, y: 393.9, width: 36.441, height: 9 },
+  { page: 1, text: "1.23 USDC", x: 452.14, y: 417.7, width: 101.14, height: 20 },
+  { page: 1, text: "Atomic units: 1230000000000000000 atomic units", x: 398.377, y: 428, width: 154.903, height: 7 },
+  { page: 1, text: "Payment destination", x: 42, y: 488.5, width: 80.91, height: 9 },
+];
 const proof = { invoiceDataHash: `0x${"5".repeat(64)}`, pdfContentHash: `0x${"6".repeat(64)}`, documentCommitment: `0x${"7".repeat(64)}` };
 const object = (label: string): StoredDocument => {
   const bytes = new TextEncoder().encode(`%PDF-1.7\nmocked producer bytes: ${label}`);
@@ -45,7 +55,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   producer.parse.mockReturnValue(document); producer.view.mockReturnValue(view);
   producer.render.mockResolvedValue(object("loser").bytes);
-  producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations: [input.invoiceUrl], text });
+  producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations: [input.invoiceUrl], text, textItems });
   producer.commitment.mockReturnValue(proof);
 });
 
@@ -92,14 +102,14 @@ it.each(["stored", "finalized", "failed"])("does not upload when rendering finis
 });
 
 it.each([{ qrDestinations: [] }, { qrDestinations: ["https://example.test/wrong"] }, { qrDestinations: [input.invoiceUrl, input.invoiceUrl] }])("rejects missing, wrong or multiple decoded QR destinations %j", async ({ qrDestinations }) => {
-  producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations, text });
+  producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations, text, textItems });
   await expect(createInvoiceDocumentPort({ read: vi.fn().mockResolvedValue(object("winner")), create: vi.fn() },
     { storageState: vi.fn().mockResolvedValue("stored") }).createOrRead(input)).rejects.toEqual(new DocumentVerificationError());
   expect(producer.commitment).not.toHaveBeenCalled();
 });
 
 it("rejects another invoice's material text even if its QR matches", async () => {
-  producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations: [input.invoiceUrl], text: text.replace("Test & Studio", "Wrong Issuer") });
+  producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations: [input.invoiceUrl], textItems, text: text.replace("Test & Studio", "Wrong Issuer") });
   await expect(createInvoiceDocumentPort({ read: vi.fn().mockResolvedValue(object("wrong invoice")), create: vi.fn() },
     { storageState: vi.fn().mockResolvedValue("stored") }).createOrRead(input)).rejects.toEqual(new DocumentVerificationError());
 });
@@ -112,19 +122,78 @@ it.each([
   text + "\nCommercial invoice / payment request | Page 1 of 1",
   text.replace("Total due", "Other total"),
 ])("rejects missing, duplicated or inconsistent footer/field labels %#", async (text) => {
-  producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations: [input.invoiceUrl], text });
+  producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations: [input.invoiceUrl], text, textItems });
   await expect(createInvoiceDocumentPort({ read: vi.fn().mockResolvedValue(object("invalid layout")), create: vi.fn() },
     { storageState: vi.fn().mockResolvedValue("stored") }).createOrRead(input)).rejects.toEqual(new DocumentVerificationError());
 });
 
 it("normalizes layout whitespace within complete decimal and atomic values", async () => {
-  producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations: [input.invoiceUrl],
+  producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations: [input.invoiceUrl], textItems,
     text: text.replaceAll("1.23", "1. 2\n3").replaceAll("1230000000000000000", "123000000\n0000000000") });
   const stored = object("wrapped amounts");
   const result = await createInvoiceDocumentPort({ read: vi.fn().mockResolvedValue(stored), create: vi.fn() },
     { storageState: vi.fn().mockResolvedValue("stored") }).createOrRead(input);
   expect(result.bytes).toBe(stored.bytes);
 });
+
+it.each(["description column", "before the row", "after the total", "outside the right margin", "another page", "wrong font"])(
+  "rejects unchanged flattened text whose line money geometry is in %s", async (change) => {
+    const measured = structuredClone(textItems), money = measured[2];
+    if (change === "description column") money.x = 56.14;
+    if (change === "before the row") money.y = 300;
+    if (change === "after the total") money.y = 430;
+    if (change === "outside the right margin") money.width += 5;
+    if (change === "another page") money.page = 2;
+    if (change === "wrong font") money.height = 7;
+    producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations: [input.invoiceUrl], text, textItems: measured });
+    await expect(createInvoiceDocumentPort({ read: vi.fn().mockResolvedValue(object("misplaced money")), create: vi.fn() },
+      { storageState: vi.fn().mockResolvedValue("stored") }).createOrRead(input)).rejects.toEqual(new DocumentVerificationError());
+  },
+);
+
+it.each(["decimal", "atomic"])("rejects swapped %s row observations while all flattened text stays unchanged", async (kind) => {
+  const multi = structuredClone(view);
+  multi.items.push({ description: "Review work", amountDecimal: "2.34", amountAtomic: "2340000000000000000" });
+  multi.amountDecimal = "3.57"; multi.amountAtomic = "3570000000000000000";
+  const canonical = { ...document, invoice: { ...document.invoice, items: multi.items,
+    amountDecimal: multi.amountDecimal, amountAtomic: multi.amountAtomic } };
+  producer.parse.mockReturnValue(canonical); producer.view.mockReturnValue(multi);
+  const multiText = text.replace("\nTotal due", "\n2 Review work Line amount: 2.34 USDC Atomic units: 2340000000000000000 atomic units\nTotal due")
+    .replace("Total due 1.23 USDC Atomic units: 1230000000000000000", "Total due 3.57 USDC Atomic units: 3570000000000000000");
+  const measured: PdfTextItem[] = [
+    ...structuredClone(textItems.slice(0, 4)),
+    { page: 1, text: "2", x: 42, y: 390, width: 3.892, height: 7 },
+    { page: 1, text: "Review work", x: 56.14, y: 392.7, width: 60, height: 10 },
+    { ...textItems[2], text: "Line amount: 2.34 USDC", y: 392.7 },
+    { ...textItems[3], text: "Atomic units: 2340000000000000000 atomic units", y: 401 },
+    { ...textItems[4], y: 440 },
+    { ...textItems[5], text: "3.57 USDC", y: 464 },
+    { ...textItems[6], text: "Atomic units: 3570000000000000000 atomic units", y: 475 },
+    { ...textItems[7], y: 520 },
+  ];
+  producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations: [input.invoiceUrl], text: multiText, textItems: measured });
+  const port = createInvoiceDocumentPort({ read: vi.fn().mockResolvedValue(object("two rows")), create: vi.fn() },
+    { storageState: vi.fn().mockResolvedValue("stored") });
+  const request = { ...input, canonicalInvoiceJson: canonicalJson(canonical) };
+  await expect(port.createOrRead(request)).resolves.toMatchObject({ decodedQrDestination: input.invoiceUrl });
+  const first = kind === "decimal" ? 2 : 3, second = kind === "decimal" ? 6 : 7;
+  [measured[first].y, measured[second].y] = [measured[second].y, measured[first].y];
+  await expect(port.createOrRead(request)).rejects.toEqual(new DocumentVerificationError());
+});
+
+it.each(["atomic in the description column", "decimal in a row", "decimal after payment", "decimal as memo text", "duplicate total marker"])(
+  "rejects unchanged text with invalid total geometry: %s", async (kind) => {
+    const measured = structuredClone(textItems);
+    if (kind === "atomic in the description column") measured[6].x = 56.14;
+    if (kind === "decimal in a row") measured[5].y = 350;
+    if (kind === "decimal after payment") measured[5].y = 520;
+    if (kind === "decimal as memo text") measured[5].height = 10;
+    if (kind === "duplicate total marker") measured.push({ ...measured[4], y: 400 });
+    producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations: [input.invoiceUrl], text, textItems: measured });
+    await expect(createInvoiceDocumentPort({ read: vi.fn().mockResolvedValue(object("invalid total")), create: vi.fn() },
+      { storageState: vi.fn().mockResolvedValue("stored") }).createOrRead(input)).rejects.toEqual(new DocumentVerificationError());
+  },
+);
 
 it.each(["mime", "length", "magic", "oversize", "inspection"])("treats invalid %s proof as terminal", async (kind) => {
   const stored = object("invalid");

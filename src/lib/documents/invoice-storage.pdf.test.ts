@@ -32,6 +32,33 @@ it("accepts the actual stored PDF bytes without requiring a newly rendered byte 
   expect(create).not.toHaveBeenCalled();
 }, 30000);
 
+it("rejects a cross-row money collision even when the complete flattened PDF text is identical", async () => {
+  const document = testInvoiceDocument();
+  const firstMoney = "Line amount: 1.23 USDC Atomic units: 1230000000000000000 atomic units";
+  const otherMoney = "Line amount: 9 USDC Atomic units: 9000000000000000000 atomic units";
+  document.invoice.items = [
+    { description: "Work", amountDecimal: "1.23", amountAtomic: "1230000000000000000" },
+    { description: `${otherMoney} 2 Review`, amountDecimal: "2.34", amountAtomic: "2340000000000000000" },
+  ];
+  document.invoice.amountDecimal = "3.57";
+  document.invoice.amountAtomic = "3570000000000000000";
+  const view = buildPublishedInvoiceView(document, testInvoiceUrl);
+  const expected = await inspectInvoicePdf(await renderInvoicePdf(view));
+  const wrong = structuredClone(view);
+  // Literal index digits keep the flattened collision valid even with the indexed producer.
+  wrong.items[0] = { description: `Work ${firstMoney} 2`, amountDecimal: "9", amountAtomic: "9000000000000000000" };
+  wrong.items[1].description = "Review";
+  const bytes = await renderInvoicePdf(wrong), inspection = await inspectInvoicePdf(bytes);
+  expect(inspection.qrDestinations).toEqual([testInvoiceUrl]);
+  expect(inspection.text.replace(/\s+/g, "")).toBe(expected.text.replace(/\s+/g, ""));
+  const create = vi.fn();
+  const port = createInvoiceDocumentPort({ read: async () => ({ bytes, byteLength: bytes.length, contentType: "application/pdf" }), create },
+    { storageState: async () => "stored" });
+  const outcome = await port.createOrRead({ ...input, canonicalInvoiceJson: canonicalJson(document) }).then(() => null, (error) => error);
+  expect(outcome).toEqual(new DocumentVerificationError());
+  expect(create).not.toHaveBeenCalled();
+}, 30000);
+
 it.each([
   { name: "Work1 / 1.23 versus Work / 11.23", description: "Work1", repeated: false },
   { name: "a description containing amount labels", description: "Line amount: 1.23 USDC Atomic units: 1230000000000000000 Work1", repeated: false },
@@ -175,3 +202,20 @@ it("accepts all 100 ordered items across real page footers and wrapped material 
     { storageState: async () => "stored" });
   expect((await port.createOrRead({ ...input, canonicalInvoiceJson: canonicalJson(document) })).bytes).toBe(bytes);
 }, 60000);
+
+it("verifies an unwrapped total on a different page from the last indexed row", async () => {
+  const document = testInvoiceDocument();
+  document.invoice.items = Array.from({ length: 11 }, (_, index) => ({ description: `Work ${index + 1}`,
+    amountDecimal: "1", amountAtomic: "1000000000000000000" }));
+  document.invoice.amountDecimal = "11"; document.invoice.amountAtomic = "11000000000000000000";
+  const bytes = await renderInvoicePdf(buildPublishedInvoiceView(document, testInvoiceUrl));
+  const inspection = await inspectInvoicePdf(bytes);
+  const last = inspection.textItems.find((item) => item.x === 42 && item.height === 7 && item.text === "11")!;
+  const total = inspection.textItems.find((item) => item.height === 9 && item.text === "Total due")!;
+  expect(total.page).toBe(last.page + 1);
+  const create = vi.fn();
+  const port = createInvoiceDocumentPort({ read: async () => ({ bytes, byteLength: bytes.length, contentType: "application/pdf" }), create },
+    { storageState: async () => "stored" });
+  expect((await port.createOrRead({ ...input, canonicalInvoiceJson: canonicalJson(document) })).bytes).toBe(bytes);
+  expect(create).not.toHaveBeenCalled();
+}, 30000);

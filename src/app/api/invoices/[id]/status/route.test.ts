@@ -278,7 +278,7 @@ it.each(["inactive", "revoked", "unknownKey"])("fails explicit share closed for 
   expect(getPublicationDocumentPort).not.toHaveBeenCalled();
 });
 
-it("imports routes without reading runtime configuration or requiring the unavailable production document port", async () => {
+it("imports routes without reading runtime configuration or constructing the production document port", async () => {
   vi.resetModules();
   await import("./route");
   await import("../share/route");
@@ -287,5 +287,4 @@ it("imports routes without reading runtime configuration or requiring the unavai
   expect(getPublicationRepository).not.toHaveBeenCalled();
   expect(getPublicationLinkConfig).not.toHaveBeenCalled();
   expect(getPublicationDocumentPort).not.toHaveBeenCalled();
-  expect(() => getPublicationDocumentPort()).toThrow("DOCUMENTS_NOT_CONFIGURED");
 });

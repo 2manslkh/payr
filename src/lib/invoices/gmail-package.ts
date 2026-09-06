@@ -1,14 +1,13 @@
 import type { DraftSnapshot } from "./contracts";
 import type { GmailReadyPackage } from "./publication-contracts";
+import { buildInvoiceEmail } from "../email/templates";
 
 export function buildGmailPackage({ snapshot, invoiceNumber, invoiceUrl, invoicePdfUrl }: { snapshot: DraftSnapshot; invoiceNumber: string; invoiceUrl: string; invoicePdfUrl: string }): GmailReadyPackage {
-  const subject = `Invoice ${invoiceNumber} from ${snapshot.sender.businessName}`;
-  const lines = [subject, `Amount: ${snapshot.amountDecimal} USDC on Arc`, `Due: ${snapshot.dueDate}`,
-    `Payment: ${invoiceUrl}`, `Invoice PDF: ${invoicePdfUrl}`];
-  const escapes: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  if (!snapshot.sender.businessName) throw new Error("Invoice email requires the confirmed sender business name");
+  const { subject, textBody, htmlBody } = buildInvoiceEmail({ invoiceNumber, businessName: snapshot.sender.businessName,
+    amountDecimal: snapshot.amountDecimal, dueDate: snapshot.dueDate, invoiceUrl, invoicePdfUrl });
   return {
-    to: [snapshot.client.contactEmail], subject, textBody: lines.join("\n"),
-    htmlBody: lines.map((line) => `<p>${line.replace(/[&<>"']/g, (character) => escapes[character])}</p>`).join("\n"),
+    to: [snapshot.client.contactEmail], subject, textBody, htmlBody,
     paymentUrl: invoiceUrl, invoicePdfUrl,
   };
 }

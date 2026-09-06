@@ -1,5 +1,5 @@
 import type { DraftSnapshot } from "../invoices/contracts";
-import type { LinkMaterial, PublicationAttempt, PublicationState, PublicationStatusData } from "../invoices/publication-contracts";
+import type { LinkMaterial, PublicationAttempt, PublicationLinkConfig, PublicationState, PublicationStatusData } from "../invoices/publication-contracts";
 
 export type CanonicalInvoiceDocument = {
   schemaVersion: "payr.invoice-document.v1";
@@ -34,6 +34,7 @@ export type DocumentRepository = {
   admit(scope: "ip" | "token", keyHash: string): Promise<{ allowed: boolean }>;
 };
 export type PdfInspection = { pageCount: number; qrDestinations: string[]; text: string };
+export type DocumentAccessConfig = PublicationLinkConfig & { pepper: Uint8Array };
 
 export class DocumentVerificationError extends Error {
   constructor() { super("ARTIFACT_VERIFICATION_FAILED"); this.name = "DocumentVerificationError"; }

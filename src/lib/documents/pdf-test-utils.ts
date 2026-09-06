@@ -124,7 +124,8 @@ export async function writeInvoiceTestEvidence(directory: string) {
   return measurements;
 }
 
-export async function probePackagedInvoicePdf(parent: string, fault?: "missing-jsqr" | "broken-worker" | "missing-font" | "missing-native", inputBytes?: Uint8Array) {
+export async function probePackagedInvoicePdf(parent: string, fault?: "missing-jsqr" | "broken-worker" | "missing-font" | "missing-native"
+  | "empty-qr-candidate" | "binary-qr-candidate" | "chunk-qr-candidate", inputBytes?: Uint8Array) {
   const root = process.cwd(), directory = await mkdtemp(join(parent, "r06-pdf-trace-"));
   try {
     const tracePath = join(root, ".next/server/app/api/jobs/publications/route.js.nft.json");
@@ -173,6 +174,21 @@ export async function probePackagedInvoicePdf(parent: string, fault?: "missing-j
     }
     if (fault === "broken-worker") await writeFile(join(directory, "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"),
       'throw new Error("test-only bootstrap failure");');
+    if (fault?.endsWith("-qr-candidate")) {
+      const decoderPath = join(directory, "node_modules/jsqr/dist/jsQR.js");
+      // Fault only the isolated external decoder. The first real pixel decode
+      // becomes an empty candidate at the real QR's location, so erasing it or
+      // filtering only the final destination array would lose the valid QR.
+      const decoder = await readFile(decoderPath, "utf8");
+      await writeFile(decoderPath, decoder + `\nconst originalDecoder = module.exports; let injected = false;
+        module.exports = (...args) => {
+          const code = originalDecoder(...args);
+          if (!code || injected) return code;
+          injected = true;
+          return { ...code, data: "", binaryData: ${fault === "binary-qr-candidate" ? "[0]" : "[]"},
+            chunks: ${fault === "chunk-qr-candidate" ? '[{ type: "eci", assignmentNumber: 26 }]' : "[]"} };
+        };\n`);
+    }
     const bytes = inputBytes ?? await fixturePdf({ destinations: [testInvoiceUrl] });
     const run = () => {
       const result = spawnSync(process.execPath, ["--input-type=commonjs", "-e", probe, JSON.stringify(chunks), fault ?? ""], {

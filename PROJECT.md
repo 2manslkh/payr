@@ -29,6 +29,12 @@ One short instruction becomes a confirmed USDC invoice, protected payment link, 
 
 The durable visual rules are recorded in `DESIGN.md`. Surface-specific behavior and acceptance criteria remain in the approved framing design and implementation plan.
 
+## Future credit and lending
+
+After the invoicing MVP, extend invoice-bound settlement into DeFi marketplaces, including escrow where a validated marketplace use case needs it. With user consent, accumulated invoice settlement history can become one input to a credit assessment and eventually undercollateralized USDC lending using suitable Circle/Arc infrastructure. These are future capabilities, not current MVP or sponsor-integration claims.
+
+Settlement proves a transfer, not genuine commerce or repayment capacity. Credit work must address identity, self-payment and collusion resistance, counterparty concentration, unpaid obligations, defaults, and privacy before assigning scores or lending. Lending also requires validated underwriting, capital/risk ownership, applicable legal review, and verification of the actual Circle products or lending protocols to integrate. Keep raw invoice contents private; do not publish borrower scores or add lending/escrow tables to the current build.
+
 ## Why Ethereum is necessary
 
 The invoice document can be generated offchain, but Arc provides direct ownership of settled USDC plus neutral, independently inspectable proof binding the payment to an invoice commitment. The contract enforces exact amount, payee, expiry, and single settlement.
@@ -42,7 +48,9 @@ The invoice document can be generated offchain, but Arc provides direct ownershi
 5. Open the link as the client and connect a pre-funded external wallet.
 6. Press Pay Now, obtain a short-lived policy-controlled authorization, and pay exact native USDC through the Payr contract on Arc.
 7. Show event-verified Paid state, receipt PDF, Resend receipt email, and explorer proof.
-8. Show the private-document/policy-attestation/onchain-settlement architecture diagram.
+8. Show the private-document/policy-attestation/onchain-settlement architecture diagram in `docs/architecture.excalidraw.svg`, with planned capabilities visibly separated from deployed behavior.
+
+The diagram is user-owned and in progress alongside implementation. Record the final 2-4 minute submission video only after the deployed core product flow is complete, then rehearse, upload, and verify it before the submission deadline. Script and presentation preparation may happen earlier.
 
 ## Success criteria
 
@@ -61,7 +69,7 @@ The invoice document can be generated offchain, but Arc provides direct ownershi
 
 - Primary: Arc — Best DeFi/Onchain Finance Application.
 - Conditional: Privy — Best B2B Financial Product, only if an early policy allow/deny and contract-verification spike passes.
-- Conditional: Arc — Launch on Arc Testnet & Push to Mainnet, only with availability through 30 September.
+- Additional target: Arc — Launch on Arc Testnet & Push to Mainnet, with one-click mainnet deployment-readiness due 30 September 2026. Eligibility and completion depend on demonstrated readiness, not this commitment alone; see `docs/ops/mainnet-readiness.md`.
 - Conditional: Bazantic — Agentify a New API, only after a one-hour integration spike succeeds.
 - Excluded: Arc Agentic Economy and Continuity-only Arc prizes.
 
@@ -80,17 +88,19 @@ The invoice document can be generated offchain, but Arc provides direct ownershi
 - Unsourced or automatically accepted web-search data.
 - Guaranteed Gmail PDF attachment; protected links are the required delivery path.
 - Sponsor integrations that do not improve the freelancer journey.
+- Credit scoring, lending, and marketplace escrow in the submission MVP; these remain the future roadmap above.
 
 ## Constraints
 
-- Event window: 4–16 September 2026; exact submission cutoff time/timezone still requires dashboard verification.
+- Event window: 4–16 September 2026. The official submission deadline is **13 September 2026, 12:00 EDT / 16:00 UTC**; event end is not submission cutoff. Source: https://ethglobal.com/events/ethonline2026/info/details (checked 6 September). Cross-check the authenticated dashboard; any discrepancy uses the earlier cutoff until resolved.
 - Team: Keng is product owner and sole human operator; scoped implementation agents work under Keng's review, while Chanita owns administration and presentation.
 - Focused availability: 12–4 PM daily.
-- Engineering budget: approximately 44 focused hours from 4–14 September.
-- Code freeze: 15 September.
+- Engineering budget: the original 44-hour estimate is historical, not remaining availability. Re-estimate remaining work against the dated gates in the implementation plan, including operator work, reviews, and integration; do not assume extra human hours from agent parallelism.
+- Feature freeze: **11 September 2026, 23:59 UTC**. Final deployed proof, video, and rehearsals: **12 September**. Reserve two hours of core-blocker contingency before the internal submission target of **13 September, 14:00 UTC**, leaving two hours before the official cutoff.
 - Deployment: web application plus remote MCP endpoint and Arc contract.
 - Canonical public domain: `https://payrlink.xyz`; DNS/TLS and Resend sender verification must pass before it is used in the demo.
 - Document scope: generic commercial invoice/payment request, not a tax-compliance product.
+- Post-submission milestone: one protected action deploys the reviewed contract and application configuration to a provisioned mainnet environment, with verification and fail-closed gates, by **30 September 2026**. This is a separate readiness deliverable, not permission to broadcast mainnet transactions now or extend the MVP submission deadline.
 
 ## Source of truth
 

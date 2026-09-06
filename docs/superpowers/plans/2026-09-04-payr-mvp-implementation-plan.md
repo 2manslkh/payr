@@ -1,8 +1,8 @@
 # Payr MVP Implementation Plan
 
-**Status:** Executable implementation baseline
+**Status:** Executable implementation baseline; schedule revised 2026-09-06
 
-**Goal:** Deliver one narrow Payr vertical slice in 44 focused engineering hours: a freelancer uses a deployed Claude connector to create and approve an immutable USDC invoice, a client pays it from an external wallet through the Payr contract on Arc testnet, and Payr independently reconciles the event into a receipt and durable Resend deliveries.
+**Goal:** Deliver one narrow Payr vertical slice before 13 September 2026 at 12:00 EDT / 16:00 UTC: a freelancer uses a deployed Claude connector to create and approve an immutable USDC invoice, a client pays it from an external wallet through the Payr contract on Arc testnet, and Payr independently reconciles the event into a receipt and durable Resend deliveries. The original 44-hour decomposition is an effort estimate, not remaining availability. A separate one-click mainnet readiness milestone is due 30 September.
 
 **Architecture:** One Next.js application owns the dashboard, canonical invoice service, stateless Streamable HTTP MCP endpoint, protected invoice and receipt routes, payment authorization, reconciliation, and database-backed workers. Supabase/PostgreSQL is the private system of record. A minimal Arc contract accepts exact native USDC and emits the event that creates settlement evidence. Commercial invoice state remains independent from settlement evidence. A `PaymentSigner` port uses a tightly guarded testnet-only local signer for the committed MVP; a policy-controlled Privy adapter is an optional out-of-schedule enhancement.
 
@@ -10,7 +10,7 @@
 
 ## Scope And Execution Rules
 
-- Keng is the sole human operator. Scoped GPT-5.6 Terra xhigh agents implement isolated tickets under the orchestration plan; the human engineering and live-operator budget remains exactly 44 hours.
+- Keng is the sole human operator. Scoped GPT-5.6 Terra xhigh agents implement isolated tickets under the orchestration plan. Track remaining human implementation, review/integration, and live-operator time against the dated gates below; agent parallelism does not add human availability.
 - The current repository already has a runnable Next.js shell. Inspect and adopt it. Do not run `pnpm init`, `create-next-app`, or another scaffold command.
 - Track the four approved reference files under `assets/brand/` unchanged. Production web assets are separate derived files with `Payr` capitalization.
 - Before changing Next.js routes, cookies, caching, runtime configuration, or deployment behavior, read the relevant versioned guide under `node_modules/next/dist/docs/`. This repository's installed Next.js version is authoritative.
@@ -21,7 +21,9 @@
 - Do not mark an external integration complete from mocks. Read back every external write from its authoritative API, chain, deployment, inbox, or dashboard.
 - Do not log secrets, raw connector path tokens, protected invoice/receipt slugs, authorization signatures, private keys, or provider credentials. Application logs and analytics must redact path credentials. The platform/CDN may still retain URL paths, as documented below.
 - Agents commit only their owned ticket files in isolated worktrees. The coordinator integrates them into one versioned PR per tranche, stages intended paths explicitly, and merges through protected `main`; trusted CI tags the resulting merge commit under `docs/ops/versioning.md`.
-- Claude Gmail execution, Gmail PDF attachment, host-agent web-search implementation, Privy, and Bazantic are outside the committed 44-hour schedule. The data contract still accepts confirmed `web_source` provenance. Optional spikes begin only after every core acceptance criterion passes early.
+- Claude Gmail execution, Gmail PDF attachment, host-agent web-search implementation, Privy, and Bazantic are outside the submission critical path. The data contract still accepts confirmed `web_source` provenance. Optional spikes begin only after every core acceptance criterion passes early and never consume recording, submission, or contingency time.
+- Marketplace settlement/escrow, invoice-history credit assessment, and undercollateralized USDC lending using suitable Circle/Arc infrastructure are post-MVP roadmap work, not additional acceptance criteria or schema work for this build. See `PROJECT.md` for underwriting, anti-manipulation, and privacy boundaries.
+- `docs/architecture.excalidraw.svg` is the user's in-progress architecture diagram. Inspect and report discrepancies without overwriting it. Final video recording follows the completed deployed product flow; script preparation and diagram work may proceed in parallel.
 
 ## Approved Web Experience Contract
 
@@ -38,7 +40,34 @@
 
 ## Time Budget And Dependency Gates
 
-| Task | Deliverable | Depends on | Hours | Kill gate |
+### Deadline And Calendar Override
+
+The official event instructions at https://ethglobal.com/events/ethonline2026/info/details, checked on 6 September, set submission at **13 September 2026, 12:00 EDT / 16:00 UTC** (`2026-09-13T16:00:00Z`). This supersedes the old 15 September code freeze and 4-14 September work assumption. Cross-check the authenticated dashboard now; use the earlier deadline if sources conflict until the organizers resolve it. September 30 applies only to the separate mainnet milestone.
+
+The calendar below is the execution target, not permission to waive dependency or safety gates. All cutoff times are UTC; the coordinator maps work sessions to local time without moving them. R00-R06 are released through `v0.5.0`; R06 hosted rollout remains separately unverified. Do not repeat completed implementation.
+
+| Date / latest gate | Remaining outcome | Required proof |
+| --- | --- | --- |
+| 6 September | Confirm the remaining operator calendar, deadline, hosted/provider prerequisites, and R05 handoff; begin R06 | Named blockers, remaining-effort estimate, and a reserved final recording/submission block |
+| 6-7 September | R06: real invoice PDF/QR/storage and protected surfaces | Real adapter and deployed storage/read-back proof; no synthetic production adapter |
+| 7-8 September | R07: contract, signer, deployment, and first real testnet payment | Verified deployment and operator transaction, not simulation alone |
+| 8-10 September | R08: reconciliation, receipt, and receipt email | A real payment produces consistent settlement/artifact/delivery evidence |
+| 10-11 September | R09: client browser payment and CLI/Claude MCP journey | Complete approved-invoice-to-paid-receipt flow with real integrations |
+| **11 September, 23:59 UTC** | Feature freeze | Core flow complete; only verified core-blocker repairs afterward |
+| 12 September | R10: final deployed release proof, user diagram review, then final 2-4 minute video and two rehearsals | Recording matches completed product; submission assets and links checked |
+| Before **13 September, 14:00 UTC** | Spend up to two reserved hours only on core blockers; submit and read back the dashboard receipt | Submission, video/repo links, and selected prize tracks verified |
+| **13 September, 16:00 UTC** | Official submission cutoff | Internal target leaves a two-hour upload/platform buffer; no planned feature work here |
+| 14-30 September | R11: one-click mainnet deployment-readiness | Separate budget and evidence gates in `docs/ops/mainnet-readiness.md` |
+
+Tasks 5-9 below originally total **21 hours**, plus Task 10's **6 hours**: a **27-hour remaining estimate at the R05 checkpoint**, before adjusting for actual completed work or newly discovered integration costs. Seven full four-hour blocks on 6-12 September would provide at most 28 hours, and the current day's elapsed time reduces that ceiling. This is not a claim that 27 hours remain available. Keng must record actual remaining capacity and review/operator allowances before dispatching the next tranche; do not double-count time already spent or assume all of 6 September is still free.
+
+If work exceeds capacity or misses a dated gate, mark the schedule at risk immediately, stop optional work, and agree a scope or availability adjustment with Keng. Do not silently extend the deadline, borrow video/upload buffers, skip evidence, or promise the unchanged scope within a fictional 44 hours. Preserve the final six-hour release/recording/contingency allocation when re-estimating. Product-dependent setup must deploy incrementally during R06-R09; Task 10 verifies it rather than discovering hosted integration for the first time.
+
+### Original Effort Decomposition
+
+The task estimates below are retained for traceability and dependency planning. They sum to the original 44 hours, not the current remaining budget; the calendar override above controls execution.
+
+| Task | Deliverable | Depends on | Estimated hours | Kill gate |
 | ---: | --- | --- | ---: | --- |
 | 1 | Adopt runnable shell, external preflight, Vercel health preview | None | 3 | Arc facts and Vercel health are real or explicitly blocked; DNS and Resend verification have started |
 | 2 | Domain and hardened database contract | 1 | 5 | State, tenancy, immutability, token, idempotency, and direct-access denial tests pass |
@@ -50,7 +79,7 @@
 | 8 | Client payment UI | 5, 6, 7 | 3 | No wallet write on wrong network, insufficient balance, or failed authorization; Paid comes only from status |
 | 9 | MCP and Claude smoke test | 3, 4, 7 | 2 | Deployed stateless endpoint exposes exactly four tools and passes connector lifecycle tests |
 | 10 | Production proof, docs, rehearsal, contingency | All prior tasks | 6 | Core acceptance matrix is green, evidence is honest, and two rehearsals complete |
-|  | **Total** |  | **44** | Task 10 includes an explicit two-hour contingency reserve |
+|  | **Original estimate** |  | **44** | Not remaining availability; Task 10 retains two hours of contingency |
 
 Reconciliation is deliberately complete before payment UI. Task 8 consumes the already-built `/api/reconcile/transaction` and status routes instead of inventing a frontend settlement path.
 
@@ -102,6 +131,7 @@ verifierHash = HMAC-SHA256(linkKey[keyVersion],
 - On publish retry, status lookup, Gmail package creation, email dispatch, and process restart, regenerate the same slug from the stored token ID and key version.
 - Persisted idempotency/publication result JSON contains only IDs, hashes, filenames, and state. It contains no raw URL. API/MCP responses materialize URLs just before return.
 - Build all absolute links from validated `NEXT_PUBLIC_APP_URL`; never hardcode `payrlink.xyz`. Set it to the custom domain when healthy or the verified Vercel hostname as fallback.
+- Select and freeze that origin before the first real publication reservation. Preserve it while active attempts or published artifacts reference it. Later deployment or DNS changes must preserve existing invoice/receipt URLs and immutable PDF QR destinations; a hostname fallback is not permission to regenerate old links under a different origin.
 
 ### Idempotency And Fencing
 
@@ -1424,7 +1454,7 @@ Each tool is a thin adapter over canonical services and returns their exact sche
 
 `skills/payr-create-invoice/SKILL.md` describes the four-tool finite workflow: gather, draft, ask for structured missing fields, revise through `create_invoice_draft`, show exact preview/defaults/client diff, ask publication approval, publish, present links/Gmail package, and query status. It must not grant profile/payout authority or claim that a chat approval is cryptographic authorization.
 
-Deploy the current application to Vercel. Set `NEXT_PUBLIC_APP_URL` to the healthy custom domain, or to the verified Vercel hostname if custom DNS/TLS remains pending, then redeploy so generated links use that origin.
+Deploy the current application to Vercel using the origin frozen before its first real publication. If no real publication exists yet, select the healthy custom domain or verified Vercel fallback first. Do not change the origin of existing immutable documents/links merely to complete this deployment.
 
 - [ ] **9.4 Run local protocol and deployed Claude smoke**
 
@@ -1438,7 +1468,7 @@ pnpm exec vercel deploy
 
 In Claude, use a fresh short-lived demo connector and prove initialize/discovery, structured missing fields, complete draft, revision using the same tool, explicit publication, exact status, and void on a separate unpaid fixture. Revoke/rotate the token after the test and confirm subsequent denial. Record redacted outcomes, not the connector URL.
 
-Do not spend Task 9's committed budget on Gmail execution, attachment, or host web search. After every core acceptance criterion passes early, a separately approved link-only Gmail send using `gmailLinkPackage` may be smoke-tested outside the 44-hour schedule; it cannot block MCP acceptance.
+Do not spend Task 9's budget on Gmail execution, attachment, or host web search. After every core acceptance criterion passes early, a separately approved link-only Gmail send using `gmailLinkPackage` may be smoke-tested only in separately available time; it cannot block MCP acceptance or consume recording/submission reserves.
 
 Finish:
 
@@ -1451,6 +1481,8 @@ git status --short
 
 **Hours:** 6, split into 4 hours planned release work plus 2 hours reserved contingency
 
+**Calendar:** Final product proof and recording on 12 September, with the contingency completed before the internal 13 September 14:00 UTC submission target. The official cutoff is 16:00 UTC. Prepare scripts and submission metadata earlier, but record the final demo only after the deployed core flow works.
+
 **Depends on:** Tasks 1-9
 
 **Files:**
@@ -1459,6 +1491,7 @@ git status --short
 - Create: `tests/live/resend-receipt.live.ts`
 - Create: `tests/live/claude-connector-checklist.md`
 - Create: `docs/architecture.md`
+- Inspect with user: `docs/architecture.excalidraw.svg` (in progress; user-owned, do not overwrite)
 - Create: `docs/ops/demo-runbook.md`
 - Create: `docs/ops/production-checklist.md`
 - Create: `docs/ops/verification-evidence.md`
@@ -1467,18 +1500,18 @@ git status --short
 - Modify: `.env.example`, `vercel.json`, `.github/workflows/ci.yml`, `package.json`, `pnpm-lock.yaml` only if final verified behavior requires it
 - External only: Supabase/Vercel/Resend/Claude/DNS configuration; never store secrets in Git
 
-**Produces:** Production-like deployed proof, one real external-wallet journey, complete redacted evidence, consistent public docs, two timed rehearsals, and protected contingency.
+**Produces:** Production-like deployed proof, one real external-wallet journey, complete redacted evidence, a reviewed user-owned diagram, a final 2-4 minute video recorded after product completion, consistent public docs, two timed rehearsals, and verified submission before cutoff.
 
 ### Planned Release Work: 4 Hours
 
 - [ ] **10.1 Apply infrastructure in dependency order and read it back**
 
-1. Recheck the Task 1 preflight and exact ETHOnline cutoff.
+1. Recheck the Task 1 preflight and dashboard against the confirmed 13 September 12:00 EDT / 16:00 UTC cutoff; preserve the 14:00 UTC internal submission target.
 2. Apply all Supabase migrations to the intended project.
 3. Read back constraints/functions/privileges, private bucket configuration, and anonymous denial.
 4. Configure Vercel environment variables by environment without printing them.
 5. Deploy and verify health, dashboard auth, protected routes, job auth, and MCP.
-6. Complete `payrlink.xyz` DNS/TLS if ready; otherwise use the verified Vercel hostname and set `NEXT_PUBLIC_APP_URL` accordingly.
+6. Verify DNS/TLS at the canonical origin pinned before real publication. A fallback hostname can be selected only before the first real publication; preserve existing protected URLs and QR destinations during recovery.
 7. Complete/read back Resend SPF/DKIM and sender verification. If not verified, do not claim branded delivery; use an allowed verified sender or mark live email blocked.
 8. Observe at least one scheduled worker invocation or declare the operator script as the active demo fallback.
 
@@ -1524,9 +1557,13 @@ Use a unique fixture and perform:
 
 Store only public/redacted evidence: deployment origin, invoice number, artifact hashes, public contract/attestor mode, transaction hash, block/log index, receipt hash, provider message IDs, timestamps, and screenshots with bearer credentials/private addresses redacted. Never store the invoice/receipt URL itself.
 
-- [ ] **10.4 Finish docs and rehearse twice**
+- [ ] **10.4 Finish docs, record the completed product, and rehearse twice**
 
 `README.md`, `DESIGN.md`, and `docs/architecture.md` must match deployed behavior: freelancer is primary user, client controls payment, commercial state is independent, settlement is event-backed, documents are private/offchain, selected signer mode is honest, and Arc testnet/native-USDC limitations are explicit. Re-run the design-system documentation pass after implementation so `DESIGN.md` records actual tokens/components rather than an unverified seed.
+
+Review the user's `docs/architecture.excalidraw.svg` against that implemented flow; report necessary corrections to the user rather than replacing the drawing. Label future marketplace/escrow, credit scoring, and undercollateralized lending separately, with no implication that Circle lending infrastructure is already integrated. Diagram preparation is ongoing, not an absent deliverable or evidence of completed architecture verification.
+
+After the deployed core acceptance path passes, record the final 2-4 minute, at-least-720p demo with human narration. Show the real frontend/backend/Arc flow and the reviewed diagram; prepare the script earlier but do not record planned behavior as if implemented. Retain an uncut timed rehearsal for AC-42 and create the submission video within the event's duration rules. Include AI-assistance attribution and the spec/planning artifacts required by the official event instructions. Verify upload playback and the GitHub link before submitting; record the dashboard submission confirmation by 13 September 14:00 UTC.
 
 `docs/ops/demo-runbook.md` includes:
 
@@ -1546,7 +1583,7 @@ Capture authenticated overview, invoice ledger/detail, protected payment, and re
 
 - [ ] **10.5 Protect and spend contingency only on core blockers**
 
-Reserve the final two hours. Do not pre-allocate them to visual polish, Gmail, search, Bazantic, sponsor extras, refactors, or attachment work.
+Reserve two hours before the internal submission target. Do not pre-allocate them to visual polish, Gmail, search, Bazantic, sponsor extras, refactors, attachment work, or mainnet/lending implementation. Any repair that changes demonstrated behavior requires refreshed tests and recording before upload; never spend past the official cutoff.
 
 Use contingency in this priority order only:
 
@@ -1557,7 +1594,7 @@ Use contingency in this priority order only:
 5. MCP/Claude core connector failure;
 6. acceptance evidence or rehearsal blocker.
 
-At the start of the contingency window, freeze feature scope. If no blocker remains, use the time for another core rehearsal, backup evidence, token rotation, and rest; do not pull excluded enhancements into scope.
+Feature scope is already frozen on 11 September at 23:59 UTC. If no blocker remains, use contingency for another core rehearsal, backup evidence, token rotation, and early submission; do not pull excluded enhancements into scope.
 
 - [ ] **10.6 Final release-tranche verification**
 
@@ -1567,6 +1604,16 @@ git status --short --branch
 ```
 
 Inspect every modified/untracked path. Confirm the tracked `assets/brand/` references are preserved and no unrelated paths enter the integration branch. Finish through the versioned PR and merge-tag flow in the orchestration and versioning runbooks.
+
+## R11: One-Click Mainnet Readiness
+
+**Deadline:** 30 September 2026, separate from the 13 September MVP submission.
+
+**Depends on:** The completed testnet product and a reviewed release; not a prerequisite for recording the testnet demo.
+
+**Budget:** Separately estimated post-submission work. Before fanout, Keng records available operator time, the mainnet signer/deployment implementation estimate, official network prerequisites, and the sponsor's deployment-ready evidence expectations.
+
+Implement and verify `docs/ops/mainnet-readiness.md`: one protected, operator-approved workflow from a tagged release, after one-time provisioning, that checks the target, applies safe migrations, deploys or resumes the contract, configures/deploys the application, and verifies its behavior without manual address copying. Retain testnet signer denial on mainnet and never rewrite historical invoice bindings. Missing network facts, credentials, signer acceptance, or readiness evidence block completion. The milestone is not satisfied by a document, an untested button, or a successful testnet run alone.
 
 ## Final Acceptance Matrix
 
@@ -1588,13 +1635,13 @@ Each core criterion appears exactly once below. A row is green only from the lis
 | C12 | Claude status returns commercial/display state, settlement/explorer, receipt, delivery, and settled-after-void facts | Tasks 4, 7, 9 | Exact-schema contract test and deployed Claude status result |
 | C13 | Private invoice content stays out of calldata/events and direct storage/table access is denied | Tasks 2, 5, 6 | Calldata/event inspection, salted commitment, direct RPC/table/object denial tests |
 | C14 | Production lint, typecheck, unit, DB integration, desktop/mobile browser, build, and Foundry suites pass | Tasks 1, 10 | Local commands and green separate Supabase CI job plus other CI jobs |
-| C15 | Core live path fits under three minutes without Gmail or search | Task 10 | Two timed rehearsals with bypass-first runbook and real prior fallback |
-| C16 | Repository, architecture, demo, and submission tell the same implemented product story | Task 10 | Final README/architecture/runbook/evidence review against deployment |
+| C15 | Core live path fits under three minutes without Gmail or search | Task 10 | Two timed rehearsals, retained uncut proof, final 2-4 minute video recorded after product completion, and real prior fallback |
+| C16 | Repository, architecture, demo, and submission tell the same implemented product story | Task 10 | User diagram review, final README/runbook/evidence review, and verified dashboard submission before 13 September 16:00 UTC (internal target 14:00 UTC) |
 | C17 | The authenticated console and protected payment/receipt surfaces implement `Commit Ledger`, remain agent-first, separate commercial/payment state, and expose neither direct web authoring nor Bills | Tasks 3, 4, 7, 8, 10 | Desktop/mobile screenshots, browser assertions, keyboard/contrast checks, and final `DESIGN.md` reconciliation |
 
 ## Separate Enhancement Status
 
-These are not core acceptance criteria and consume none of the committed 44 hours unless all assigned core work finishes early inside its existing task timebox:
+These are not core acceptance criteria and may use only separately available time after the core finishes early, never the protected recording/submission/contingency allocation. R11 mainnet readiness is a separate approved milestone, not an optional sponsor spike in this table.
 
 | Enhancement | Committed implementation? | Evidence rule |
 | --- | --- | --- |
@@ -1604,8 +1651,9 @@ These are not core acceptance criteria and consume none of the committed 44 hour
 | Privy signer adapter and prize claim | No | Claim only after the one-hour live wire-shape, same-shape-deny, recovered-signature, and contract-simulation gate passes |
 | Bazantic | No | Explicitly excluded from this plan and sponsor claims |
 | Incoming Bills | No | Future incoming-request concept only; hide it from MVP navigation and do not implement batch or autonomous payment |
+| Marketplace settlement/escrow, invoice credit assessment, and undercollateralized lending | No; post-MVP roadmap | Validate genuine economic activity, identity, consent, anti-manipulation, underwriting/default risk, and actual Circle/Arc integration before claiming a credit or lending product |
 
-The optional Privy spike starts only after every core acceptance criterion passes early and is capped at one hour outside the committed 44 hours. If attempted, add `scripts/privy-policy-spike.ts` and `docs/ops/privy-signer-evidence.md`, capture the credential-redacted actual SDK wire shape, and require: one valid pinned `PayrPayment` signature that recovers the Privy wallet, one same-shape policy denial for a supported constraint, and local contract verification/simulation. Also test a forbidden signing method when supported. If any gate fails or remains unknown at 60 minutes, stop, retain the guarded local signer, remove Privy claims, and never loosen policy to save the integration.
+The optional Privy spike starts only after every core acceptance criterion passes early and is capped at one hour of separately available time, outside recording/submission reserves. If attempted, add `scripts/privy-policy-spike.ts` and `docs/ops/privy-signer-evidence.md`, capture the credential-redacted actual SDK wire shape, and require: one valid pinned `PayrPayment` signature that recovers the Privy wallet, one same-shape policy denial for a supported constraint, and local contract verification/simulation. Also test a forbidden signing method when supported. If any gate fails or remains unknown at 60 minutes, stop, retain the guarded testnet signer for the MVP, remove Privy claims, and never loosen policy to save the integration. This feasibility spike does not establish mainnet signer readiness.
 
 ## Final Stop Conditions
 

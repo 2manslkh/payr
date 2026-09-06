@@ -33,9 +33,16 @@ When two sources conflict, stop the affected ticket and reconcile the authoritat
 | R07 | Arc settlement authorization | Foundry, TypeScript authorization, and deployment lanes | Adversarial contract suite and one real operator payment | `v0.6.0` |
 | R08 | Reconciliation, receipt, and durable delivery | Reconciler, receipt, outbox, and proof-UI lanes | Race matrix, worker recovery, real idempotent delivery | `v0.7.0` |
 | R09 | Client payment and Claude MCP | Payment UI and MCP lanes | Desktop/mobile payment simulations and deployed Claude smoke | `v0.8.0` |
-| R10 | Production proof and submission | Evidence, documentation, and rehearsal lanes | Full acceptance matrix and two rehearsals | `v0.8.1` |
+| R10 | Production proof and submission | Evidence, documentation, and rehearsal lanes | Full acceptance matrix; user diagram review; final video after product completion; two rehearsals and verified submission | `v0.8.1` |
+| R11 | One-click mainnet deployment-readiness | Deployment/workflow, signer/security, and evidence lanes | Protected one-action rollout and verified readiness under `docs/ops/mainnet-readiness.md` by 30 September | Selected at release |
 
 Expected versions are planning labels after R00. The release coordinator selects the actual SemVer bump from the merged behavior under `docs/ops/versioning.md`.
+
+## Calendar Gates
+
+The implementation plan's 6 September calendar override controls remaining execution. Feature freeze is 11 September 2026 at 23:59 UTC; final product proof/video/rehearsal work is on 12 September; internal submission is due 13 September at 14:00 UTC, ahead of the official 12:00 EDT / 16:00 UTC cutoff. Re-estimate remaining human hours and integration/operator work before fanout rather than assuming the original 44 hours remain. No release tranche may silently consume the final recording/upload reserves.
+
+R11 is separate post-submission work due 30 September, not an extension of R10. Its workflow and production signer require their own reviewed interface freeze and budget. Keep lending/credit/marketplace escrow in the future roadmap, outside both the current invoicing MVP and the one-click rollout scope.
 
 ## Worktree Topology
 
@@ -74,6 +81,7 @@ The coordinator records this manifest before dispatch:
 | `contracts/**`, ABI generation | Contract lane |
 | `contracts/deployments/**` | Release coordinator after authoritative live read-back |
 | Root status, planning, and version documents | Release coordinator |
+| `docs/architecture.excalidraw.svg` | User-owned diagram; agents inspect and report corrections, never overwrite without explicit permission |
 | Package version | Release coordinator |
 | Annotated tag | Trusted `publish-release-tag` CI job using the release deploy key; coordinator recovery |
 
@@ -102,6 +110,8 @@ Every implementation prompt must tell the agent to:
 4. Keep external credentials and live writes in the coordinator/operator lane.
 5. Leave package versions, tags, shared manifests, environment schemas, CI, and migration numbering to their designated owners.
 6. Finish only after the requested tests pass and return the exact commit SHA, changed files, test results, assumptions, and blockers.
+
+Diagram work and script preparation may run beside implementation. The final submission video is recorded only after the deployed core flow passes; the presentation lane must still finish recording, playback verification, and submission before R10's dated gate.
 
 An implementation agent does not open a PR to `main`. The unit of review and release is the integration tranche, not the individual worktree.
 

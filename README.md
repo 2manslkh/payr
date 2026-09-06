@@ -8,6 +8,12 @@ R06 adds real invoice PDF/QR generation, immutable private storage, and protecte
 
 **PDF text limitation:** invoice fields support printable ASCII plus LF line breaks only. Accented text, Thai, emoji, and other unsupported characters fail closed. Payr does not silently drop characters, transliterate names, or invent legal details. Confirm accurate supported facts before publication; an invalid document after reservation can permanently consume an invoice number.
 
+## Schedule and roadmap
+
+The submission deadline is **13 September 2026, 12:00 EDT / 16:00 UTC**, with an internal 14:00 UTC upload target. The [implementation calendar](docs/superpowers/plans/2026-09-04-payr-mvp-implementation-plan.md#deadline-and-calendar-override) supersedes the original 44-hour availability assumption and September 15 freeze. The user is developing `docs/architecture.excalidraw.svg`; the final video will be recorded after the deployed product flow is complete and before submission.
+
+[One-click mainnet deployment-readiness](docs/ops/mainnet-readiness.md) is a separate approved target due **30 September**, not a shipped capability. Marketplace settlement/escrow, invoice-history credit assessment, and undercollateralized USDC lending are the [post-MVP roadmap](PROJECT.md#future-credit-and-lending), not current features or claims of an existing Circle lending integration.
+
 ## Local development
 
 Requires Node `>=22.13 <23` and pnpm `10.19.0`. Use the frozen lockfile; PDF/native dependency versions are pinned for the current producer and verification profile.

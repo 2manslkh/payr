@@ -2,7 +2,7 @@
 
 Status: Approved implementation baseline
 Date: 2026-09-04
-Last revised: 2026-09-05
+Last revised: 2026-09-06
 Owner: Lim Keng Hin (product and engineering)
 Presentation and submission: Chanita Inthathong
 
@@ -19,19 +19,25 @@ The remembered three-minute claim is:
 ## 1. Starting point and constraints
 
 - ETHOnline 2026 runs from 4–16 September 2026.[1]
-- The exact submission cutoff time and timezone have not yet been verified from the participant dashboard. This must be confirmed before submission planning.
+- The official submission cutoff is **13 September 2026, 12:00 EDT / 16:00 UTC**.[20] This is earlier than the event end date. Cross-check the authenticated dashboard now; use the earlier cutoff if sources conflict until resolved.
 - Keng is the sole human operator and owns product decisions; scoped implementation agents work under Keng's review.
 - Chanita owns administration, presentation, and submission preparation.
 - Both have a focused 12–4 PM daily work block.
-- Code freezes on 15 September so the final period can be used for presentation and submission.
-- Keng has approximately 44 focused engineering hours from 4–14 September inclusive.
-- The workspace contains approved planning documents, brand assets, and a runnable application shell; product implementation has not started.
+- Feature scope freezes on **11 September at 23:59 UTC**. Final deployed proof, video recording after product completion, and rehearsals occur on **12 September**. Submit by the internal **13 September 14:00 UTC** target, two hours before the official cutoff.
+- The original 44-hour estimate through 14 September is superseded as an availability assumption. The implementation plan owns remaining-effort estimates and dated gates, with explicit human review/operator time and a protected six-hour release/recording/contingency allocation.
+- R00-R06 are released through `v0.5.0`, including local/CI-verified real documents and protected routes. Completed work is not restarted; hosted document rollout, chain payment, MCP, and delivery still need their own verified gates.
 - The critical path may contain at most one difficult external integration at a time.
-- `payrlink.xyz` has been purchased through Vercel. Vercel nameservers and A records have begun resolving, but HTTPS and Resend sender-domain verification are not yet proven.
+- `payrlink.xyz` shell HTTPS was verified during preflight. That is not evidence of hosted product, real invoice, or Resend delivery readiness; current evidence is recorded in `STATUS.md` and `docs/ops/`.
 
 Single framing outcome: approve one narrow, honest, demo-ready vertical slice before implementation.
 
 Not yet: production-scale infrastructure, autonomous payer custody, multiple chains or tokens, fiat onboarding, tax engines, escrow, accounting integrations, or sponsor features without user value.
+
+### Post-MVP Credit And Lending Roadmap
+
+The next product direction is invoice-bound settlement or escrow for DeFi marketplaces, followed by consent-based credit assessment from invoice history and undercollateralized USDC lending using suitable Circle/Arc infrastructure. These are future capabilities, not submission MVP features or existing Circle lending integrations.
+
+Verified settlement is only one underwriting input: self-payments, collusion, fabricated commerce, counterparty concentration, outstanding obligations, and defaults can make paid-invoice volume misleading. Require validated identity and economic-activity evidence, privacy/consent controls, scoring validation, underwriting/capital/default-risk ownership, legal review, and confirmation of actual Circle or lending-protocol capabilities before a lending implementation. Do not add score fields, borrower PII disclosures, or escrow/lending contracts to the current invoice schema. `PROJECT.md` owns this roadmap boundary.
 
 ## 2. Candidate ranking
 
@@ -847,11 +853,11 @@ Payr's invoice API could be a new reusable agent service. Eligibility requires a
 
 Give Bazantic at most a one-hour out-of-schedule spike only after every core acceptance criterion passes. Keep it only if the gateway and recipe call the canonical Payr API without duplicating state or destabilizing Claude. Otherwise drop the track.
 
-### Conditional fourth: Arc — Launch on Arc Testnet & Push to Mainnet
+### Additional target: Arc — Launch on Arc Testnet & Push to Mainnet
 
 The From-Scratch prize accepts USDC commerce flows and agentic payments, but requires a working frontend/backend, architecture diagram, documentation, and mainnet deployment or deployment-readiness by 30 September 2026.[8]
 
-Target this only if the testnet vertical slice is stable by code freeze and Keng explicitly commits post-submission time through 30 September. Do not claim this target is complete merely because a testnet contract exists.
+The 6 September decision commits to one-click mainnet deployment-readiness by 30 September, with a separate post-submission budget and verification milestone. After prerequisites are provisioned, one protected operator-approved workflow must deploy a reviewed release and verify its contract/application binding without manual address or environment edits. `docs/ops/mainnet-readiness.md` owns the implementation and acceptance contract. Preserve testnet signer denial on mainnet, independent client-controlled payment, and immutable historical invoice bindings. Do not claim completion from a testnet contract or a plan alone; confirm Arc's definition of deployment-ready and report any unmet prerequisite honestly.
 
 ### Do not target: Arc — Agentic Economy
 
@@ -863,20 +869,13 @@ The combined prize is restricted to Continuity Track participants.[8] Payr is re
 
 ## 16. Engineering budget
 
-| Workstream | Hours |
-| --- | ---: |
-| Foundation, authentication, tenant-safe database, and profiles | 6 |
-| Invoice state/API, MCP adapter, and portable agent skill | 7 |
-| Crash-safe publication, HTML/PDF parity, protected links, and QR | 6 |
-| Settlement contract, Arc deployment, and signer interface | 8 |
-| Payment page, external wallet flow, and reconciliation | 5 |
-| Receipt artifact worker, durable outbox, and Resend delivery | 6 |
-| Release proof and deployed production checks | 2 |
-| Three-minute rehearsal and submission evidence | 2 |
-| Protected contingency | 2 |
-| **Total** | **44** |
+The [implementation plan's calendar override](../plans/2026-09-04-payr-mvp-implementation-plan.md#deadline-and-calendar-override) supersedes the original 44-hour availability assumption. At the R05 checkpoint, its original remaining Tasks 5-9 estimate is 21 hours plus six hours for final release/recording/contingency. Keng must reconcile this estimate with actual remaining four-hour work blocks, elapsed time, and integration/operator costs before the next dispatch. A missed date requires an explicit scope or availability decision, not an invented extension beyond 13 September.
 
-The final six focused hours are reserved, in order, for two hours of release proof/deployed checks, two hours of rehearsal/submission evidence, and two hours of contingency. Contingency is not a feature budget. Claude Gmail connector execution, web search, Gmail PDF attachment, Bazantic, and every other optional sponsor enhancement are outside the committed 44-hour schedule and begin only if the core is accepted early. Autonomous payer work has no allocation.
+Protect the final six focused hours: two for deployed release proof, two for final video/rehearsal/submission preparation, and two for core-blocker contingency before the 13 September 14:00 UTC internal upload target. The final recording happens after the product works, not during unfinished implementation. The user is developing `docs/architecture.excalidraw.svg` in parallel; agents review it for consistency but do not overwrite it. Any future lending/escrow components must be labeled as future scope in the diagram and presentation.
+
+The official video must be 2-4 minutes, with at least 720p resolution and human narration.[20] Retain the separate uncut timed rehearsal required by AC-42. Verify submitted links and dashboard confirmation before the 16:00 UTC official deadline. Script and slide preparation can begin earlier; the final product-dependent recording cannot be deferred past submission.
+
+Claude Gmail execution, search, Gmail PDF attachment, Bazantic, and other optional enhancements may use only separately available time after core acceptance. They never consume the video/upload buffer or contingency. Autonomous payer work and the future credit/lending roadmap have no MVP allocation. One-click mainnet readiness is a separate approved R11 milestone through 30 September, not part of the remaining testnet estimate.
 
 ## 17. Leading risks and scope triggers
 
@@ -898,10 +897,11 @@ The final six focused hours are reserved, in order, for two hours of release pro
 | Receipt worker or email duplicates/fails | Same event creates repeated jobs, same-address duplicates, or no durable delivery | Stop polish and fix job/outbox lease and recipient uniqueness before demo |
 | Resend outcome remains unknown beyond 24 hours | `sending` has no provider ID after the provider idempotency window | Move to manual review; never auto-resend or claim transport exactly-once.[14] |
 | Protected artifact leaks through storage/CDN | Unsigned direct storage request succeeds or served hash differs | Block release; make bucket private, serve only through bearer routes, and reverify exact bytes/headers |
-| `payrlink.xyz` TLS or Resend verification remains incomplete | HTTPS or SPF/DKIM checks fail at integration gate | Use verified Vercel hostname for web demo and do not claim branded Resend delivery |
+| `payrlink.xyz` TLS or Resend verification remains incomplete | HTTPS or SPF/DKIM checks fail at integration gate | Select a verified origin before publication reservations; preserve origins referenced by active attempts or artifacts. Do not retarget immutable QR links or claim branded Resend delivery without proof |
 | Bazantic duplicates the MCP layer | Requires a separate data model, agent UI, or committed-schedule time | Drop Bazantic |
 | Sponsor pressure expands personas | Autonomous payer enters the critical path | Reject the feature and preserve the freelancer journey |
-| Mainnet launch prize creates post-event obligations | No availability through 30 September | Do not submit for that prize |
+| Mainnet readiness misses its gate | Unavailable official network facts, unaccepted readiness evidence, unsafe signer, or insufficient time through 30 September | Escalate the approved R11 target, preserve testnet safety and evidence, and do not claim deployment/readiness until its gates actually pass |
+| Submission schedule drifts | Work or recording is planned after 13 September 16:00 UTC | Stop optional work, re-estimate against the 11 September feature freeze and 14:00 UTC internal upload target, and get an explicit scope/capacity decision |
 
 ## 18. Acceptance criteria
 
@@ -999,7 +999,7 @@ Enhancement acceptance is separate and cannot satisfy any core AC:
 
 These are verification tasks, not design decisions:
 
-- Confirm the exact ETHOnline submission cutoff time and timezone from the authenticated event dashboard.
+- Cross-check the official 13 September 2026 12:00 EDT / 16:00 UTC cutoff against the authenticated dashboard; use the earlier deadline on conflict until resolved. Verify submission by the 14:00 UTC internal target.[20]
 - Confirm `payrlink.xyz` HTTPS routing and Resend SPF/DKIM verification after DNS propagation.
 - Exercise the required Claude, Circle/Arc, Resend, and wallet accounts; exercise Gmail, Privy, and Bazantic only before claiming their enhancements.
 - Verify connector URL application-log/analytics redaction on Vercel, document that platform/CDN/browser-history exposure cannot be excluded, and rehearse immediate token revocation/rotation.[18]
@@ -1014,6 +1014,7 @@ These are verification tasks, not design decisions:
 - Confirm the Arc testnet RPC, explorer, chain ID, and faucet-funded balances from official current documentation.
 - Confirm one committed Arc block is the deployed reconciler's finality threshold and remove any confirmation/reorg configuration.[12]
 - Verify whether the selected Arc mainnet-launch prize requires any additional registration outside the ETHGlobal submission.
+- Confirm sponsor-accepted deployment-readiness evidence and complete the separate one-click mainnet workflow gates by 30 September; do not equate a dry run or testnet deployment with mainnet activation.
 
 ## Sources
 
@@ -1032,3 +1033,4 @@ These are verification tasks, not design decisions:
 [17] https://supabase.com/docs/guides/database/functions — Supabase database functions and privileges
 [18] https://vercel.com/docs/logs/runtime — Vercel runtime logs
 [19] https://www.postgresql.org/docs/current/sql-alterdefaultprivileges.html — PostgreSQL ALTER DEFAULT PRIVILEGES
+[20] https://ethglobal.com/events/ethonline2026/info/details - ETHOnline 2026 submission deadline, video, and AI-attribution rules (checked 6 September 2026)

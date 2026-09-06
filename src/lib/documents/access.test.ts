@@ -2,6 +2,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { testPublicationSnapshot } from "../invoices/publication.test-support";
 import { createKeyedTokenCodec } from "../security/keyed-token";
+import { createDocumentRepository } from "../db/documents";
 import type { DocumentAccessConfig, InvoiceAccessCandidate, InvoiceAccessTarget } from "./contracts";
 import { createInvoiceAccessService } from "./access";
 
@@ -69,6 +70,25 @@ it.each(["", "random", "invalid.slug", "padded", "wrong-mac"])("denies noncanoni
   const supplied = kind === "padded" ? `${slug}=` : kind === "wrong-mac" ? `${slug.slice(0, 23)}${"A".repeat(43)}` : kind;
   expect(await service.resolve(supplied)).toBeNull();
   expect(repository.readTarget).not.toHaveBeenCalled();
+});
+
+it.each([
+  "11111111-1111-1111-1111-111111111111",
+  "01ffffff-ffff-ffff-ffff-ffffffffffff",
+  "00000000-0000-0000-8000-000000000001",
+  "00000000-0000-9000-8000-000000000001",
+  "00000000-0000-4000-7000-000000000001",
+])("denies canonical bearer bytes with a database-ineligible UUID before candidate validation (%s)", async (tokenId) => {
+  const { service, repository } = setup();
+  const codec = createKeyedTokenCodec(config.keys);
+  const { slug } = codec.derive(tokenId, "invoice-bearer", 1);
+  expect(codec.parseTokenId(slug)).toBe(tokenId);
+  const rpc = vi.fn().mockResolvedValue({ data: null, error: null });
+  repository.findCandidate.mockImplementation(createDocumentRepository({ rpc }).findCandidate);
+  expect(await service.resolve(slug, "192.0.2.1")).toBeNull();
+  expect(repository.admit.mock.calls.map(([scope]) => scope)).toEqual(["ip"]);
+  expect(repository.findCandidate).not.toHaveBeenCalled();
+  expect(rpc).not.toHaveBeenCalled();
 });
 
 it.each([

@@ -38,6 +38,7 @@ The concurrent local-configuration edit selecting Postgres `58322` was preserved
 | Production browser | 40 desktop/mobile tests, including actual local publication/share/void endpoints and canonical draft fixtures |
 | Reset / SQL lint | All four migrations apply cleanly; no SQL lint errors |
 | Secret scan | R05 Git history clean; no production credentials committed |
+| Clean GitHub runner | Draft PR #6 run `34012831924` passed `web`, `browser`, and `database`; version metadata was deferred until the final release commit |
 
 The SQL suite verifies reserve/claim/store/finalize/fail, lease expiry/reclaim/stale fences, original metadata replay, permanent number consumption, profile/client rollback, web provenance, active revision blocking, inactive link behavior, terminal immutability, tenant/scope/privilege denial, void/settlement races, and bounded expiry. Integrated worker/lifecycle tests use real Supabase transactions and deterministic test documents, not a production renderer.
 

@@ -7,7 +7,7 @@ import type { PublishedInvoiceView, StoredDocument } from "./contracts";
 import { DocumentUnavailableError, DocumentVerificationError } from "./contracts";
 import { createInvoiceDocumentPort, createPrivateDocumentStorage } from "./invoice-storage";
 
-// Approved producer seams are mocked here, not real PDF evidence. T01 supplies the implementations.
+// Producer seams are mocked for recovery tests; invoice-storage.pdf.test.ts verifies real PDFs.
 const producer = vi.hoisted(() => ({ parse: vi.fn(), view: vi.fn(), render: vi.fn(), inspect: vi.fn(), commitment: vi.fn() }));
 vi.mock("/src/lib/documents/invoice-view", () => ({ parseCanonicalInvoiceDocument: producer.parse, buildPublishedInvoiceView: producer.view }));
 vi.mock("/src/lib/documents/invoice-pdf", () => ({ renderInvoicePdf: producer.render }));
@@ -25,9 +25,16 @@ const view: PublishedInvoiceView = { invoiceNumber: input.invoiceNumber, invoice
   client: { businessName: "Test Client", contactName: "Client", contactEmail: "client@example.test", addressLines: ["1 Test Road", "London", "N1 1AA", "United Kingdom"] },
   items: document.invoice.items, amountDecimal: "1.23", amountAtomic: "1230000000000000000", memo: "", payoutWallet: document.invoice.sender.payoutWallet,
   asset: "USDC", network: "Arc", invoiceUrl: input.invoiceUrl };
-const text = [view.invoiceNumber, view.invoiceVersion, view.issueDate, view.dueDate, view.payableUntil,
-  ...Object.values(view.sender).flat(), ...Object.values(view.client).flat(), "Confirmed work", "1.23", view.payoutWallet,
-  view.asset, view.network, view.invoiceUrl].join(" ");
+const text = `Payr Invoice INV-2026-000001 Version 1
+From Test & Studio 1 Test Road London N1 1AA United Kingdom Owner owner@example.test
+Bill to Test Client 1 Test Road London N1 1AA United Kingdom Client client@example.test
+Issue date 2030-01-01 Due date 2030-01-31 Technical payable deadline (UTC) 2030-03-02T00:00:00.000Z
+Description Amount (USDC)
+Confirmed work 1.23 USDC 1230000000000000000 atomic units
+Total due 1.23 USDC 1230000000000000000 atomic units
+Payment destination 0x2222222222222222222222222222222222222222 USDC on Arc
+Open the protected invoice page to review and pay. https://example.test/invoice/test-only-destination
+Commercial invoice / payment request | Page 1 of 1`;
 const proof = { invoiceDataHash: `0x${"5".repeat(64)}`, pdfContentHash: `0x${"6".repeat(64)}`, documentCommitment: `0x${"7".repeat(64)}` };
 const object = (label: string): StoredDocument => {
   const bytes = new TextEncoder().encode(`%PDF-1.7\nmocked producer bytes: ${label}`);
@@ -95,6 +102,28 @@ it("rejects another invoice's material text even if its QR matches", async () =>
   producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations: [input.invoiceUrl], text: text.replace("Test & Studio", "Wrong Issuer") });
   await expect(createInvoiceDocumentPort({ read: vi.fn().mockResolvedValue(object("wrong invoice")), create: vi.fn() },
     { storageState: vi.fn().mockResolvedValue("stored") }).createOrRead(input)).rejects.toEqual(new DocumentVerificationError());
+});
+
+it.each([
+  text.replace("Page 1 of 1", "Page 2 of 1"),
+  text.replace("Page 1 of 1", "Page 1 of 2"),
+  text.replace("Page 1 of 1", "Page 01 of 1"),
+  text.replace(/\nCommercial invoice.*$/, ""),
+  text + "\nCommercial invoice / payment request | Page 1 of 1",
+  text.replace("Total due", "Other total"),
+])("rejects missing, duplicated or inconsistent footer/field labels %#", async (text) => {
+  producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations: [input.invoiceUrl], text });
+  await expect(createInvoiceDocumentPort({ read: vi.fn().mockResolvedValue(object("invalid layout")), create: vi.fn() },
+    { storageState: vi.fn().mockResolvedValue("stored") }).createOrRead(input)).rejects.toEqual(new DocumentVerificationError());
+});
+
+it("normalizes layout whitespace within complete decimal and atomic values", async () => {
+  producer.inspect.mockResolvedValue({ pageCount: 1, qrDestinations: [input.invoiceUrl],
+    text: text.replaceAll("1.23", "1. 2\n3").replaceAll("1230000000000000000", "123000000\n0000000000") });
+  const stored = object("wrapped amounts");
+  const result = await createInvoiceDocumentPort({ read: vi.fn().mockResolvedValue(stored), create: vi.fn() },
+    { storageState: vi.fn().mockResolvedValue("stored") }).createOrRead(input);
+  expect(result.bytes).toBe(stored.bytes);
 });
 
 it.each(["mime", "length", "magic", "oversize", "inspection"])("treats invalid %s proof as terminal", async (kind) => {

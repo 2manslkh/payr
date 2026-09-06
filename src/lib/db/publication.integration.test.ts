@@ -127,20 +127,22 @@ describe("F3 publication RPC transactions", () => {
     const config = { appOrigin: "https://payr.example.test", explorerOrigin: "https://explorer.example.test", activeKeyVersion: 1,
       keys: new Map([[1, new Uint8Array(32).fill(1)], [2, new Uint8Array(32).fill(2)]]), chainId: input.chainId, contractAddress: input.contractAddress };
     const documents = createTestDocumentPort();
-    const publisher = createPublicationService(repository, config, { async createOrRead(value) {
+    const publisher = createPublicationService(repository, { getLinkConfig: () => config, getReservationConfig: () => config, getDocuments: () => ({ async createOrRead(value) {
       fixture(`begin; set local lock_timeout = '500ms'; select 1 from public.invoices where id = '${input.draftId}' for update; rollback;`);
       return documents.createOrRead(value);
-    } });
+    } }) });
     const approved = { draftId: input.draftId, expectedVersion: 1, approval: true as const, idempotencyKey: input.idempotencyKey };
     const published = await publisher.publish(actor, approved);
     expect(published).toMatchObject({ invoiceId: input.draftId, invoiceVersion: 1, commercialState: "published", sendApprovalRequired: true,
       gmailLinkPackage: { to: ["client@example.test"], paymentUrl: published.invoiceUrl, invoicePdfUrl: published.invoicePdfUrl } });
-    const lifecycle = createInvoiceLifecycleService(repository, config);
+    const lifecycle = createInvoiceLifecycleService(repository, () => config);
     expect(await lifecycle.status(actor, input.draftId)).toMatchObject({ displayStatus: "Published", paymentStatus: "unpaid",
       invoiceDocument: { state: "ready", pageUrl: published.invoiceUrl, pdfUrl: published.invoicePdfUrl } });
     expect(await lifecycle.share(actor, input.draftId)).toEqual({ invoiceUrl: published.invoiceUrl, invoicePdfUrl: published.invoicePdfUrl, pdfFilename: published.pdfFilename });
-    const rotated = createPublicationService(repository, { ...config, activeKeyVersion: 2, chainId: 1, contractAddress: `0x${"4".repeat(40)}` }, {
-      async createOrRead() { throw new Error("Finalized replays must not render again"); },
+    const rotated = createPublicationService(repository, {
+      getLinkConfig: () => config,
+      getReservationConfig: () => ({ ...config, activeKeyVersion: 2, chainId: 1, contractAddress: `0x${"4".repeat(40)}` }),
+      getDocuments() { throw new Error("Finalized replays must not render again"); },
     });
     expect(await rotated.publish(actor, approved)).toEqual(published);
     expect((await repository.statusData(actor, input.draftId))!.attempt).toMatchObject({ chainId: input.chainId, contractAddress: input.contractAddress, link: { keyVersion: 1 } });

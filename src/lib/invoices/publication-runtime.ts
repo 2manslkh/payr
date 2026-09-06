@@ -4,7 +4,8 @@ import { createPublicationRepository } from "../db/publication";
 import { PublicationError, type InvoiceDocumentPort } from "./publication-contracts";
 
 export function getPublicationRepository() {
-  return createPublicationRepository(createSupabaseAdminClient());
+  try { return createPublicationRepository(createSupabaseAdminClient()); }
+  catch { throw new PublicationError("CONFIGURATION_ERROR", 503); }
 }
 
 export function getPublicationLinkConfig() {

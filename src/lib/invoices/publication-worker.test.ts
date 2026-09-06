@@ -10,7 +10,7 @@ import { createTestDocumentPort, testPublicationSnapshot } from "./publication.t
 
 function setup() {
   const config: PublicationLinkConfig = {
-    appOrigin: "https://payrlink.xyz", explorerOrigin: "https://testnet.arcscan.app", activeKeyVersion: 1,
+    appOrigin: "https://payrlink.xyz", explorerOrigin: "https://testnet.arcscan.app",
     keys: new Map([[1, new Uint8Array(32).fill(7)]]),
   };
   const tokenId = randomUUID();
@@ -24,6 +24,7 @@ function setup() {
     }, leaseOwner: null, leaseUntil: "2030-01-01T00:01:00.000Z", fence: "9007199254740993", artifact: null, failureCode: null, finalizedAt: null,
   };
   const repository: PublicationRepository = {
+    findReplay: vi.fn(),
     reserve: vi.fn(), statusData: vi.fn(), voidInvoice: vi.fn(), expire: vi.fn(),
     claim: vi.fn(async (_id, owner) => ({ ...attempt, leaseOwner: owner })),
     store: vi.fn<PublicationRepository["store"]>(async ({ artifact }) => ({ ...attempt, state: "stored", artifact })),
@@ -38,7 +39,7 @@ function setup() {
 it("does not call a provider or expose links when no work can be claimed", async () => {
   const createOrRead = vi.fn();
   const worker = createPublicationWorker({ claim: vi.fn().mockResolvedValue(null) } as unknown as PublicationRepository, {
-    appOrigin: "https://payrlink.xyz", explorerOrigin: "https://testnet.arcscan.app", activeKeyVersion: 1, keys: new Map([[1, new Uint8Array(32).fill(7)]]),
+    appOrigin: "https://payrlink.xyz", explorerOrigin: "https://testnet.arcscan.app", keys: new Map([[1, new Uint8Array(32).fill(7)]]),
   }, { createOrRead });
   expect(await worker.run()).toEqual({ outcome: "idle" });
   expect(createOrRead).not.toHaveBeenCalled();
@@ -140,7 +141,6 @@ it("does not fall back to the active key when the reserved key is unavailable", 
   const { worker, config, repository, attempt, createOrRead } = setup();
   (config.keys as Map<number, Uint8Array>).delete(1);
   (config.keys as Map<number, Uint8Array>).set(2, new Uint8Array(32).fill(8));
-  config.activeKeyVersion = 2;
   expect(await worker.run(attempt.id)).toEqual({ outcome: "retryable", attemptId: attempt.id });
   expect(createOrRead).not.toHaveBeenCalled();
   expect(repository.store).not.toHaveBeenCalled();

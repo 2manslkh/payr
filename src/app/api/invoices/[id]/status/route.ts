@@ -10,7 +10,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const session = await requireRequestSession(request, false);
     if (new URL(request.url).search || request.body !== null) throw new PublicationError("INVALID_INPUT", 400);
     const id = invoiceId((await params).id);
-    const service = createInvoiceLifecycleService(getPublicationRepository(), getPublicationLinkConfig());
+    const service = createInvoiceLifecycleService(getPublicationRepository(), getPublicationLinkConfig);
     return privateJson(await service.status(ownerActor(session), id));
   } catch (error) {
     return publicationErrorResponse(error);

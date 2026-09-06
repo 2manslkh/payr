@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { requireRequestSession } from "../../../../../lib/auth/runtime";
 import { IdentityError } from "../../../../../lib/identity/contracts";
 import { PublicationError, type PublicationAttempt, type PublicationConfig, type PublicationRepository } from "../../../../../lib/invoices/publication-contracts";
-import { getPublicationConfig, getPublicationDocumentPort, getPublicationRepository } from "../../../../../lib/invoices/publication-runtime";
+import { getPublicationConfig, getPublicationDocumentPort, getPublicationLinkConfig, getPublicationRepository } from "../../../../../lib/invoices/publication-runtime";
 import { testPublicationSnapshot } from "../../../../../lib/invoices/publication.test-support";
 import { createKeyedTokenCodec } from "../../../../../lib/security/keyed-token";
 import { POST } from "./route";
@@ -12,7 +12,7 @@ vi.mock("../../../../../lib/auth/runtime", async (original) => ({
   ...await original<typeof import("../../../../../lib/auth/runtime")>(), requireRequestSession: vi.fn(),
 }));
 vi.mock("../../../../../lib/invoices/publication-runtime", () => ({
-  getPublicationConfig: vi.fn(), getPublicationDocumentPort: vi.fn(), getPublicationRepository: vi.fn(),
+  getPublicationConfig: vi.fn(), getPublicationDocumentPort: vi.fn(), getPublicationLinkConfig: vi.fn(), getPublicationRepository: vi.fn(),
 }));
 vi.mock("../../../../../lib/invoices/gmail-package", () => ({ buildGmailPackage: vi.fn((value) => ({
   to: [value.snapshot.client.contactEmail], subject: value.invoiceNumber, textBody: "Gmail seam", htmlBody: "Gmail seam",
@@ -25,6 +25,7 @@ const input = { expectedVersion: 1, approval: true, idempotencyKey: "publish" };
 const config: PublicationConfig = { appOrigin: "https://payrlink.xyz", explorerOrigin: "https://testnet.arcscan.app", activeKeyVersion: 1,
   keys: new Map([[1, new Uint8Array(32).fill(7)]]), chainId: 5042002, contractAddress: `0x${"1".repeat(40)}` };
 const repository: PublicationRepository = {
+  findReplay: vi.fn(),
   reserve: vi.fn(), claim: vi.fn(), store: vi.fn(), finalize: vi.fn(), fail: vi.fn(), statusData: vi.fn(), voidInvoice: vi.fn(), expire: vi.fn(),
 };
 const createOrRead = vi.fn();
@@ -33,9 +34,11 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(requireRequestSession).mockResolvedValue(identity);
   vi.mocked(getPublicationConfig).mockReturnValue(config);
+  vi.mocked(getPublicationLinkConfig).mockReturnValue(config);
   vi.mocked(getPublicationRepository).mockReturnValue(repository);
   vi.mocked(getPublicationDocumentPort).mockReturnValue({ createOrRead });
   vi.mocked(repository.reserve).mockRejectedValue(new PublicationError("PUBLICATION_IN_PROGRESS"));
+  vi.mocked(repository.findReplay).mockResolvedValue(null);
 });
 
 function request(body: unknown = input) {
@@ -104,7 +107,7 @@ it.each(["DOCUMENTS_NOT_CONFIGURED", "CONFIGURATION_ERROR"])("fails closed for %
   const response = await post();
   expect(response.status).toBe(503);
   expect(await response.json()).toEqual({ code });
-  expect(getPublicationRepository).not.toHaveBeenCalled();
+  expect(repository.findReplay).toHaveBeenCalled();
   expect(repository.reserve).not.toHaveBeenCalled();
   expect(repository.claim).not.toHaveBeenCalled();
   privateHeaders(response);
@@ -186,7 +189,9 @@ it("returns the finalized canonical result with private headers, without republi
     artifact: { pdfFilename: "INV-2030-000001.pdf", contentType: "application/pdf", byteLength: 100, invoiceDataHash: `0x${"5".repeat(64)}`,
       pdfContentHash: `0x${"6".repeat(64)}`, documentCommitment: `0x${"7".repeat(64)}`, qrVerified: true },
   };
-  vi.mocked(repository.reserve).mockResolvedValue(attempt);
+  vi.mocked(repository.findReplay).mockResolvedValue(attempt);
+  vi.mocked(getPublicationConfig).mockImplementation(() => { throw new PublicationError("CONFIGURATION_ERROR", 503); });
+  vi.mocked(getPublicationDocumentPort).mockImplementation(() => { throw new PublicationError("DOCUMENTS_NOT_CONFIGURED", 503); });
   vi.mocked(repository.statusData).mockResolvedValue({ invoiceId, invoiceVersion: 1, invoiceNumber: attempt.invoiceNumber,
     commercialState: "expired", payableUntil: attempt.snapshot.payableUntil, voidedAt: null, snapshot: attempt.snapshot, attempt,
     settlement: null, receipt: null, deliveries: [] });
@@ -201,5 +206,7 @@ it("returns the finalized canonical result with private headers, without republi
   expect(repository.claim).not.toHaveBeenCalled();
   expect(createOrRead).not.toHaveBeenCalled();
   expect(JSON.stringify(result)).not.toContain(attempt.publicationSalt);
+  expect(getPublicationConfig).not.toHaveBeenCalled();
+  expect(getPublicationDocumentPort).not.toHaveBeenCalled();
   privateHeaders(response);
 });

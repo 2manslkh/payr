@@ -86,7 +86,6 @@ export function createIdentityEnv(value: unknown = process.env): IdentityConfig 
 export function createPublicationLinkEnv(value: unknown = process.env): PublicationLinkConfig {
   const parsed = z.object({
     NEXT_PUBLIC_APP_URL: publicEnvSchema.shape.NEXT_PUBLIC_APP_URL,
-    LINK_ACTIVE_KEY_VERSION: z.string().regex(/^[1-9][0-9]*$/).transform(Number).pipe(z.number().int().max(2147483647)),
     NEXT_PUBLIC_ARC_EXPLORER_URL: z.string().optional(),
   }).parse(value);
   const keys = new Map<number, Uint8Array>();
@@ -99,20 +98,21 @@ export function createPublicationLinkEnv(value: unknown = process.env): Publicat
     }
     keys.set(version, Uint8Array.from(atob(key.replace(/-/g, "+").replace(/_/g, "/")), (char) => char.charCodeAt(0)));
   }
-  if (!keys.has(parsed.LINK_ACTIVE_KEY_VERSION)) throw new Error("Active publication link key is unavailable");
   const explorer = new URL(parsed.NEXT_PUBLIC_ARC_EXPLORER_URL || "https://testnet.arcscan.app");
   if (explorer.protocol !== "https:" || explorer.username || explorer.password || explorer.pathname !== "/" || explorer.search || explorer.hash) {
     throw new Error("Invalid explorer origin");
   }
-  return { appOrigin: parsed.NEXT_PUBLIC_APP_URL, explorerOrigin: explorer.origin, activeKeyVersion: parsed.LINK_ACTIVE_KEY_VERSION, keys };
+  return { appOrigin: parsed.NEXT_PUBLIC_APP_URL, explorerOrigin: explorer.origin, keys };
 }
 
 export function createPublicationEnv(value: unknown = process.env): PublicationConfig {
   const links = createPublicationLinkEnv(value);
   const parsed = z.object({
+    LINK_ACTIVE_KEY_VERSION: z.string().regex(/^[1-9][0-9]*$/).transform(Number).pipe(z.number().int().max(2147483647)),
     ARC_CHAIN_ID: z.string().regex(/^[1-9][0-9]*$/).transform(Number).pipe(z.number().int().max(Number.MAX_SAFE_INTEGER)),
     NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/)
       .refine((address) => address.toLowerCase() !== `0x${"0".repeat(40)}`).transform((address) => address.toLowerCase() as `0x${string}`),
   }).parse(value);
-  return { ...links, chainId: parsed.ARC_CHAIN_ID, contractAddress: parsed.NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS };
+  if (!links.keys.has(parsed.LINK_ACTIVE_KEY_VERSION)) throw new Error("Active publication link key is unavailable");
+  return { ...links, activeKeyVersion: parsed.LINK_ACTIVE_KEY_VERSION, chainId: parsed.ARC_CHAIN_ID, contractAddress: parsed.NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS };
 }

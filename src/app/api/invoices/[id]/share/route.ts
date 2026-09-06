@@ -15,7 +15,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (new URL(request.url).search) throw new PublicationError("INVALID_INPUT", 400);
     const id = invoiceId((await params).id);
     emptyBody.parse(await readAuthJson(request, true));
-    const service = createInvoiceLifecycleService(getPublicationRepository(), getPublicationLinkConfig());
+    const service = createInvoiceLifecycleService(getPublicationRepository(), getPublicationLinkConfig);
     return privateJson(await service.share(ownerActor(session), id));
   } catch (error) {
     return publicationErrorResponse(error);

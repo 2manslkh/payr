@@ -7,7 +7,7 @@ import { createKeyedTokenCodec } from "../security/keyed-token";
 import type { InvoiceActor } from "./contracts";
 import { buildGmailPackage } from "./gmail-package";
 import { createPublicationService } from "./publication";
-import { PublicationError, type PublicationAttempt, type PublicationConfig, type PublicationFence, type PublicationRepository, type PublicationStatusData } from "./publication-contracts";
+import { PublicationError, type InvoiceDocumentPort, type PublicationAttempt, type PublicationConfig, type PublicationFence, type PublicationRepository, type PublicationStatusData } from "./publication-contracts";
 import { createPublicationWorker } from "./publication-worker";
 import { createTestDocumentPort, testPublicationSnapshot } from "./publication.test-support";
 
@@ -19,6 +19,9 @@ vi.mock("./gmail-package", () => ({ buildGmailPackage: vi.fn((input) => ({
 
 const actor: InvoiceActor = { workspaceId: "00000000-0000-4000-8000-000000000001", ownerWallet: `0x${"2".repeat(40)}`, connectorId: null };
 const input = { draftId: "00000000-0000-4000-8000-000000000003", expectedVersion: 1, approval: true, idempotencyKey: "publish-1" };
+const dependencies = (config: PublicationConfig, documents: InvoiceDocumentPort) => ({
+  getLinkConfig: () => config, getReservationConfig: () => config, getDocuments: () => documents,
+});
 
 function setup() {
   const config: PublicationConfig = {
@@ -36,6 +39,13 @@ function setup() {
       && Date.parse(attempt.leaseUntil!) > Date.now() && ["rendering", "stored"].includes(attempt.state) ? attempt : null;
   }
   const repository: PublicationRepository = {
+    findReplay: vi.fn(async (_actor, key, fingerprint) => {
+      if (!state.canPublish) throw new IdentityError("FORBIDDEN", 403);
+      const replay = replays.get(key);
+      if (!replay) return null;
+      if (replay.fingerprint !== fingerprint) throw new PublicationError("IDEMPOTENCY_CONFLICT");
+      return copy(attempts.get(replay.id)!);
+    }),
     reserve: vi.fn(async (_actor, reservation) => {
       if (!state.canPublish) throw new IdentityError("FORBIDDEN", 403);
       const replay = replays.get(reservation.idempotencyKey);
@@ -106,7 +116,7 @@ function setup() {
     voidInvoice: vi.fn(), expire: vi.fn(),
   };
   const createOrRead = vi.fn(createTestDocumentPort(objects).createOrRead);
-  const service = createPublicationService(repository, config, { createOrRead });
+  const service = createPublicationService(repository, dependencies(config, { createOrRead }));
   return { service, repository, config, attempts, replays, objects, state, createOrRead };
 }
 
@@ -179,7 +189,7 @@ it("reconstructs a finalized retry after restart using stored binding/key metada
   const first = await service.publish(actor, input);
   const rotated: PublicationConfig = { ...config, chainId: 42, contractAddress: `0x${"5".repeat(40)}`, activeKeyVersion: 2,
     keys: new Map([[1, new Uint8Array(32).fill(7)], [2, new Uint8Array(32).fill(8)]]) };
-  const fresh = createPublicationService(repository, rotated, createTestDocumentPort(objects));
+  const fresh = createPublicationService(repository, dependencies(rotated, createTestDocumentPort(objects)));
   expect(await fresh.publish(actor, input)).toEqual(first);
   state.commercialState = "voided";
   [...attempts.values()][0].link.revokedAt = new Date().toISOString();
@@ -187,8 +197,44 @@ it("reconstructs a finalized retry after restart using stored binding/key metada
   expect(repository.claim).toHaveBeenCalledTimes(1);
   expect(repository.finalize).toHaveBeenCalledTimes(1);
   expect(attempts.size).toBe(1);
-  expect(vi.mocked(repository.reserve).mock.calls[1][1].requestFingerprint).toBe(vi.mocked(repository.reserve).mock.calls[0][1].requestFingerprint);
+  expect(repository.reserve).toHaveBeenCalledOnce();
+  expect(vi.mocked(repository.findReplay).mock.calls[1][2]).toBe(vi.mocked(repository.findReplay).mock.calls[0][2]);
   expect([...attempts.values()][0]).toMatchObject({ chainId: config.chainId, contractAddress: config.contractAddress, link: { keyVersion: 1 } });
+});
+
+it("replays finalized artifacts with retained keys without current binding, active key, or document provider", async () => {
+  const { service, repository, config } = setup();
+  const published = await service.publish(actor, input);
+  const getReservationConfig = vi.fn(() => { throw new PublicationError("CONFIGURATION_ERROR", 503); });
+  const getDocuments = vi.fn(() => { throw new PublicationError("DOCUMENTS_NOT_CONFIGURED", 503); });
+  const replay = createPublicationService(repository, { getLinkConfig: () => config, getReservationConfig, getDocuments });
+  expect(await replay.publish(actor, input)).toEqual(published);
+  expect(getReservationConfig).not.toHaveBeenCalled();
+  expect(getDocuments).not.toHaveBeenCalled();
+  expect(repository.reserve).toHaveBeenCalledOnce();
+});
+
+it("recovers an active attempt without current reservation configuration", async () => {
+  const { service, repository, config, createOrRead, objects, attempts } = setup();
+  createOrRead.mockRejectedValueOnce(new Error("temporary document outage"));
+  await expect(service.publish(actor, input)).rejects.toMatchObject({ code: "PUBLICATION_RETRYABLE" });
+  vi.advanceTimersByTime(61_000);
+  const getReservationConfig = vi.fn(() => { throw new PublicationError("CONFIGURATION_ERROR", 503); });
+  const recovered = createPublicationService(repository, {
+    getLinkConfig: () => config, getReservationConfig, getDocuments: () => createTestDocumentPort(objects),
+  });
+  expect((await recovered.publish(actor, input)).invoiceNumber).toBe("INV-2030-000001");
+  expect(getReservationConfig).not.toHaveBeenCalled();
+  expect(attempts.size).toBe(1);
+});
+
+it("does not claim a replay descriptor for a different invoice", async () => {
+  const { service, repository, attempts } = setup();
+  await service.publish(actor, input);
+  vi.mocked(repository.claim).mockClear();
+  vi.mocked(repository.findReplay).mockResolvedValue({ ...[...attempts.values()][0], invoiceId: randomUUID(), state: "reserved" });
+  await expect(service.publish(actor, input)).rejects.toMatchObject({ code: "INVALID_DATABASE_RESPONSE" });
+  expect(repository.claim).not.toHaveBeenCalled();
 });
 
 it("reports effective expiry on replay without re-finalizing or changing link lifetime", async () => {
@@ -202,7 +248,7 @@ it("reports effective expiry on replay without re-finalizing or changing link li
 it("does not fall back when a finalized attempt's retained key is missing", async () => {
   const { service, repository, config, objects } = setup();
   await service.publish(actor, input);
-  const fresh = createPublicationService(repository, { ...config, activeKeyVersion: 2, keys: new Map([[2, new Uint8Array(32).fill(8)]]) }, createTestDocumentPort(objects));
+  const fresh = createPublicationService(repository, dependencies({ ...config, activeKeyVersion: 2, keys: new Map([[2, new Uint8Array(32).fill(8)]]) }, createTestDocumentPort(objects)));
   await expect(fresh.publish(actor, input)).rejects.toMatchObject({ code: "LINK_UNAVAILABLE" });
   expect(repository.claim).toHaveBeenCalledTimes(1);
 });
@@ -239,7 +285,7 @@ it.each(["before_document", "after_upload", "before_store", "after_store", "befo
     const freshDocuments = createTestDocumentPort(objects);
     const worker = createPublicationWorker(repository, rotated, freshDocuments);
     expect(await worker.run()).toEqual(crash === "after_finalize" ? { outcome: "idle" } : { outcome: "finalized", attemptId: attempt.id });
-    const result = await createPublicationService(repository, rotated, freshDocuments).publish(actor, input);
+    const result = await createPublicationService(repository, dependencies(rotated, freshDocuments)).publish(actor, input);
     expect(result).toMatchObject({ invoiceNumber: reservedFacts.invoiceNumber, commercialState: "published", sendApprovalRequired: true });
     expect({ id: attempt.id, invoiceNumber: attempt.invoiceNumber, invoiceKey: attempt.invoiceKey,
       publicationSalt: attempt.publicationSalt, storageKey: attempt.storageKey, tokenId: attempt.link.tokenId }).toEqual(reservedFacts);
@@ -321,7 +367,7 @@ it("keeps a stored attempt retryable with a missing old key, then resumes unchan
   const bytes = objects.get(attempt.storageKey)!.slice();
   vi.advanceTimersByTime(60_000);
   const keys = new Map([[2, new Uint8Array(32).fill(8)]]);
-  const fresh = createPublicationService(repository, { ...config, activeKeyVersion: 2, keys }, createTestDocumentPort(objects));
+  const fresh = createPublicationService(repository, dependencies({ ...config, activeKeyVersion: 2, keys }, createTestDocumentPort(objects)));
   await expect(fresh.publish(actor, input)).rejects.toMatchObject({ code: "PUBLICATION_RETRYABLE" });
   expect(attempt.state).toBe("stored");
   expect(attempt.link.activatedAt).toBeNull();

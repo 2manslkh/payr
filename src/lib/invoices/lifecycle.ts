@@ -16,7 +16,7 @@ const voidSchema = z.object({
   idempotencyKey: z.string().trim().min(1).max(128),
 }).strict();
 
-export function createInvoiceLifecycleService(repository: PublicationRepository, config: PublicationLinkConfig, now: () => Date = () => new Date()): InvoiceLifecycleService {
+export function createInvoiceLifecycleService(repository: PublicationRepository, getConfig: () => PublicationLinkConfig, now: () => Date = () => new Date()): InvoiceLifecycleService {
   return {
     async status(actor, invoiceId) {
       const parsedActor = actorSchema.safeParse(actor);
@@ -28,7 +28,7 @@ export function createInvoiceLifecycleService(repository: PublicationRepository,
       const { attempt, receipt, settlement } = data;
       let invoiceDocument: InvoiceStatusFacts["invoiceDocument"] = null;
       if (attempt?.state === "finalized" && attempt.finalizedAt !== null && attempt.artifact) {
-        const pageUrl = publicationLink(attempt.link, "invoice-bearer", config);
+        const pageUrl = publicationLink(attempt.link, "invoice-bearer", getConfig());
         invoiceDocument = {
           state: "ready", pageUrl, pdfUrl: `${pageUrl}/pdf`,
           pdfFilename: attempt.artifact.pdfFilename, pdfContentHash: attempt.artifact.pdfContentHash,
@@ -38,7 +38,7 @@ export function createInvoiceLifecycleService(repository: PublicationRepository,
       if (settlement && receipt) {
         if (receipt.state === "ready") {
           if (!receipt.artifact) throw new PublicationError("LINK_UNAVAILABLE", 503);
-          const pageUrl = publicationLink(receipt.link, "receipt-bearer", config);
+          const pageUrl = publicationLink(receipt.link, "receipt-bearer", getConfig());
           receiptDocument = {
             state: "ready", pageUrl, pdfUrl: `${pageUrl}/pdf`,
             pdfFilename: receipt.artifact.pdfFilename, pdfContentHash: receipt.artifact.pdfContentHash,
@@ -56,7 +56,7 @@ export function createInvoiceLifecycleService(repository: PublicationRepository,
           blockTime: settlement.blockTime, payer: settlement.payer, payee: settlement.payee,
           amountDecimal: settlement.amountDecimal, amountAtomic: settlement.amountAtomic, documentCommitment: settlement.documentCommitment,
         },
-        explorer: settlement === null ? null : { transactionUrl: new URL(`/tx/${settlement.transactionHash}`, config.explorerOrigin).href },
+        explorer: settlement === null ? null : { transactionUrl: new URL(`/tx/${settlement.transactionHash}`, getConfig().explorerOrigin).href },
         invoiceDocument, receiptDocument,
         deliveries: data.deliveries.map((delivery) => ({
           roles: delivery.roles.filter((role) => role === "issuer" || role === "client"),
@@ -74,7 +74,7 @@ export function createInvoiceLifecycleService(repository: PublicationRepository,
       if (!data) throw new PublicationError("NOT_FOUND", 404);
       const { attempt } = data;
       if (!publicationView(data, now()).canShare || !attempt?.artifact) throw new PublicationError("LINK_UNAVAILABLE", 503);
-      const invoiceUrl = publicationLink(attempt.link, "invoice-bearer", config);
+      const invoiceUrl = publicationLink(attempt.link, "invoice-bearer", getConfig());
       return { invoiceUrl, invoicePdfUrl: `${invoiceUrl}/pdf`, pdfFilename: attempt.artifact.pdfFilename };
     },
     async void(actor, rawInput) {

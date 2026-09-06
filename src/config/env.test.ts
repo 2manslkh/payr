@@ -106,12 +106,13 @@ describe("publication runtime configuration", () => {
   };
   it("retains old versions and allows read configuration without deployment binding", () => {
     const parsed = createPublicationLinkEnv(valid);
-    expect(parsed.activeKeyVersion).toBe(2);
     expect([...parsed.keys.keys()]).toEqual([1, 2]);
     expect(() => createPublicationEnv(valid)).toThrow();
   });
   it("rejects missing active material and zero deployment addresses", () => {
-    expect(() => createPublicationLinkEnv({ ...valid, LINK_TOKEN_KEY_V2: undefined })).toThrow();
+    expect(createPublicationLinkEnv({ ...valid, LINK_TOKEN_KEY_V2: undefined }).keys.has(1)).toBe(true);
+    expect(createPublicationLinkEnv({ ...valid, LINK_TOKEN_KEY_V2: undefined, LINK_ACTIVE_KEY_VERSION: "invalid" }).keys.has(1)).toBe(true);
+    expect(() => createPublicationEnv({ ...valid, LINK_TOKEN_KEY_V2: undefined, ARC_CHAIN_ID: "5042002", NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS: `0x${"1".repeat(40)}` })).toThrow();
     expect(() => createPublicationEnv({ ...valid, ARC_CHAIN_ID: "5042002", NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS: `0x${"0".repeat(40)}` })).toThrow();
     expect(createPublicationEnv({ ...valid, ARC_CHAIN_ID: "5042002", NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS: `0x${"1".repeat(40)}` }).chainId).toBe(5042002);
   });

@@ -8,6 +8,7 @@ R05 implements Task 4.3-4.6 using the frozen `InvoiceDocumentPort`. R06 supplies
 
 - Publish input is exactly `{draftId, expectedVersion, approval:true, idempotencyKey}`. Fingerprint SHA-256 of canonical `{operation:"publish_invoice",workspaceId,draftId,expectedVersion,approval:true}`. Generated metadata and current configuration are not fingerprint inputs.
 - Actor scope uses F3's owner-or-connector shape and `invoice:publish`. Replay checks precede mutable draft/profile/binding checks. Same-key retries use the original attempt and its stored chain/contract/key version, ignoring newly generated metadata. Different input returns `IDEMPOTENCY_CONFLICT` without the original descriptor.
+- Publication configuration and document selection are lazy dependencies: authorized replay is read first. Finalized replay needs retained link keys but not current reservation binding/active key or a document provider; active recovery needs only retained links and the provider. Voiding never loads link/explorer configuration. Read configuration ignores the active reservation key; new reservations validate it explicitly.
 - Under the invoice lock, require an editable complete exact version, current authoritative sender/client revisions, future technical deadline, and no competing active publication. R04 revisions are blocked while any attempt on that invoice is active. Replays of previously saved draft requests remain valid.
 - Consume the workspace/UTC-year sequence atomically. Format `<frozen prefix>-<UTC year>-<sequence padded to at least six digits>`. Successful reservations permanently burn a number, including terminal failures. Enforce unique reserved number/sequence and object key.
 - Store server-generated attempt UUID, invoice key, salt, token UUID/key version/verifier, configured chain/contract, initiating actor, and immutable storage key. Key is `workspace/<workspaceId>/invoice/<invoiceId>/<version>/attempt/<attemptId>.pdf`.
@@ -45,6 +46,7 @@ Actor parameters are `p_workspace_id uuid, p_owner_wallet text, p_connector_id u
 
 | RPC | Additional/exact parameters | Result |
 | --- | --- | --- |
+| `payr_find_publication_replay_v1` | actor + `p_idempotency_key text, p_request_fingerprint text` | PublicationAttempt or null; conflict raises |
 | `payr_reserve_publication_v1` | actor + `p_input jsonb` (PublicationReservation) | PublicationAttempt |
 | `payr_claim_publication_v1` | `p_attempt_id uuid` (nullable), `p_lease_owner uuid` | PublicationAttempt or null |
 | `payr_store_publication_v1` | `p_attempt_id uuid, p_lease_owner uuid, p_fence bigint, p_artifact jsonb` | PublicationAttempt or null |

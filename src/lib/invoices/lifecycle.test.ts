@@ -13,7 +13,7 @@ const actor: InvoiceActor = { workspaceId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
 const now = new Date("2030-01-02T00:00:00.000Z");
 const hash = `0x${"3".repeat(64)}` as const;
 const config: PublicationLinkConfig = {
-  appOrigin: "https://payr.test", explorerOrigin: "https://explorer.test", activeKeyVersion: 1,
+  appOrigin: "https://payr.test", explorerOrigin: "https://explorer.test",
   keys: new Map([[1, new Uint8Array(32).fill(7)]]),
 };
 const codec = createKeyedTokenCodec(config.keys);
@@ -66,7 +66,7 @@ function delivery(state: DeliveryStatus["state"]): DeliveryStatus {
 
 function setup(value: PublicationStatusData | null, linkConfig = config) {
   const repository = { statusData: vi.fn().mockResolvedValue(value), voidInvoice: vi.fn() };
-  return { repository, service: createInvoiceLifecycleService(repository as unknown as PublicationRepository, linkConfig, () => now) };
+  return { repository, service: createInvoiceLifecycleService(repository as unknown as PublicationRepository, () => linkConfig, () => now) };
 }
 
 it("returns the exact default DTO with explicit nulls and no document or email before settlement", async () => {
@@ -206,7 +206,7 @@ it("regenerates identical invoice and receipt links from stored keys after rotat
   value.settlement = settlement;
   value.receipt = readyReceipt();
   const first = await setup(value).service.status(actor, id);
-  const rotated: PublicationLinkConfig = { ...config, activeKeyVersion: 2, keys: new Map([[1, new Uint8Array(32).fill(7)], [2, new Uint8Array(32).fill(9)]]) };
+  const rotated: PublicationLinkConfig = { ...config, keys: new Map([[1, new Uint8Array(32).fill(7)], [2, new Uint8Array(32).fill(9)]]) };
   const restarted = setup(JSON.parse(JSON.stringify(value)), rotated).service;
   expect(await restarted.status(actor, id)).toEqual(first);
   expect(await restarted.share(actor, id)).toEqual({ invoiceUrl, invoicePdfUrl: `${invoiceUrl}/pdf`, pdfFilename: "INV-2030-000001.pdf" });
@@ -333,7 +333,7 @@ it("lets the atomic repository replay before current-state checks and reject con
   await expect(service.void(actor, { ...voidInput, expectedVersion: 2 })).rejects.toMatchObject({ code: "VERSION_CONFLICT" });
   expect(await service.void(actor, voidInput)).toEqual(voidResult);
   value.settlement = settlement;
-  const restarted = createInvoiceLifecycleService(repository as unknown as PublicationRepository, { ...config, keys: new Map() });
+  const restarted = createInvoiceLifecycleService(repository as unknown as PublicationRepository, () => ({ ...config, keys: new Map() }));
   expect(await restarted.void(actor, voidInput)).toEqual(voidResult);
   await expect(service.void(actor, { ...voidInput, expectedVersion: 2 })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
   await expect(service.void(actor, { ...voidInput, invoiceId: actor.workspaceId })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });

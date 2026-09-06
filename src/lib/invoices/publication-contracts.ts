@@ -5,8 +5,13 @@ import type { DraftSnapshot, InvoiceActor, InvoiceDocumentPort } from "./contrac
 export type PublicationState = "reserved" | "rendering" | "stored" | "finalized" | "failed";
 export type PublicationFailure = "ARTIFACT_VERIFICATION_FAILED" | "PROFILE_CONFLICT" | "CLIENT_CONFLICT" | "AUTH_REVOKED" | "DEADLINE_EXPIRED" | "VERSION_CONFLICT";
 export type LinkMaterial = { tokenId: string; keyVersion: number; verifierHash: string; expiresAt: string; activatedAt: string | null; revokedAt: string | null };
-export type PublicationLinkConfig = { appOrigin: string; explorerOrigin: string; activeKeyVersion: number; keys: ReadonlyMap<number, Uint8Array> };
-export type PublicationConfig = PublicationLinkConfig & { chainId: number; contractAddress: `0x${string}` };
+export type PublicationLinkConfig = { appOrigin: string; explorerOrigin: string; keys: ReadonlyMap<number, Uint8Array> };
+export type PublicationConfig = PublicationLinkConfig & { activeKeyVersion: number; chainId: number; contractAddress: `0x${string}` };
+export type PublicationDependencies = {
+  getLinkConfig(): PublicationLinkConfig;
+  getReservationConfig(): PublicationConfig;
+  getDocuments(): InvoiceDocumentPort;
+};
 export type PublicationArtifact = {
   pdfFilename: string; contentType: "application/pdf"; byteLength: number;
   invoiceDataHash: `0x${string}`; pdfContentHash: `0x${string}`; documentCommitment: `0x${string}`; qrVerified: true;
@@ -44,6 +49,7 @@ export type PublicationStatusData = {
   deliveries: DeliveryStatus[];
 };
 export type PublicationRepository = {
+  findReplay(actor: InvoiceActor, idempotencyKey: string, requestFingerprint: string): Promise<PublicationAttempt | null>;
   reserve(actor: InvoiceActor, input: PublicationReservation): Promise<PublicationAttempt>;
   claim(attemptId: string | null, leaseOwner: string): Promise<PublicationAttempt | null>;
   store(input: PublicationFence & { artifact: PublicationArtifact }): Promise<PublicationAttempt | null>;

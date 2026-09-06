@@ -10,6 +10,7 @@ vi.mock("../../../../lib/invoices/publication-runtime", () => ({
 
 const secret = "a".repeat(32);
 const repository: PublicationRepository = {
+  findReplay: vi.fn(),
   reserve: vi.fn(), claim: vi.fn(), store: vi.fn(), finalize: vi.fn(), fail: vi.fn(), statusData: vi.fn(), voidInvoice: vi.fn(), expire: vi.fn(),
 };
 const createOrRead = vi.fn();
@@ -19,7 +20,7 @@ beforeEach(() => {
   vi.stubEnv("CRON_SECRET", secret);
   vi.mocked(getPublicationDocumentPort).mockReturnValue({ createOrRead });
   vi.mocked(getPublicationLinkConfig).mockReturnValue({ appOrigin: "https://payrlink.xyz", explorerOrigin: "https://testnet.arcscan.app",
-    activeKeyVersion: 1, keys: new Map([[1, new Uint8Array(32).fill(7)]]) });
+    keys: new Map([[1, new Uint8Array(32).fill(7)]]) });
   vi.mocked(getPublicationRepository).mockReturnValue(repository);
   vi.mocked(repository.claim).mockResolvedValue(null);
   vi.mocked(repository.expire).mockResolvedValue({ expired: 0 });

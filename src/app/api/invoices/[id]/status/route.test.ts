@@ -84,12 +84,24 @@ describe.each(routes)("$name route", ({ name, method, call, body, mutation }) =>
   }
   const context = () => ({ params: Promise.resolve({ id }) });
 
+  if (name === "void") it("voids and replays without requiring any link or explorer configuration", async () => {
+    vi.mocked(getPublicationLinkConfig).mockImplementation(() => { throw new PublicationError("CONFIGURATION_ERROR", 503); });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await call(request(), context());
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(voidResult);
+    }
+    expect(getPublicationLinkConfig).not.toHaveBeenCalled();
+    expect(repository.voidInvoice).toHaveBeenCalledTimes(2);
+  });
+
   it("authenticates before lazy factories and reads existing records without a document provider or network", async () => {
     const req = request();
     const response = await call(req, context());
     expect(requireRequestSession).toHaveBeenCalledExactlyOnceWith(req, mutation);
     expect(vi.mocked(requireRequestSession).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(getPublicationRepository).mock.invocationCallOrder[0]);
-    expect(vi.mocked(requireRequestSession).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(getPublicationLinkConfig).mock.invocationCallOrder[0]);
+    if (name === "void") expect(getPublicationLinkConfig).not.toHaveBeenCalled();
+    else expect(vi.mocked(requireRequestSession).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(getPublicationLinkConfig).mock.invocationCallOrder[0]);
     expect(response.status).toBe(200);
     const dto = await response.json();
     if (name === "status") {

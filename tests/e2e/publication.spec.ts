@@ -56,8 +56,10 @@ function publicationFixture() {
   async function publish(version: DraftVersion) {
     // Only this test process injects deterministic documents. No application route or runtime override.
     const service = createPublicationService(repository, {
-      ...createPublicationLinkEnv(), chainId: 5042002, contractAddress: `0x${"3".repeat(40)}`,
-    }, createTestDocumentPort());
+      getLinkConfig: () => createPublicationLinkEnv(),
+      getReservationConfig: () => ({ ...createPublicationLinkEnv(), activeKeyVersion: 1, chainId: 5042002, contractAddress: `0x${"3".repeat(40)}` }),
+      getDocuments: () => createTestDocumentPort(),
+    });
     return service.publish(actor, { draftId: version.draftId, expectedVersion: version.version, approval: true, idempotencyKey: randomUUID() });
   }
   return { identity, actor, repository, draft, publish };

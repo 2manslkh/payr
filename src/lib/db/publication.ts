@@ -170,6 +170,13 @@ export function createPublicationRepository(client: RpcClient): PublicationRepos
     return parse(schema, result.data, true);
   }
   return {
+    async findReplay(actor, idempotencyKey, requestFingerprint) {
+      const parameters = scope(actor);
+      const key = parse(z.string().trim().min(1).max(128), idempotencyKey);
+      const fingerprint = parse(z.string().regex(/^[0-9a-f]{64}$/), requestFingerprint);
+      return call("payr_find_publication_replay_v1", { ...parameters, p_idempotency_key: key, p_request_fingerprint: fingerprint },
+        attempt.refine((value) => value.workspaceId === actor.workspaceId).nullable());
+    },
     async reserve(actor, input) {
       const parameters = scope(actor), value = parse(write, input);
       return call("payr_reserve_publication_v1", { ...parameters, p_input: value }, attempt.refine((a) =>

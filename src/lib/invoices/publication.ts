@@ -5,7 +5,7 @@ import { deriveEffectiveCommercialState } from "../domain/invoice";
 import { IdentityError, walletSchema } from "../identity/contracts";
 import { createKeyedTokenCodec } from "../security/keyed-token";
 import { buildGmailPackage } from "./gmail-package";
-import { PublicationError, type InvoiceDocumentPort, type PublicationConfig, type PublicationRepository, type PublicationService } from "./publication-contracts";
+import { PublicationError, type InvoiceDocumentPort, type PublicationDependencies, type PublicationRepository, type PublicationService } from "./publication-contracts";
 import { publicationLink } from "./publication-links";
 import { createPublicationWorker } from "./publication-worker";
 
@@ -18,8 +18,7 @@ const actorSchema = z.object({
   connectorId: z.string().uuid().transform((value) => value.toLowerCase()).nullable(),
 }).strict().refine((actor) => (actor.ownerWallet === null) !== (actor.connectorId === null));
 
-export function createPublicationService(repository: PublicationRepository, config: PublicationConfig, documents: InvoiceDocumentPort): PublicationService {
-  const worker = createPublicationWorker(repository, config, documents);
+export function createPublicationService(repository: PublicationRepository, dependencies: PublicationDependencies): PublicationService {
   return { async publish(actor, rawInput) {
     const parsed = publishInvoiceSchema.safeParse(rawInput);
     if (!parsed.success) throw new PublicationError("INVALID_INPUT", 400);
@@ -27,26 +26,41 @@ export function createPublicationService(repository: PublicationRepository, conf
     if (!parsedActor.success) throw new IdentityError("FORBIDDEN", 403);
     actor = parsedActor.data;
     const input = parsed.data;
-    const tokenId = randomUUID();
-    let verifierHash: string;
-    try {
-      if (!Number.isSafeInteger(config.chainId) || config.chainId <= 0
-        || !/^0x[0-9a-fA-F]{40}$/.test(config.contractAddress) || /^0x0{40}$/.test(config.contractAddress)
-        || !Number.isSafeInteger(config.activeKeyVersion) || config.activeKeyVersion < 1 || config.activeKeyVersion > 2147483647) throw new Error();
-      verifierHash = createKeyedTokenCodec(config.keys).derive(tokenId, "invoice-bearer", config.activeKeyVersion).verifierHash;
-    } catch { throw new PublicationError("CONFIGURATION_ERROR", 503); }
     const requestFingerprint = createHash("sha256").update(canonicalJson({
       operation: "publish_invoice", workspaceId: actor.workspaceId, draftId: input.draftId,
       expectedVersion: input.expectedVersion, approval: true,
     })).digest("hex");
-    // The repository authorizes invoice:publish and resolves replay before mutable draft/binding checks.
-    const reserved = await repository.reserve(actor, {
-      ...input, requestFingerprint, attemptId: randomUUID(), invoiceKey: `0x${randomBytes(32).toString("hex")}`,
-      publicationSalt: `0x${randomBytes(32).toString("hex")}`, tokenId, keyVersion: config.activeKeyVersion,
-      verifierHash, chainId: config.chainId, contractAddress: config.contractAddress.toLowerCase() as `0x${string}`,
-    });
+    // Resolve authorized replay before touching current deployment binding or an unavailable provider.
+    let reserved = await repository.findReplay(actor, input.idempotencyKey, requestFingerprint);
+    let documents: InvoiceDocumentPort | undefined;
+    if (!reserved) {
+      try {
+        documents = dependencies.getDocuments();
+        const config = dependencies.getReservationConfig();
+        const tokenId = randomUUID();
+        let verifierHash: string;
+        try {
+          if (!Number.isSafeInteger(config.chainId) || config.chainId <= 0
+            || !/^0x[0-9a-fA-F]{40}$/.test(config.contractAddress) || /^0x0{40}$/.test(config.contractAddress)
+            || !Number.isSafeInteger(config.activeKeyVersion) || config.activeKeyVersion < 1 || config.activeKeyVersion > 2147483647) throw new Error();
+          verifierHash = createKeyedTokenCodec(config.keys).derive(tokenId, "invoice-bearer", config.activeKeyVersion).verifierHash;
+        } catch { throw new PublicationError("CONFIGURATION_ERROR", 503); }
+        reserved = await repository.reserve(actor, {
+          ...input, requestFingerprint, attemptId: randomUUID(), invoiceKey: `0x${randomBytes(32).toString("hex")}`,
+          publicationSalt: `0x${randomBytes(32).toString("hex")}`, tokenId, keyVersion: config.activeKeyVersion,
+          verifierHash, chainId: config.chainId, contractAddress: config.contractAddress.toLowerCase() as `0x${string}`,
+        });
+      } catch (error) {
+        reserved = await repository.findReplay(actor, input.idempotencyKey, requestFingerprint);
+        if (!reserved) throw error;
+      }
+    }
+    if (reserved.workspaceId !== actor.workspaceId || reserved.invoiceId !== input.draftId || reserved.invoiceVersion !== input.expectedVersion) {
+      throw new PublicationError("INVALID_DATABASE_RESPONSE", 500);
+    }
     if (reserved.state === "failed") throw new PublicationError("PUBLICATION_FAILED", 409, reserved.failureCode ?? undefined);
     if (reserved.state !== "finalized") {
+      const worker = createPublicationWorker(repository, dependencies.getLinkConfig(), documents ?? dependencies.getDocuments());
       const result = await worker.run(reserved.id);
       if (result.outcome === "idle" || result.outcome === "busy") throw new PublicationError("PUBLICATION_IN_PROGRESS");
       if (result.outcome === "retryable") throw new PublicationError("PUBLICATION_RETRYABLE", 503);
@@ -66,7 +80,7 @@ export function createPublicationService(repository: PublicationRepository, conf
       || !attempt.artifact?.qrVerified || !attempt.link.activatedAt || data.commercialState === "draft" || !data.payableUntil) {
       throw new PublicationError("PUBLICATION_RETRYABLE", 503);
     }
-    const invoiceUrl = publicationLink(attempt.link, "invoice-bearer", config);
+    const invoiceUrl = publicationLink(attempt.link, "invoice-bearer", dependencies.getLinkConfig());
     const invoicePdfUrl = `${invoiceUrl}/pdf`;
     return {
       invoiceId: attempt.invoiceId, invoiceVersion: attempt.invoiceVersion, invoiceNumber: attempt.invoiceNumber,

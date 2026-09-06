@@ -19,7 +19,7 @@ const target = publicationStatusDataSchema.safeExtend({ snapshot: publicationSna
     const a = value.attempt, s = value.settlement, r = value.receipt;
     if (!["published", "expired"].includes(value.commercialState) || value.voidedAt !== null
       || a.state !== "finalized" || a.link.activatedAt === null || a.link.revokedAt !== null
-      || Date.parse(a.link.activatedAt) > Date.now() || Date.parse(a.link.expiresAt) <= Date.now()
+      || Date.parse(a.link.expiresAt) <= Date.parse(a.link.activatedAt)
       || a.invoiceVersion !== value.invoiceVersion || a.invoiceNumber !== value.invoiceNumber
       || Date.parse(a.snapshot.payableUntil) !== Date.parse(value.payableUntil!)
       || canonicalJson(a.snapshot) !== canonicalJson(value.snapshot)) return false;

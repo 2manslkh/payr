@@ -1,13 +1,13 @@
 # R06 Immutable Documents And Protected Surfaces
 
-Snapshot: `2026-09-06`. Base: `v0.4.0` / `6761096fba1ed2900d5fedfc91416d1b270dafdd`. Integration: `integration/r06-documents-v0.5.0` in `.worktrees/r06-integration`; documentation handoff baseline: `7a8a8e7`. Intended version: `v0.5.0`; package metadata remains `0.4.0`, with no R06 release PR at this snapshot.
+Snapshot: `2026-09-06`. Base: `v0.4.0` / `6761096fba1ed2900d5fedfc91416d1b270dafdd`. Integration: `integration/r06-documents-v0.5.0` in `.worktrees/r06-integration`. Intended version: `v0.5.0`. This pre-release snapshot is superseded by the release PR's verified merge/tag read-back.
 
-**Provisional evidence:** the complete gates below precede the final structural money-row repair. Prior standards/specification findings are closed, but one medium security finding remains pending implementation/verification in `agent/r06-storage`. Do not treat the geometry freeze or these earlier passes as final review approval.
+The structural repair `8fb06d3a22a42c56c55a8ee6df3130ab36b35582` is integrated. Independent security review closed the whole-row-shift finding after checking actual positioned PDF evidence and a real collision with identical flattened text. Prior standards/specification and other security findings are closed within their reviewed scope. Local checks below include the completed repair; protected CI and release read-back remain required.
 
 ## Delivered Scope
 
 - A canonical immutable invoice view feeds real PDF and protected HTML. The PDF includes confirmed parties, line items, exact decimal/atomic USDC amounts, dates, full payee wallet, network, invoice URL, and a visible QR. Metadata uses frozen issue-date facts, not retry time.
-- Publication reads back actual private Storage bytes, parses/rasterizes the PDF, decodes the visible QR, checks material text and exactly one destination, and computes the existing Keccak/three-bytes32 ABI commitment. Real compiled publication is exercised locally, not substituted with a production fake provider.
+- Publication reads back actual private Storage bytes, parses/rasterizes the PDF, decodes the visible QR, checks material text and exactly one destination, and computes the existing Keccak/three-bytes32 ABI commitment. Measured line indexes, positions and font sizes independently bind decimal/atomic amounts to each row and the total region; free-form text cannot supply money-cell evidence. Real compiled publication is exercised locally, not substituted with a production fake provider.
 - The user-approved self-reference exception in `DECISIONS.md` and the framing spec places the invoice PDF's own final hash/commitment on protected HTML and subsequent receipts, not inside that PDF. No post-hash stamping or changed hashing formula is permitted. R08 still owns receipt implementation.
 - The private PDF-only `documents` bucket uses attempt-specific keys and `upsert:false`. Success/collision requires downloaded-byte verification; no overwrite, delete, signed URL, or regeneration of a known stored/finalized missing object is provided.
 - Additive migration `202609040005_document_access.sql` supplies service-only candidate/target/storage-state/admission RPCs and a storage-version guard. The guard prevents the observed Supabase Storage `v1.70.3` concurrent-create race from replacing an existing `documents` object pointer despite `upsert:false`. Released migrations `0001-0004` remain unchanged.
@@ -25,7 +25,8 @@ The verifier supports the restricted current producer profile, not arbitrary PDF
 | Decoded stream | 4 MiB each |
 | Aggregate decoded streams | 16 MiB |
 | Aggregate image pixels | 4 million |
-| Worker timer | 20 seconds; termination is awaited |
+| Worker timer | 30 seconds; termination is awaited |
+| Positioned text / inspection output | 10,000 items / 2 MiB |
 
 The worker/resource checks are not an OS-enforced RSS sandbox. Missing native producer packages, bindings, fonts, or other infrastructure failures are unavailable/retryable; invalid document proof is terminal. Reserved invoice numbers remain consumed, including after terminal failure.
 
@@ -47,30 +48,30 @@ Runtime requires Node `>=22.13 <23`, pnpm `10.19.0`, and frozen dependencies: `@
 | Protected surfaces | `77af111` |
 | Configuration and publication runtime | `31af59b` |
 
-Review corrections include bounded preflight/native packaging (`b72b1d2`), required package/current RSC tests (`eabd4cd`), labeled money fields (`107d320`), UUID rejection and post-download revalidation (`4bae0f0`), and empty QR candidate handling (`0eb436d`). Freeze `7a8a8e7` adds the positioned `textItems` contract; it is not the completed geometry repair. The active contract and ownership are in [`../superpowers/freezes/2026-09-06-f3-documents.md`](../superpowers/freezes/2026-09-06-f3-documents.md).
+Review corrections include bounded preflight/native packaging (`b72b1d2`), required package/current RSC tests (`eabd4cd`), labeled money fields (`107d320`), UUID rejection and post-download revalidation (`4bae0f0`), empty QR candidate handling (`0eb436d`), and positioned row/total evidence (`8fb06d3`). The row repair resumed preserved work after interruption, rather than discarding it. The active contract and ownership are in [`../superpowers/freezes/2026-09-06-f3-documents.md`](../superpowers/freezes/2026-09-06-f3-documents.md).
 
 ## Verification
 
-Coordinator-supplied last complete local results, all **before the final geometry repair**:
+Final local results after structural integration and the decoder timing correction:
 
-| Gate | Provisional result |
+| Gate | Local result |
 | --- | --- |
 | Lint / typecheck / production build | Passed |
-| Pre-build unit | 1,545 passed; 13 isolated package cases deferred |
-| Post-build `pnpm test:documents:package` | 33 passed, including all 13 isolated package cases |
+| Pre-build unit | 1,564 passed across 54 files; 13 isolated package cases deferred |
+| Post-build `pnpm test:documents:package` | 35 passed, including all 13 isolated package cases |
 | Database integration | 433 passed across 9 files |
 | Production browser | 44 desktop/mobile tests passed |
 | Release tooling | 10 tests passed |
 | Local reset / SQL lint | Passed, including migration `0005` |
 | Secret scan | Clean at the recorded gate |
 
-Twenty post-build cases overlap the unit suite; do not add all 33 to the unit count. The 13 isolated cases must run after build, not remain skipped. Both required CI `web` and local `pnpm verify` run `pnpm test:documents:package` after `pnpm build`; passing pre-build units alone is insufficient. These results are local evidence, not a hosted deployment or final R06 CI claim.
+Twenty-two post-build cases overlap the unit suite; do not add all 35 to the unit count. The 13 isolated cases must run after build, not remain skipped. Both required CI `web` and local `pnpm verify` run `pnpm test:documents:package` after `pnpm build`; passing pre-build units alone is insufficient. These results are local evidence, not a hosted deployment or final R06 CI claim.
+
+After Docker was restarted, two document-read tests transiently failed; their exact earlier timing/response predicate was not captured. Eight isolated repetitions and the complete document suite then passed. Separate deterministic regressions reproduced a decoder problem with an application clock 1 ms behind activation or at expiry during transit. The DTO decoder now checks timestamp ordering, not current wall time. SQL and the access service still enforce live activation/expiry, including post-download revalidation. Independent security review accepted this separation; no MAC, scope or time-based access checks were relaxed. The subsequent full 433-test database and 44-test browser gates passed. This does not establish the cause of the earlier transient failures or resolve R05 nonce clock sensitivity.
 
 ## Remaining Gates
 
-- **Final money-row repair: PENDING.** Labels and whitespace-compacted text equality alone cannot prevent free-form descriptions from impersonating complete monetary rows. The frozen repair requires actual extracted text geometry, sequential row anchors, independent decimal/atomic amount cells, and the total region; descriptions must not supply amount-cell evidence. Coordinator to record the merged repair SHA and adversarial verification.
-- **Complete post-repair evidence: PENDING.** Coordinator to replace the provisional gate table after the final geometry gate and complete release checks, then record standards/specification/security sign-off. No all-reviews-clean claim is made here.
-- **Release metadata and CI: PENDING.** Coordinator owns the final version commit, release PR, required checks, trusted merge tag, and post-merge verification. None is performed by this documentation task.
+- **Release metadata and CI: PENDING.** The coordinator owns the final version-only commit, release PR, required checks, trusted merge tag, and post-merge verification. Immutable tags require a forward-fix release for any post-merge regression.
 
 Protected HTML retains a verification gap for denial-status uniformity when a request is live at admission but becomes invalid in flight. This is not an established confidentiality bypass. PDF post-download access revalidation is tested; that does not prove HTML in-flight status behavior.
 

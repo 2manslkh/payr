@@ -62,6 +62,16 @@ it("returns the existing status DTO with a nonnull finalized attempt and exact s
   expect(await repository({ ...target(), commercialState: "expired" }).readTarget(id)).toMatchObject({ commercialState: "expired" });
 });
 
+it.each([Date.parse(link.activatedAt) - 1, Date.parse(link.expiresAt)])(
+  "decodes consistent timestamps independently of application clock %s", async (now) => {
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+    try {
+      // SQL admission and the access service enforce time; transit cannot corrupt a DTO.
+      expect(await repository(target()).readTarget(id)).toEqual(target());
+    } finally { clock.mockRestore(); }
+  },
+);
+
 it.each([
   ["attempt", null], ["snapshot", null], ["invoiceVersion", 2], ["invoiceNumber", "INV-2026-000002"],
   ["commercialState", "draft"], ["commercialState", "voided"], ["payableUntil", "2031-01-01T00:00:00.000Z"],

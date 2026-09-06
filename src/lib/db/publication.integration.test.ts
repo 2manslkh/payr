@@ -122,6 +122,90 @@ describe("F3 publication RPC transactions", () => {
     expect(fixture("select bool_and(public.payr_is_safe_result_descriptor(result_descriptor)) from public.idempotency_requests;")).toBe("t");
   });
 
+  it("finds only exact durable publication replays, including every active and terminal state", async () => {
+    const input = await reservation();
+    const args = { ...scope, p_idempotency_key: input.idempotencyKey, p_request_fingerprint: input.requestFingerprint };
+    const empty = await service.rpc("payr_find_publication_replay_v1", args);
+    expect(empty.error).toBeNull(); expect(empty.data).toBeNull();
+    expect(fixture("select count(*) from public.publication_attempts;")).toBe("0");
+    const reserved = await repository.reserve(actor, input);
+    expect(await repository.findReplay(actor, input.idempotencyKey, input.requestFingerprint)).toEqual(reserved);
+    const claimed = (await repository.claim(reserved.id, randomUUID()))!;
+    expect(await repository.findReplay(actor, input.idempotencyKey, input.requestFingerprint)).toEqual(claimed);
+    const saved = (await repository.store({ ...fence(claimed), artifact }))!;
+    expect(await repository.findReplay(actor, input.idempotencyKey, input.requestFingerprint)).toEqual(saved);
+    const finalized = (await repository.finalize(fence(saved)))!;
+    fixture("update public.sender_profiles set revision = revision + 1; update public.clients set revision = revision + 1;");
+    expect(await repository.findReplay(actor, input.idempotencyKey, input.requestFingerprint)).toEqual(finalized);
+    const conflict = await service.rpc("payr_find_publication_replay_v1", { ...args, p_request_fingerprint: "0".repeat(64) });
+    expect(conflict.error).toMatchObject({ code: "P0001", message: "IDEMPOTENCY_CONFLICT" }); expect(conflict.data).toBeNull();
+    fixture("update public.sender_profiles set revision = 1; update public.clients set revision = 1;");
+    const next = await stored();
+    const failed = await repository.fail({ ...fence(next.claimed), failureCode: "PROFILE_CONFLICT" });
+    expect(await repository.findReplay(actor, next.input.idempotencyKey, next.input.requestFingerprint)).toEqual(failed);
+    expect(fixture("select count(*) from public.publication_attempts;")).toBe("2");
+  });
+
+  it.each([[null, "a".repeat(64)], ["", "a".repeat(64)], [" ", "a".repeat(64)], ["x".repeat(129), "a".repeat(64)],
+    ["key", null], ["key", ""], ["key", "A".repeat(64)], ["key", "a".repeat(63)]])("rejects invalid SQL replay input %j / %j", async (p_idempotency_key, p_request_fingerprint) => {
+    const result = await service.rpc("payr_find_publication_replay_v1", { ...scope, p_idempotency_key, p_request_fingerprint });
+    expect(result.error).toMatchObject({ code: "22023", message: "INVALID_INPUT" }); expect(result.data).toBeNull();
+    expect(fixture("select count(*) from public.idempotency_requests;")).toBe("0");
+  });
+
+  it("isolates replay tenants and rechecks revoked actors even when an attempt exists", async () => {
+    const input = await reservation();
+    const tokenId = randomUUID();
+    const identity = createIdentityRepository(service);
+    await identity.createConnector({ workspaceId, ownerWallet: owner }, { id: tokenId, tokenHash: "c".repeat(64), expiresAt: new Date(Date.now() + 86400000).toISOString() });
+    const connector = { ...actor, ownerWallet: null, connectorId: tokenId };
+    const reserved = await repository.reserve(connector, input);
+    expect(await repository.findReplay(connector, input.idempotencyKey, input.requestFingerprint)).toEqual(reserved);
+    await identity.revokeConnector({ workspaceId, ownerWallet: owner }, tokenId);
+    const denied = await service.rpc("payr_find_publication_replay_v1", { ...scope, p_owner_wallet: null, p_connector_id: tokenId,
+      p_idempotency_key: input.idempotencyKey, p_request_fingerprint: input.requestFingerprint });
+    expect(denied.error).toMatchObject({ message: "NOT_FOUND" }); expect(denied.data).toBeNull();
+    const other = { workspaceId: randomUUID(), ownerWallet: `0x${"4".repeat(40)}`, connectorId: null };
+    fixture(`insert into public.workspaces (id,owner_wallet) values ('${other.workspaceId}','${other.ownerWallet}');`);
+    expect(await repository.findReplay(other, input.idempotencyKey, input.requestFingerprint)).toBeNull();
+    await expect(repository.findReplay({ ...actor, ownerWallet: other.ownerWallet }, input.idempotencyKey, input.requestFingerprint))
+      .rejects.toMatchObject({ code: "NOT_FOUND" });
+    const invalidScope = await service.rpc("payr_find_publication_replay_v1", { ...scope, p_owner_wallet: null,
+      p_idempotency_key: input.idempotencyKey, p_request_fingerprint: input.requestFingerprint });
+    expect(invalidScope.error).toMatchObject({ message: "NOT_FOUND" }); expect(invalidScope.data).toBeNull();
+    expect(await repository.findReplay(actor, input.idempotencyKey, input.requestFingerprint)).toEqual(reserved);
+  });
+
+  it.each(["key", "invoice"])("rechecks replay actor expiry after waiting on the %s lock", async (lock) => {
+    const input = await reservation();
+    await repository.reserve(actor, input);
+    const tokenId = randomUUID();
+    fixture(`insert into public.connector_tokens (id,workspace_id,token_hash,expires_at)
+      values ('${tokenId}','${workspaceId}','${"c".repeat(64)}',clock_timestamp() + interval '700 milliseconds');`);
+    const sql = lock === "key" ? `select pg_advisory_xact_lock(hashtextextended('payr:publish_invoice:${workspaceId}:${input.idempotencyKey}',0))`
+      : `select 1 from public.invoices where id = '${input.draftId}' for update`;
+    await transaction(sql, async (pid, commit) => {
+      const pending = service.rpc("payr_find_publication_replay_v1", { ...scope, p_owner_wallet: null, p_connector_id: tokenId,
+        p_idempotency_key: input.idempotencyKey, p_request_fingerprint: input.requestFingerprint }).then((r) => r);
+      await waitForWaiter(pid); await new Promise((resolve) => setTimeout(resolve, 750)); await commit();
+      const result = await pending;
+      expect(result.error).toMatchObject({ message: "NOT_FOUND" }); expect(result.data).toBeNull();
+    });
+    expect(fixture("select state = 'reserved' and fence = 0 from public.publication_attempts;")).toBe("t");
+  });
+
+  it.each(["empty", "missing-version", "wrong-invoice"])("fails closed on %s replay descriptor bindings", async (descriptor) => {
+    const input = await reservation();
+    const reserved = await repository.reserve(actor, input);
+    const value = descriptor === "empty" ? "{}" : JSON.stringify({ ids: {
+      invoice_id: descriptor === "wrong-invoice" ? randomUUID() : reserved.invoiceId, attempt_id: reserved.id,
+      ...(descriptor === "wrong-invoice" ? { version_id: reserved.invoiceVersionId } : {}),
+    } });
+    fixture(`update public.idempotency_requests set result_descriptor = '${value}' where operation = 'publish_invoice';`);
+    const result = await service.rpc("payr_find_publication_replay_v1", { ...scope, p_idempotency_key: input.idempotencyKey, p_request_fingerprint: input.requestFingerprint });
+    expect(result.error).toMatchObject({ message: "INVALID_PUBLICATION_DESCRIPTOR" }); expect(result.data).toBeNull();
+  });
+
   it("publishes through the integrated worker and lifecycle without holding SQL locks across document I/O", async () => {
     const input = await reservation();
     const config = { appOrigin: "https://payr.example.test", explorerOrigin: "https://explorer.example.test", activeKeyVersion: 1,
@@ -139,16 +223,46 @@ describe("F3 publication RPC transactions", () => {
     expect(await lifecycle.status(actor, input.draftId)).toMatchObject({ displayStatus: "Published", paymentStatus: "unpaid",
       invoiceDocument: { state: "ready", pageUrl: published.invoiceUrl, pdfUrl: published.invoicePdfUrl } });
     expect(await lifecycle.share(actor, input.draftId)).toEqual({ invoiceUrl: published.invoiceUrl, invoicePdfUrl: published.invoicePdfUrl, pdfFilename: published.pdfFilename });
+    let reservationReads = 0, documentReads = 0;
     const rotated = createPublicationService(repository, {
-      getLinkConfig: () => config,
-      getReservationConfig: () => ({ ...config, activeKeyVersion: 2, chainId: 1, contractAddress: `0x${"4".repeat(40)}` }),
-      getDocuments() { throw new Error("Finalized replays must not render again"); },
+      getLinkConfig: () => ({ appOrigin: config.appOrigin, explorerOrigin: config.explorerOrigin, keys: new Map([[1, config.keys.get(1)!]]) }),
+      getReservationConfig() { reservationReads++; throw new Error("Current binding and active key are unavailable"); },
+      getDocuments() { documentReads++; throw new Error("Finalized replays must not render again"); },
     });
     expect(await rotated.publish(actor, approved)).toEqual(published);
     expect((await repository.statusData(actor, input.draftId))!.attempt).toMatchObject({ chainId: input.chainId, contractAddress: input.contractAddress, link: { keyVersion: 1 } });
-    await lifecycle.void(actor, { invoiceId: input.draftId, expectedVersion: 1, approval: true, idempotencyKey: randomUUID() });
+    const voidOnly = createInvoiceLifecycleService(repository, () => { throw new Error("Voiding must not load link configuration"); });
+    const voidInput = { invoiceId: input.draftId, expectedVersion: 1, approval: true, idempotencyKey: randomUUID() };
+    const voided = await voidOnly.void(actor, voidInput);
+    expect(await voidOnly.void(actor, voidInput)).toEqual(voided);
     expect(await rotated.publish(actor, approved)).toMatchObject({ commercialState: "voided", invoiceUrl: published.invoiceUrl, pdfContentHash: published.pdfContentHash });
+    expect({ reservationReads, documentReads }).toEqual({ reservationReads: 0, documentReads: 0 });
     await expect(lifecycle.share(actor, input.draftId)).rejects.toMatchObject({ code: "LINK_UNAVAILABLE" });
+    expect(fixture("select next_value::text from public.invoice_sequences;")).toBe("2");
+  });
+
+  it("recovers an active publication with only retained keys and the document provider", async () => {
+    const input = await reservation();
+    const config = { appOrigin: "https://payr.example.test", explorerOrigin: "https://explorer.example.test", activeKeyVersion: 1,
+      keys: new Map([[1, new Uint8Array(32).fill(1)]]), chainId: input.chainId, contractAddress: input.contractAddress };
+    const approved = { draftId: input.draftId, expectedVersion: 1, approval: true as const, idempotencyKey: input.idempotencyKey };
+    const interrupted = createPublicationService(repository, { getLinkConfig: () => config, getReservationConfig: () => config,
+      getDocuments: () => ({ async createOrRead() { throw new Error("Temporary I/O failure"); } }),
+    });
+    await expect(interrupted.publish(actor, approved)).rejects.toMatchObject({ code: "PUBLICATION_RETRYABLE" });
+    const pending = (await repository.statusData(actor, input.draftId))!.attempt!;
+    expect(pending).toMatchObject({ state: "rendering", fence: "1", link: { activatedAt: null } });
+    expireLease(pending.id);
+    let reservationReads = 0, documentReads = 0;
+    const recovered = createPublicationService(repository, {
+      getLinkConfig: () => ({ appOrigin: config.appOrigin, explorerOrigin: config.explorerOrigin, keys: config.keys }),
+      getReservationConfig() { reservationReads++; throw new Error("Current binding and active key are unavailable"); },
+      getDocuments() { documentReads++; return createTestDocumentPort(); },
+    });
+    expect(await recovered.publish(actor, approved)).toMatchObject({ commercialState: "published", invoiceNumber: pending.invoiceNumber });
+    expect((await repository.statusData(actor, input.draftId))!.attempt).toMatchObject({ id: pending.id, state: "finalized", fence: "2",
+      chainId: pending.chainId, contractAddress: pending.contractAddress, invoiceKey: pending.invoiceKey, link: { tokenId: pending.link.tokenId, keyVersion: 1 } });
+    expect({ reservationReads, documentReads }).toEqual({ reservationReads: 0, documentReads: 1 });
     expect(fixture("select next_value::text from public.invoice_sequences;")).toBe("2");
   });
 
@@ -183,11 +297,14 @@ describe("F3 publication RPC transactions", () => {
       .toMatchObject({ message: "IDEMPOTENCY_CONFLICT" });
   });
 
-  it("keeps replay attempt/link facts consistent across concurrent finalization", async () => {
+  it.each(["reserve", "findReplay"])("keeps %s attempt/link facts consistent across concurrent finalization", async (method) => {
     const { input, claimed } = await stored();
-    const replays = Array.from({ length: 30 }, () => repository.reserve(actor, input));
+    const replays = Array.from({ length: 30 }, () => method === "reserve" ? repository.reserve(actor, input)
+      : repository.findReplay(actor, input.idempotencyKey, input.requestFingerprint));
     const finalized = repository.finalize(fence(claimed));
     for (const replay of await Promise.all(replays)) {
+      expect(replay).not.toBeNull();
+      if (!replay) throw new Error("Expected the durable replay");
       if (replay.state === "stored") expect(replay.link.activatedAt).toBeNull();
       else { expect(replay.state).toBe("finalized"); expect(replay.link.activatedAt).not.toBeNull(); }
     }
@@ -615,6 +732,7 @@ describe("F3 publication RPC transactions", () => {
     const input = await reservation();
     const args = { p_attempt_id: input.attemptId, p_lease_owner: randomUUID(), p_fence: "1" };
     const calls: [string, Record<string, unknown>][] = [
+      ["payr_find_publication_replay_v1", { ...scope, p_idempotency_key: input.idempotencyKey, p_request_fingerprint: input.requestFingerprint }],
       ["payr_reserve_publication_v1", { ...scope, p_input: input }], ["payr_claim_publication_v1", { p_attempt_id: null, p_lease_owner: args.p_lease_owner }],
       ["payr_store_publication_v1", { ...args, p_artifact: artifact }], ["payr_finalize_publication_v1", args],
       ["payr_fail_publication_v1", { ...args, p_failure_code: "PROFILE_CONFLICT" }], ["payr_publication_status_v1", { ...scope, p_invoice_id: input.draftId }],
@@ -632,7 +750,7 @@ describe("F3 publication RPC transactions", () => {
     } finally { if (userId) await service.auth.admin.deleteUser(userId); }
   });
 
-  it("grants service only the eight exact RPCs, never internal lock/profile helpers or direct writes", async () => {
+  it("grants service only the nine exact RPCs, never internal lock/profile helpers or direct writes", async () => {
     const args = { p_attempt_id: randomUUID(), p_lease_owner: randomUUID(), p_fence: "1" };
     expect(["42501", "PGRST202"]).toContain((await service.rpc("payr_publication_lock_v1", args)).error?.code);
     expect(["42501", "PGRST202"]).toContain((await service.rpc("payr_publication_profiles_v1", {
@@ -640,8 +758,8 @@ describe("F3 publication RPC transactions", () => {
     })).error?.code);
     expect(fixture(`select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public'
       and p.proname in ('payr_reserve_publication_v1','payr_claim_publication_v1','payr_store_publication_v1','payr_finalize_publication_v1',
-        'payr_fail_publication_v1','payr_publication_status_v1','payr_void_invoice_v1','payr_expire_invoices_v1')
-      and p.prosecdef and p.proconfig @> array['search_path=""'] and has_function_privilege('service_role',p.oid,'execute');`)).toBe("8");
+        'payr_fail_publication_v1','payr_publication_status_v1','payr_void_invoice_v1','payr_expire_invoices_v1','payr_find_publication_replay_v1')
+      and p.prosecdef and p.proconfig @> array['search_path=""'] and has_function_privilege('service_role',p.oid,'execute');`)).toBe("9");
     expect((await service.from("publication_attempts").update({ state: "failed" }).eq("workspace_id", workspaceId)).error?.code).toBe("42501");
     expect(fixture("select count(*) from pg_policies where schemaname = 'public';")).toBe("0");
   });

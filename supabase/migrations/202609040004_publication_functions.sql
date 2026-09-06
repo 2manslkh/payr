@@ -137,10 +137,48 @@ begin
 end;
 $$;
 
+create function public.payr_find_publication_replay_v1(p_workspace_id uuid, p_owner_wallet text, p_connector_id uuid,
+  p_idempotency_key text, p_request_fingerprint text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare v_request public.idempotency_requests; v_attempt public.publication_attempts; v_result jsonb;
+begin
+  perform public.payr_draft_scope_v1(p_workspace_id,p_owner_wallet,p_connector_id,'invoice:publish');
+  if public.payr_draft_text_v1(pg_catalog.to_jsonb(p_idempotency_key),128) is not true
+    or p_request_fingerprint is null or p_request_fingerprint !~ '^[0-9a-f]{64}$' then
+    raise exception using errcode = '22023', message = 'INVALID_INPUT';
+  end if;
+  -- Share reservation's key lock so an in-flight reservation is observed after it commits.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    'payr:publish_invoice:' || p_workspace_id::text || ':' || p_idempotency_key,0));
+  perform public.payr_draft_scope_v1(p_workspace_id,p_owner_wallet,p_connector_id,'invoice:publish');
+  select r.* into v_request from public.idempotency_requests as r where r.workspace_id = p_workspace_id
+    and r.operation = 'publish_invoice' and r.idempotency_key = p_idempotency_key;
+  if not found then return 'null'::jsonb; end if;
+  if v_request.request_fingerprint <> p_request_fingerprint then
+    raise exception using errcode = 'P0001', message = 'IDEMPOTENCY_CONFLICT';
+  end if;
+  -- Replay bypasses mutable validation, but observes attempt/link facts atomically.
+  perform 1 from public.invoices as i where i.workspace_id = p_workspace_id
+    and i.id = (v_request.result_descriptor #>> '{ids,invoice_id}')::uuid for share;
+  select a.* into v_attempt from public.publication_attempts as a where a.workspace_id = p_workspace_id
+    and a.idempotency_request_id = v_request.id and a.request_fingerprint = v_request.request_fingerprint
+    and a.id = (v_request.result_descriptor #>> '{ids,attempt_id}')::uuid
+    and a.invoice_id = (v_request.result_descriptor #>> '{ids,invoice_id}')::uuid
+    and a.invoice_version_id = (v_request.result_descriptor #>> '{ids,version_id}')::uuid;
+  if not found then raise exception using errcode = 'P0001', message = 'INVALID_PUBLICATION_DESCRIPTOR'; end if;
+  perform public.payr_draft_scope_v1(p_workspace_id,p_owner_wallet,p_connector_id,'invoice:publish');
+  v_result := public.payr_publication_attempt_dto_v1(v_attempt);
+  if v_result is null or v_result = 'null'::jsonb then
+    raise exception using errcode = 'P0001', message = 'INVALID_PUBLICATION_DESCRIPTOR';
+  end if;
+  return v_result;
+end;
+$$;
+
 create function public.payr_reserve_publication_v1(p_workspace_id uuid, p_owner_wallet text, p_connector_id uuid, p_input jsonb)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare v_request public.idempotency_requests; v_invoice public.invoices; v_version public.invoice_versions;
-  v_attempt public.publication_attempts; v_key text; v_now timestamptz; v_expiry timestamptz; v_year integer; v_sequence bigint;
+  v_attempt public.publication_attempts; v_replay jsonb; v_key text; v_now timestamptz; v_expiry timestamptz; v_year integer; v_sequence bigint;
 begin
   perform public.payr_draft_scope_v1(p_workspace_id,p_owner_wallet,p_connector_id,'invoice:publish');
   if public.payr_identity_object_v1(p_input,array['draftId','expectedVersion','approval','idempotencyKey','requestFingerprint',
@@ -168,26 +206,13 @@ begin
       raise exception using errcode = '22023', message = 'INVALID_INPUT';
     end if;
   end loop;
-  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
-    'payr:publish_invoice:' || p_workspace_id::text || ':' || (p_input ->> 'idempotencyKey'),0));
-  select r.* into v_request from public.idempotency_requests as r where r.workspace_id = p_workspace_id
-    and r.operation = 'publish_invoice' and r.idempotency_key = p_input ->> 'idempotencyKey';
-  if found then
-    if v_request.request_fingerprint <> p_input ->> 'requestFingerprint' then
+  v_replay := public.payr_find_publication_replay_v1(p_workspace_id,p_owner_wallet,p_connector_id,
+    p_input ->> 'idempotencyKey',p_input ->> 'requestFingerprint');
+  if v_replay <> 'null'::jsonb then
+    if v_replay ->> 'invoiceId' <> p_input ->> 'draftId' or (v_replay ->> 'invoiceVersion')::integer <> (p_input ->> 'expectedVersion')::integer then
       raise exception using errcode = 'P0001', message = 'IDEMPOTENCY_CONFLICT';
     end if;
-    -- Replay precedes mutable validation, but still observes attempt/link facts atomically.
-    perform 1 from public.invoices as i where i.workspace_id = p_workspace_id
-      and i.id = (v_request.result_descriptor #>> '{ids,invoice_id}')::uuid for share;
-    select a.* into v_attempt from public.publication_attempts as a where a.workspace_id = p_workspace_id
-      and a.idempotency_request_id = v_request.id and a.id = (v_request.result_descriptor #>> '{ids,attempt_id}')::uuid;
-    if not found then raise exception using errcode = 'P0001', message = 'INVALID_PUBLICATION_DESCRIPTOR'; end if;
-    select v.* into v_version from public.invoice_versions as v where v.workspace_id = p_workspace_id and v.id = v_attempt.invoice_version_id;
-    if v_attempt.invoice_id <> (p_input ->> 'draftId')::uuid or v_version.version_number <> (p_input ->> 'expectedVersion')::integer then
-      raise exception using errcode = 'P0001', message = 'IDEMPOTENCY_CONFLICT';
-    end if;
-    perform public.payr_draft_scope_v1(p_workspace_id,p_owner_wallet,p_connector_id,'invoice:publish');
-    return public.payr_publication_attempt_dto_v1(v_attempt);
+    return v_replay;
   end if;
   if p_input ->> 'contractAddress' = '0x0000000000000000000000000000000000000000' then
     raise exception using errcode = 'P0001', message = 'PUBLICATION_CONFIGURATION_REQUIRED';
@@ -576,13 +601,15 @@ $$;
 revoke all on function public.payr_publication_protect_v1(), public.payr_publication_block_revision_v1(),
   public.payr_publication_link_dto_v1(public.access_links), public.payr_publication_artifact_dto_v1(public.publication_attempts),
   public.payr_publication_attempt_dto_v1(public.publication_attempts), public.payr_publication_profiles_v1(uuid,jsonb,uuid),
+  public.payr_find_publication_replay_v1(uuid,text,uuid,text,text),
   public.payr_publication_lock_v1(uuid,uuid,bigint), public.payr_reserve_publication_v1(uuid,text,uuid,jsonb),
   public.payr_claim_publication_v1(uuid,uuid), public.payr_store_publication_v1(uuid,uuid,bigint,jsonb),
   public.payr_finalize_publication_v1(uuid,uuid,bigint), public.payr_fail_publication_v1(uuid,uuid,bigint,text),
   public.payr_publication_status_v1(uuid,text,uuid,uuid), public.payr_void_invoice_v1(uuid,text,uuid,jsonb), public.payr_expire_invoices_v1(integer),
   public.payr_record_payment_authorization_v1(uuid,uuid,uuid,uuid,text,bigint,text,text,text,numeric,text,text,text,text,text,bigint,bigint)
   from public, anon, authenticated, service_role;
-grant execute on function public.payr_reserve_publication_v1(uuid,text,uuid,jsonb), public.payr_claim_publication_v1(uuid,uuid),
+grant execute on function public.payr_find_publication_replay_v1(uuid,text,uuid,text,text),
+  public.payr_reserve_publication_v1(uuid,text,uuid,jsonb), public.payr_claim_publication_v1(uuid,uuid),
   public.payr_store_publication_v1(uuid,uuid,bigint,jsonb), public.payr_finalize_publication_v1(uuid,uuid,bigint),
   public.payr_fail_publication_v1(uuid,uuid,bigint,text), public.payr_publication_status_v1(uuid,text,uuid,uuid),
   public.payr_void_invoice_v1(uuid,text,uuid,jsonb), public.payr_expire_invoices_v1(integer),

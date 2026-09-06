@@ -42,7 +42,7 @@ it("claims with platform worker identity rather than a fabricated owner", async 
   expect(calls).toEqual([{ name: "payr_claim_publication_v1", parameters: { p_attempt_id: null, p_lease_owner: "00000000-0000-4000-8000-000000000001" } }]);
 });
 
-it("pins all eight RPC names, actor fields, JSON arguments and text fences", async () => {
+it("pins all nine RPC names, actor fields, JSON arguments and text fences", async () => {
   const calls: { name: string; parameters: Record<string, unknown> }[] = [];
   const reserved = attempt(), stored = { ...reserved, state: "stored" as const, leaseOwner: worker, fence: fence.fence, artifact };
   const finalized = { ...stored, state: "finalized" as const, finalizedAt: "2026-09-06T00:00:00.000Z",
@@ -50,9 +50,10 @@ it("pins all eight RPC names, actor fields, JSON arguments and text fences", asy
   const failed = { ...stored, state: "failed" as const, failureCode: "PROFILE_CONFLICT" as const,
     link: { ...stored.link, revokedAt: "2026-09-06T00:00:00.000Z" } };
   const result = { invoiceId: id, invoiceVersion: 1, commercialState: "voided", voidedAt: "2026-09-06T00:00:00.000Z" };
-  const responses = [reserved, null, stored, finalized, failed, null, result, { expired: 3 }];
+  const responses = [null, reserved, null, stored, finalized, failed, null, result, { expired: 3 }];
   const db = createPublicationRepository({ rpc(name, parameters) { calls.push({ name, parameters }); return Promise.resolve({ data: responses.shift(), error: null }); } });
   const voidWrite = { invoiceId: id, expectedVersion: 1, approval: true as const, idempotencyKey: "void-key", requestFingerprint: "3".repeat(64) };
+  expect(await db.findReplay(actor, input.idempotencyKey, input.requestFingerprint)).toBeNull();
   expect(await db.reserve(actor, input)).toEqual(reserved);
   expect(await db.claim(null, worker)).toBeNull();
   expect(await db.store({ ...fence, artifact })).toEqual(stored);
@@ -64,6 +65,7 @@ it("pins all eight RPC names, actor fields, JSON arguments and text fences", asy
   const scope = { p_workspace_id: id, p_owner_wallet: wallet, p_connector_id: null };
   const args = { p_attempt_id: id, p_lease_owner: worker, p_fence: fence.fence };
   expect(calls).toEqual([
+    { name: "payr_find_publication_replay_v1", parameters: { ...scope, p_idempotency_key: input.idempotencyKey, p_request_fingerprint: input.requestFingerprint } },
     { name: "payr_reserve_publication_v1", parameters: { ...scope, p_input: input } },
     { name: "payr_claim_publication_v1", parameters: { p_attempt_id: null, p_lease_owner: worker } },
     { name: "payr_store_publication_v1", parameters: { ...args, p_artifact: artifact } },
@@ -73,6 +75,24 @@ it("pins all eight RPC names, actor fields, JSON arguments and text fences", asy
     { name: "payr_void_invoice_v1", parameters: { ...scope, p_input: voidWrite } },
     { name: "payr_expire_invoices_v1", parameters: { p_limit: 3 } },
   ]);
+});
+
+it("validates replay attempts, tenant bindings and sanitized conflicts without reservation metadata", async () => {
+  expect(await repository(attempt()).findReplay(actor, input.idempotencyKey, input.requestFingerprint)).toEqual(attempt());
+  for (const value of [[], [attempt()], { ...attempt(), workspaceId: worker }, { ...attempt(), invoiceUrl: "secret" }]) {
+    await expect(repository(value).findReplay(actor, input.idempotencyKey, input.requestFingerprint))
+      .rejects.toMatchObject({ code: "INVALID_DATABASE_RESPONSE" });
+  }
+  await expect(repository(null, { code: "P0001", message: "IDEMPOTENCY_CONFLICT", details: "private descriptor" })
+    .findReplay(actor, input.idempotencyKey, input.requestFingerprint)).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT", status: 409 });
+});
+
+it.each([[null, input.requestFingerprint], ["", input.requestFingerprint], ["x".repeat(129), input.requestFingerprint],
+  [input.idempotencyKey, null], [input.idempotencyKey, "A".repeat(64)]])("rejects invalid replay input %j / %j before RPC", async (key, fingerprint) => {
+  let called = false;
+  const db = createPublicationRepository({ rpc() { called = true; return Promise.resolve({ data: null, error: null }); } });
+  await expect(db.findReplay(actor, key as never, fingerprint as never)).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  expect(called).toBe(false);
 });
 
 it.each(["-1", "01", "1.5", "1e3", "9223372036854775808", "9".repeat(100), 1, 9007199254740992, null, undefined, true])(

@@ -12,11 +12,14 @@ const baseURL = `http://localhost:${port}`;
 // One ephemeral keypair per test run, inherited by workers and the local server only.
 process.env.PAYR_E2E_SESSION_KEY ??= randomBytes(32).toString("base64");
 process.env.PAYR_E2E_CONNECTOR_PEPPER ??= randomBytes(32).toString("base64");
+process.env.PAYR_E2E_LINK_KEY ??= randomBytes(32).toString("base64");
 const identityEnvironment = {
   NEXT_PUBLIC_APP_URL: baseURL,
   ARC_CHAIN_ID: "5042002",
   SESSION_ENCRYPTION_KEY: process.env.PAYR_E2E_SESSION_KEY,
   CONNECTOR_TOKEN_PEPPER: process.env.PAYR_E2E_CONNECTOR_PEPPER,
+  LINK_ACTIVE_KEY_VERSION: "1",
+  LINK_TOKEN_KEY_V1: process.env.PAYR_E2E_LINK_KEY,
 };
 Object.assign(process.env, identityEnvironment);
 

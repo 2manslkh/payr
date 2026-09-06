@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { addressSchema, IdentityError, type IdentityRepository, type IdentitySession } from "../identity/contracts";
+import { addressSchema, IdentityError, savedClientProvenanceSchema, type IdentityRepository, type IdentitySession } from "../identity/contracts";
 import type { RpcClient } from "./repositories";
 
 const uuid = z.string().uuid();
@@ -31,7 +31,7 @@ const clientProfile = z.object({
   id: uuid, revision, alias: z.string().min(1).max(100), businessName: z.string().min(1).max(200),
   billingAddress: storedAddress, contactName: z.string().min(1).max(200), contactEmail: z.email().max(254),
   provenance: z.record(z.string().regex(/^(alias|businessName|billingAddress|contactName|contactEmail)$/),
-    z.object({ kind: z.literal("user_provided"), confirmed: z.literal(true) }).strict()),
+    savedClientProvenanceSchema),
 }).strict();
 const connector = z.object({
   id: uuid, createdAt: timestamp, expiresAt: timestamp, revokedAt: timestamp.nullable(), lastUsedAt: timestamp.nullable(),

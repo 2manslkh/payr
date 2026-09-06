@@ -42,6 +42,18 @@ export const saveClientSchema = z.object({
 });
 export type SaveClientInput = z.infer<typeof saveClientSchema>;
 
+export const savedClientProvenanceSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("user_provided"), confirmed: z.literal(true) }).strict(),
+  z.object({
+    kind: z.literal("web_source"), confirmed: z.literal(true),
+    url: z.string().url().max(65536).refine((value) => {
+      try { const url = new URL(value); return ["https:", "http:"].includes(url.protocol) && !url.username && !url.password && !/[\s\\]/.test(value); }
+      catch { return false; }
+    }),
+  }).strict(),
+]);
+export type SavedClientProvenance = z.infer<typeof savedClientProvenanceSchema>;
+
 export const nonceRequestSchema = z.discriminatedUnion("purpose", [
   z.object({ purpose: z.literal("payr-login-v1"), wallet: walletSchema }).strict(),
   z.object({
@@ -96,7 +108,7 @@ export type SenderProfile = Readonly<{
 export type ClientProfile = Readonly<Omit<SaveClientInput, "id" | "expectedRevision"> & {
   id: string;
   revision: number;
-  provenance: Record<string, { kind: "user_provided"; confirmed: true }>;
+  provenance: Record<string, SavedClientProvenance>;
 }>;
 export type ConnectorMetadata = Readonly<{
   id: string;

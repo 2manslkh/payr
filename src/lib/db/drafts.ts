@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { COMMERCIAL_STATES, deriveDisplayStatus } from "../domain/invoice";
 import { isCountryCode } from "../domain/country";
+import { savedClientProvenanceSchema } from "../identity/contracts";
 import type { DraftRepository, DraftSnapshot, InvoiceActor } from "../invoices/contracts";
 import { DraftError } from "../invoices/errors";
 import type { RpcClient } from "./repositories";
@@ -102,7 +103,7 @@ const history = z.array(z.object({ id: uuid, version: revision, createdAt: times
 const storedAddress = address.extend({ countryCode: z.string().regex(/^[A-Z]{2}$/) });
 const context = z.object({ sender: sender.extend({ billingAddress: storedAddress.nullable() }).nullable(), client: billing.extend({ billingAddress: storedAddress, id: uuid, revision, alias: text(100),
   provenance: z.record(z.string().regex(/^(alias|businessName|billingAddress|contactName|contactEmail)$/),
-    z.object({ kind: z.literal("user_provided"), confirmed: z.literal(true) }).strict()),
+    savedClientProvenanceSchema),
 }).nullable(), previous: version.nullable(), commercialState: commercial.nullable() }).strict();
 const write = z.object({ draftId: uuid.nullable(), expectedVersion: revision.nullable(), idempotencyKey: text(128),
   requestFingerprint: z.string().regex(/^[0-9a-f]{64}$/), snapshot }).strict()

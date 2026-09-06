@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createIdentityEnv, createServerEnv, parsePublicEnv } from "./env";
+import { createIdentityEnv, createPublicationEnv, createPublicationLinkEnv, createServerEnv, parsePublicEnv } from "./env";
 
 describe("parsePublicEnv", () => {
   it("rejects a non-HTTPS production app URL", () => {
@@ -95,5 +95,24 @@ describe("identity runtime configuration", () => {
     }
     expect(() => createIdentityEnv({ ...valid, NEXT_PUBLIC_APP_URL: "https://user:pass@payrlink.xyz" })).toThrow();
     expect(createIdentityEnv({ ...valid, NEXT_PUBLIC_APP_URL: "http://127.0.0.1:3123" }).appOrigin).toBe("http://127.0.0.1:3123");
+  });
+});
+
+describe("publication runtime configuration", () => {
+  const valid = {
+    NEXT_PUBLIC_APP_URL: "https://payrlink.xyz", LINK_ACTIVE_KEY_VERSION: "2",
+    LINK_TOKEN_KEY_V1: btoa(String.fromCharCode(...new Uint8Array(32).fill(7))),
+    LINK_TOKEN_KEY_V2: btoa(String.fromCharCode(...new Uint8Array(32).fill(8))),
+  };
+  it("retains old versions and allows read configuration without deployment binding", () => {
+    const parsed = createPublicationLinkEnv(valid);
+    expect(parsed.activeKeyVersion).toBe(2);
+    expect([...parsed.keys.keys()]).toEqual([1, 2]);
+    expect(() => createPublicationEnv(valid)).toThrow();
+  });
+  it("rejects missing active material and zero deployment addresses", () => {
+    expect(() => createPublicationLinkEnv({ ...valid, LINK_TOKEN_KEY_V2: undefined })).toThrow();
+    expect(() => createPublicationEnv({ ...valid, ARC_CHAIN_ID: "5042002", NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS: `0x${"0".repeat(40)}` })).toThrow();
+    expect(createPublicationEnv({ ...valid, ARC_CHAIN_ID: "5042002", NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS: `0x${"1".repeat(40)}` }).chainId).toBe(5042002);
   });
 });

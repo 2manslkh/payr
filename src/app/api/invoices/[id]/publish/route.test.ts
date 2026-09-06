@@ -101,6 +101,20 @@ it("validates the URL UUID before provider/repository access", async () => {
   unopened();
 });
 
+it.each([
+  '{"expectedVersion":1,"approval":false,"approval":true,"idempotencyKey":"publish"}',
+  '{"expectedVersion":2,"expectedVersion":1,"approval":true,"idempotencyKey":"publish"}',
+  '{"expectedVersion":1,"approval":false,"\\u0061pproval":true,"idempotencyKey":"publish"}',
+  '{"expectedVersion":1,"approval":true,"idempotencyKey":"first","idempotencyKey":"publish"}',
+])("rejects ambiguous approval bodies before any replay lookup (%#)", async (body) => {
+  const response = await post(new Request(`https://payrlink.xyz/api/invoices/${invoiceId}/publish`, {
+    method: "POST", headers: { "content-type": "application/json" }, body,
+  }));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ code: "INVALID_INPUT" });
+  unopened();
+});
+
 it.each(["DOCUMENTS_NOT_CONFIGURED", "CONFIGURATION_ERROR"])("fails closed for %s before reservation/claim", async (code) => {
   const gate = code === "DOCUMENTS_NOT_CONFIGURED" ? getPublicationDocumentPort : getPublicationConfig;
   vi.mocked(gate).mockImplementation(() => { throw new PublicationError(code, 503); });
@@ -164,7 +178,7 @@ it("accepts exactly 16 KiB and rejects the next streamed byte regardless of decl
     method: "POST", headers: { "content-type": "application/json", "content-length": "1" }, body: body + " ",
   }));
   expect(response.status).toBe(413);
-  expect(await response.json()).toEqual({ error: { code: "PAYLOAD_TOO_LARGE" } });
+  expect(await response.json()).toEqual({ code: "PAYLOAD_TOO_LARGE" });
   unopened();
 });
 

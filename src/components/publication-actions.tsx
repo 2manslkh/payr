@@ -38,11 +38,20 @@ function actionError(error: unknown, action: Action): string {
 
 export function PublicationActions(props: Props) {
   const voidRequestRef = useRef<VoidRequest | null>(null);
+  const [completedVersion, setCompletedVersion] = useState<string | null>(null);
+  const completion = useRef<HTMLParagraphElement>(null);
+  const identity = `${props.invoiceId}:${props.version}`;
+  useEffect(() => {
+    if (completedVersion === identity) completion.current?.focus();
+  }, [completedVersion, identity]);
   // Reset private UI state when authoritative permissions/version change.
-  return <PublicationControls key={`${props.invoiceId}:${props.version}:${props.state}:${props.failureCode}:${props.canShare}:${props.canVoid}`} {...props} voidRequestRef={voidRequestRef} />;
+  return <>
+    {completedVersion === identity && <p ref={completion} tabIndex={-1} role="status">Void recorded. Commercial state is voided; payment evidence remains separate.</p>}
+    <PublicationControls key={`${props.invoiceId}:${props.version}:${props.state}:${props.failureCode}:${props.canShare}:${props.canVoid}`} {...props} voidRequestRef={voidRequestRef} onVoidComplete={() => setCompletedVersion(identity)} />
+  </>;
 }
 
-function PublicationControls({ invoiceId, version, state, failureCode, canShare, canVoid, voidRequestRef }: Props & { voidRequestRef: RefObject<VoidRequest | null> }) {
+function PublicationControls({ invoiceId, version, state, failureCode, canShare, canVoid, voidRequestRef, onVoidComplete }: Props & { voidRequestRef: RefObject<VoidRequest | null>; onVoidComplete: () => void }) {
   const router = useRouter();
   const [refreshing, startTransition] = useTransition();
   const [links, setLinks] = useState<Pick<SharedInvoiceLinks, "invoiceUrl" | "invoicePdfUrl"> | null>(null);
@@ -78,7 +87,7 @@ function PublicationControls({ invoiceId, version, state, failureCode, canShare,
   function refresh() {
     setLinks(null);
     setError(null);
-    setNotice("Checking the authoritative record...");
+    setNotice("Record refreshed.");
     startTransition(() => router.refresh());
   }
 
@@ -119,6 +128,7 @@ function PublicationControls({ invoiceId, version, state, failureCode, canShare,
         }
         await consoleApi(`/api/invoices/${invoiceId}/void`, { expectedVersion: version, approval: true, idempotencyKey: voidRequestRef.current.key }, controller.signal);
         if (!controller.signal.aborted) {
+          onVoidComplete();
           setCompleted(true);
           setConfirming(false);
           refresh();
@@ -178,7 +188,7 @@ function PublicationControls({ invoiceId, version, state, failureCode, canShare,
         </div>
       </div>}
       {error && <p className="publication-error" role="alert">{error.message}</p>}
-      <p role="status" aria-live="polite">{busy === "copy" ? "Copying link..." : notice}</p>
+      <p role="status" aria-live="polite">{refreshing ? "Checking the authoritative record..." : busy === "copy" ? "Copying link..." : notice}</p>
       {state !== null && <div className="actions"><button type="button" className="button secondary" disabled={blocked} onClick={refresh}>{refreshing ? "Refreshing..." : "Refresh record"}</button></div>}
     </section>
   );

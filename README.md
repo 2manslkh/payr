@@ -4,7 +4,7 @@ Payr helps independent developers turn confirmed work into an invoice, then reco
 
 ## Status
 
-This repository contains the R04 draft/revision lifecycle on the wallet-authenticated console and hardened database foundation. Local functionality includes strict partial draft input, structured missing fields, immutable version append, stable idempotent replay, pending client proposals, and server-rendered overview/ledger/detail views. Owner login, profiles, signed payout changes, connector lifecycle, and redacted activity remain available. Publication, protected links, wallet payments, PDFs, MCP, and email delivery remain later tranches. The public [payrlink.xyz](https://payrlink.xyz) deployment remains the earlier health shell; hosted activation still requires the intended Supabase project and runtime secrets.
+This repository contains the R05 crash-safe publication protocol on the draft/revision, identity, and database foundation. It implements permanent invoice numbering, leases/fences, artifact verification, atomic finalization, approved client changes, status/Gmail reconstruction, explicit sharing, and settlement-safe voiding. Deterministic documents are injected only in tests: new production publication fails closed until R06 installs the real PDF/QR/storage adapter. Protected document routes, wallet payments, MCP, and email delivery remain later tranches. No hosted rollout is claimed by this release.
 
 ## Local development
 
@@ -68,9 +68,19 @@ Browser tests generate ephemeral identity keys for their local server and worker
 
 `POST /api/invoices/drafts` accepts authenticated, CSRF-protected partial draft requests. An incomplete request returns structured `MISSING_FIELDS` without creating a draft or consuming its idempotency key. Supply `draftId` and `expectedVersion` together to append a revision. Same-key retries reconstruct the original immutable result even if profiles, aliases, or later versions changed.
 
-The canonical service uses authoritative sender data and confirmed saved/proposed client facts. Proposed client edits remain on the draft until publication; no profile row is silently changed. The read-only `/app/invoices` ledger and detail show exact USDC amounts, separate commercial/payment state, defaults, provenance, and pending changes. There is no browser authoring or publication form. Claude MCP is not connected yet; publication and document generation are R05/R06 work.
+The canonical service uses authoritative sender data and confirmed saved/proposed client facts. Proposed client edits remain on the draft until approved publication finalizes atomically. The `/app/invoices` ledger and detail show exact USDC amounts, separate commercial/payment state, defaults, provenance, and pending or applied changes. There is no browser authoring or publication form, and Claude MCP is not connected yet.
 
 Country entry requires assigned ISO alpha-2 codes. Previously accepted non-ISO values remain editable, but drafts identify them as fields needing confirmation rather than reporting a provider failure.
+
+### Publication and recovery
+
+Publication binds the configured `ARC_CHAIN_ID` and nonzero `NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS` once per attempt. New reservations also require `LINK_ACTIVE_KEY_VERSION` and matching `LINK_TOKEN_KEY_V<n>` material. Retain old key versions for existing links; replay and read paths use stored versions, never the current active key as a substitute.
+
+`POST /api/invoices/[id]/publish` accepts exact version, explicit approval, and idempotency key. It rejects duplicate JSON properties. A number is permanently consumed at successful reservation; workers recover the same attempt/object with an increased fence after lease expiry. No link is exposed before verified finalization, and a terminal failure requires a new approved idempotency key. The runtime intentionally returns `DOCUMENTS_NOT_CONFIGURED` before new reservation/claim while R06 is pending; there is no production fake-provider switch.
+
+Canonical status, link-only Gmail packages, and Share/Copy reconstruct existing finalized artifacts from retained keys. Gmail data is not send approval and no email provider is called. Finalized replay does not need current reservation binding or a document provider. Voiding and void replay do not need link/explorer configuration; they atomically revoke invoice access while preserving immutable records and any later valid settlement.
+
+Cron publication processing requires a timing-safe `CRON_SECRET` bearer. UI sharing is explicit, holds links only in component memory, and clears them on hide/navigation/void. Publication browser tests verify actual share responses in Node memory and redact credentials before browser artifacts, with trace/video/automatic screenshots disabled for that scenario.
 
 ## Versioning
 
@@ -89,8 +99,8 @@ Copy `.env.example` to `.env.local` and provide only the values needed for the f
 - GitHub CLI authentication is active for the repository owner, and `origin` is `https://github.com/2manslkh/payr.git`.
 - Node `v22.22.0` and pnpm `10.19.0` are installed locally.
 - Foundry CLI (`forge`), Supabase CLI, and Docker are available locally.
-- Arc Testnet chain ID `5042002`, the official RPC/explorer, and native-USDC behavior were verified from official sources and live read-back. Runtime Arc variables and funded wallets are still intentionally absent.
+- Arc Testnet chain ID `5042002`, the official RPC/explorer, and native-USDC behavior were verified during R01. Current runtime endpoints and funded wallets must still be verified before live use. The preserved `.env.example` RPC default uses an unverified `.network` hostname; current official documentation lists `https://rpc.testnet.arc.io`.
 - The intended Vercel project runs Next.js on Node 22. `https://payrlink.xyz/api/health` and the stable public fallback `https://payr-sandy.vercel.app/api/health` return the deployed commit without environment details.
 - Local Supabase reset, privilege denial, and repository transactions are verified. A hosted Supabase project is not configured; funded Arc wallets, Resend delivery, Claude connector UI, receipt inboxes, and the authenticated ETHGlobal deadline still require operator work.
 
-Local R04 verification and release boundaries are in [`docs/ops/r04-drafts.md`](docs/ops/r04-drafts.md). Prior R03/R02 evidence remains under `docs/ops/`. Task 6 live deployment/payment remains gated on funded-wallet evidence, and later connector/email proof remains gated on Claude and Resend configuration. The historical external-prerequisite ledger is in [`docs/ops/preflight.md`](docs/ops/preflight.md).
+Local R05 verification and release boundaries are in [`docs/ops/r05-publication.md`](docs/ops/r05-publication.md). Prior tranche evidence remains under `docs/ops/`. Live deployment/payment, document delivery, Claude connection, and email proof remain explicit gates. The historical external-prerequisite ledger is in [`docs/ops/preflight.md`](docs/ops/preflight.md).

@@ -31,6 +31,24 @@ function confirmVoid() {
   fireEvent.click(screen.getByRole("button", { name: "Confirm void version 2" }));
 }
 
+it("finishes refresh feedback when the record permissions do not change", async () => {
+  render(<PublicationActions {...props} />);
+  fireEvent.click(screen.getByRole("button", { name: "Refresh record" }));
+  await screen.findByText("Record refreshed.");
+  expect(screen.queryByText("Checking the authoritative record...")).toBeNull();
+});
+
+it("keeps void completion and focus outside the permission-keyed controls", async () => {
+  fetcher.mockResolvedValue(Response.json({ invoiceId, invoiceVersion: 2, commercialState: "voided", voidedAt: "2026-09-06T12:00:00Z" }));
+  const view = render(<PublicationActions {...props} />);
+  confirmVoid();
+  const message = await screen.findByText("Void recorded. Commercial state is voided; payment evidence remains separate.");
+  await waitFor(() => expect(document.activeElement).toBe(message));
+  view.rerender(<PublicationActions {...props} canShare={false} canVoid={false} />);
+  expect(document.activeElement).toBe(message);
+  expect(screen.queryByRole("button", { name: "Void invoice" })).toBeNull();
+});
+
 it("renders safe initial HTML with no automatic request, credentials, links or publication form", () => {
   const html = renderToStaticMarkup(<PublicationActions {...props} />);
   expect(html).not.toContain("SECRET_LINK");

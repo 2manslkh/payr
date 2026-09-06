@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { readAuthJson } from "../../../../../lib/auth/http";
+import { readPublicationApproval } from "../../../../../lib/invoices/approval-input";
 import { privateJson, requireRequestSession } from "../../../../../lib/auth/runtime";
-import { createPublicationService, publishInvoiceSchema } from "../../../../../lib/invoices/publication";
+import { createPublicationService } from "../../../../../lib/invoices/publication";
 import { publicationErrorResponse } from "../../../../../lib/invoices/publication-http";
 import { getPublicationConfig, getPublicationDocumentPort, getPublicationLinkConfig, getPublicationRepository } from "../../../../../lib/invoices/publication-runtime";
 
@@ -11,7 +11,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const identity = await requireRequestSession(request, true);
     const draftId = z.string().uuid().parse((await params).id);
-    const body = publishInvoiceSchema.omit({ draftId: true }).parse(await readAuthJson(request));
+    const body = await readPublicationApproval(request);
     const service = createPublicationService(getPublicationRepository(), {
       getReservationConfig: getPublicationConfig, getLinkConfig: getPublicationLinkConfig, getDocuments: getPublicationDocumentPort,
     });

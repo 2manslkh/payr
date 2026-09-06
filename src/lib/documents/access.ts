@@ -1,8 +1,11 @@
 import { createHmac } from "node:crypto";
 import { isIP } from "node:net";
+import { z } from "zod";
 import { createKeyedTokenCodec } from "../security/keyed-token";
 import type { LinkMaterial } from "../invoices/publication-contracts";
 import { DocumentUnavailableError, type DocumentAccessConfig, type DocumentRepository, type InvoiceAccessTarget } from "./contracts";
+
+const tokenIdSchema = z.string().uuid();
 
 export function createInvoiceAccessService(repository: DocumentRepository, config: DocumentAccessConfig) {
   return {
@@ -16,7 +19,7 @@ export function createInvoiceAccessService(repository: DocumentRepository, confi
         }
         const codec = createKeyedTokenCodec(config.keys);
         const tokenId = codec.parseTokenId(slug);
-        if (!tokenId) return null;
+        if (!tokenId || !tokenIdSchema.safeParse(tokenId).success) return null;
         const candidate = await repository.findCandidate(tokenId);
         if (!candidate || candidate.tokenId !== tokenId || candidate.purpose !== "invoice-bearer"
           || !config.keys.has(candidate.keyVersion)

@@ -83,6 +83,10 @@ it("extracts text and decodes the QR from actual PDF page pixels without consumi
   expect(result.pageCount).toBe(1);
   expect(result.qrDestinations).toEqual([testInvoiceUrl]);
   expect(result.text).toContain(`Fixture page 1. ${testInvoiceUrl}`);
+  expect(result.textItems).toEqual(expect.arrayContaining([
+    expect.objectContaining({ page: 1, text: `Fixture page 1. ${testInvoiceUrl}` }),
+  ]));
+  expect(result.textItems.every((item) => [item.x, item.y, item.width, item.height].every(Number.isFinite))).toBe(true);
   expect(bytes).toEqual(original);
 }, 20000);
 

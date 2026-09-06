@@ -10,6 +10,7 @@ R06 base: `v0.4.0` / `6761096fba1ed2900d5fedfc91416d1b270dafdd`. Task 5 implemen
 - Existing brand references and `Commit Ledger` remain unchanged. Use approved system fallbacks; built-in PDF fonts require explicit supported-glyph checks, never silent lost/substituted invoice text. Record any supported-character limitation.
 - Renderer metadata uses issue-date/frozen facts, never retry time. Canonical JSON remains F3-P's exact versioned object. No salt or bearer in canonical JSON, DB descriptors, diagnostics, or test artifacts.
 - Amount verification must retain field boundaries: fixed `Line amount:` and `Atomic units:` labels separate free-form descriptions from decimal/atomic values. Ordered text equality must not permit a description suffix to become a digit in a different amount.
+- Labels alone are insufficient when free-form descriptions imitate complete rows. The renderer prints a 7pt line index in a 12pt column at x=42, then its existing 305pt description and 190pt right-aligned amount column with 2pt minimum gaps. The inspector returns bounded `textItems` from actual PDF text transforms (`page`, `text`, `x`, top-down baseline `y`, `width`, `height`), not supplied metadata. Storage verifies sequential line anchors, per-row decimal/atomic cells and the total region independently, in addition to full material text parity. Amount-cell left edge is approximately x=363.28 on A4 with 42pt margins; free-form descriptions must never supply amount-cell evidence.
 
 ## Shared Type And Function Seams
 

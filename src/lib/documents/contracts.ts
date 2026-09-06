@@ -33,7 +33,8 @@ export type DocumentRepository = {
   storageState(storageKey: string): Promise<PublicationState | null>;
   admit(scope: "ip" | "token", keyHash: string): Promise<{ allowed: boolean }>;
 };
-export type PdfInspection = { pageCount: number; qrDestinations: string[]; text: string };
+export type PdfTextItem = { page: number; text: string; x: number; y: number; width: number; height: number };
+export type PdfInspection = { pageCount: number; qrDestinations: string[]; text: string; textItems: PdfTextItem[] };
 export type DocumentAccessConfig = PublicationLinkConfig & { pepper: Uint8Array };
 
 export class DocumentVerificationError extends Error {

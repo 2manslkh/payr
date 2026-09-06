@@ -30,7 +30,7 @@ The verifier supports the restricted current producer profile, not arbitrary PDF
 
 The worker/resource checks are not an OS-enforced RSS sandbox. Missing native producer packages, bindings, fonts, or other infrastructure failures are unavailable/retryable; invalid document proof is terminal. Reserved invoice numbers remain consumed, including after terminal failure.
 
-Clean Linux runner attempts `34038270355` and `34038912522` passed database/browser checks but exceeded the original 30-second inspection budget on valid 100-item PDFs. Isolating native PDF tests from UI workers did not eliminate the timeout. The inspection budget is now 45 seconds; all byte/decoded-resource limits and the 60-second live fence are unchanged. Tests that perform two independent inspections have a separate longer harness deadline. Clean-runner confirmation remains required before version preparation.
+Clean Linux runner attempts `34038270355` and `34038912522` passed database/browser checks but exceeded the original 30-second inspection budget on valid 100-item PDFs. Isolating native PDF tests from UI workers did not eliminate the timeout. The inspection budget is now 45 seconds; all byte/decoded-resource limits and the 60-second live fence are unchanged. Tests that perform two independent inspections have a separate longer harness deadline. Run `34039716909` then passed all three implementation checks, including the isolated package gate. Its 18-page, 50,105-byte fixture took 1,090 ms to render and 30,851 ms to inspect (31,942 ms combined, excluding storage/database I/O).
 
 Runtime requires Node `>=22.13 <23`, pnpm `10.19.0`, and frozen dependencies: `@react-pdf/renderer 4.9.0`, `qrcode 1.5.4`, `pdfjs-dist 6.3.289`, `@napi-rs/canvas 1.0.8`, `jsqr 1.4.0` (`@types/qrcode 1.5.6`). New publication requires real configured chain/contract binding, retained/active link keys, and Supabase. No browser authoring or production fake-provider switch exists. Keep the configured app origin fixed while active attempts or published artifacts reference it; changing QR destinations must fail verification, not mutate stored PDFs.
 
@@ -66,6 +66,7 @@ Final local results after structural integration and the decoder timing correcti
 | Release tooling | 10 tests passed |
 | Local reset / SQL lint | Passed, including migration `0005` |
 | Secret scan | Clean at the recorded gate |
+| Clean Linux runner | PR #7 run `34039716909`: `web`, `browser`, and `database` passed; version metadata awaited final preparation |
 
 Twenty-two post-build cases overlap the unit suite; do not add all 35 to the unit count. The 13 isolated cases must run after build, not remain skipped. Both required CI `web` and local `pnpm verify` run `pnpm test:documents:package` after `pnpm build`; passing pre-build units alone is insufficient. These results are local evidence, not a hosted deployment or final R06 CI claim.
 

@@ -88,14 +88,27 @@ export function createInvoiceDocumentPort(storage: PrivateDocumentStorage, repos
       if (!inspection || !Number.isInteger(inspection.pageCount) || inspection.pageCount < 1
         || typeof inspection.text !== "string" || !Array.isArray(inspection.qrDestinations) || inspection.qrDestinations.length !== 1
         || inspection.qrDestinations[0] !== input.invoiceUrl) throw new DocumentVerificationError();
-      // PDF line wrapping may split a field; it may not change or omit its material contents.
+      // Remove only numbered footer lines, then compare the complete ordered material text.
+      // Whitespace can split digits during layout; amounts, atomic units and repeated rows cannot move or disappear.
+      let footerCount = 0;
+      const materialText = inspection.text.replace(
+        /(?:^|\n)Commercial invoice \/ payment request[ \t]+\|[ \t]+Page ([1-9][0-9]*) of ([1-9][0-9]*)(?=[ \t]*(?:\n|$))/g,
+        (_footer, page, total) => {
+          if (Number(page) !== ++footerCount || Number(total) !== inspection.pageCount) throw new DocumentVerificationError();
+          return "\n";
+        },
+      );
       const compact = (value: string) => value.replace(/\s+/g, "");
-      const text = compact(inspection.text);
-      const fields = [view.invoiceNumber, String(view.invoiceVersion), view.issueDate, view.dueDate, view.payableUntil,
-        ...[view.sender, view.client].flatMap((party) => [party.businessName, party.contactName, party.contactEmail, ...party.addressLines]),
-        ...view.items.flatMap((item) => [item.description, item.amountDecimal]), view.amountDecimal, view.memo,
-        view.payoutWallet, view.asset, view.network, view.invoiceUrl];
-      if (fields.some((value) => !text.includes(compact(value)))) throw new DocumentVerificationError();
+      const fields = ["Payr", "Invoice", view.invoiceNumber, `Version ${view.invoiceVersion}`,
+        ...[view.sender, view.client].flatMap((party, index) => [index === 0 ? "From" : "Bill to", party.businessName,
+          ...party.addressLines, party.contactName, party.contactEmail]),
+        "Issue date", view.issueDate, "Due date", view.dueDate, "Technical payable deadline (UTC)", view.payableUntil,
+        "Description", `Amount (${view.asset})`,
+        ...view.items.flatMap((item) => [item.description, `${item.amountDecimal} ${view.asset}`, `${item.amountAtomic} atomic units`]),
+        "Total due", `${view.amountDecimal} ${view.asset}`, `${view.amountAtomic} atomic units`,
+        ...(view.memo ? ["Memo", view.memo] : []), "Payment destination", view.payoutWallet, `${view.asset} on ${view.network}`,
+        "Open the protected invoice page to review and pay.", view.invoiceUrl];
+      if (footerCount !== inspection.pageCount || compact(materialText) !== compact(fields.join("\n"))) throw new DocumentVerificationError();
       const { computeDocumentCommitment } = await import("../domain/commitment");
       return { bytes: stored.bytes, contentType: "application/pdf", byteLength: stored.byteLength,
         ...computeDocumentCommitment(input.canonicalInvoiceJson, stored.bytes, input.publicationSalt),

@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
 import { expect, it } from "vitest";
 import { canonicalJson } from "../domain/canonical-json";
 import { testPublicationSnapshot } from "../invoices/publication.test-support";
@@ -62,8 +61,7 @@ it("denies anonymous and authenticated listing, object downloads, public GET and
   } finally { if (data.user) await service.auth.admin.deleteUser(data.user.id); }
 });
 
-// This gate automatically becomes live when T01 is integrated; no fake producer files are created in this lane.
-it.skipIf(!["invoice-view.ts", "invoice-pdf.tsx", "pdf-verification.ts"].every((file) => existsSync(new URL(file, import.meta.url))))(
+it(
   "verifies a real rendered, downloaded PDF and raster-decoded QR, and rejects malformed collisions", async () => {
     const { buildPublishedInvoiceView } = await import("./invoice-view");
     const { renderInvoicePdf } = await import("./invoice-pdf");

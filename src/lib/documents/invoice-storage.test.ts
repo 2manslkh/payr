@@ -30,8 +30,8 @@ From Test & Studio 1 Test Road London N1 1AA United Kingdom Owner owner@example.
 Bill to Test Client 1 Test Road London N1 1AA United Kingdom Client client@example.test
 Issue date 2030-01-01 Due date 2030-01-31 Technical payable deadline (UTC) 2030-03-02T00:00:00.000Z
 Description Amount (USDC)
-Confirmed work 1.23 USDC 1230000000000000000 atomic units
-Total due 1.23 USDC 1230000000000000000 atomic units
+Confirmed work Line amount: 1.23 USDC Atomic units: 1230000000000000000 atomic units
+Total due 1.23 USDC Atomic units: 1230000000000000000 atomic units
 Payment destination 0x2222222222222222222222222222222222222222 USDC on Arc
 Open the protected invoice page to review and pay. https://example.test/invoice/test-only-destination
 Commercial invoice / payment request | Page 1 of 1`;

@@ -32,11 +32,37 @@ it("accepts the actual stored PDF bytes without requiring a newly rendered byte 
   expect(create).not.toHaveBeenCalled();
 }, 30000);
 
+it.each([
+  { name: "Work1 / 1.23 versus Work / 11.23", description: "Work1", repeated: false },
+  { name: "a description containing amount labels", description: "Line amount: 1.23 USDC Atomic units: 1230000000000000000 Work1", repeated: false },
+  { name: "one of two identical rows", description: "Work1", repeated: true },
+])("rejects a real description-to-amount digit shift: $name", async ({ description, repeated }) => {
+  const document = testInvoiceDocument();
+  document.invoice.items[0].description = description;
+  if (repeated) {
+    document.invoice.items.push({ ...document.invoice.items[0] });
+    document.invoice.amountDecimal = "2.46";
+    document.invoice.amountAtomic = "2460000000000000000";
+  }
+  const wrong = buildPublishedInvoiceView(document, testInvoiceUrl);
+  wrong.items[0].description = description.slice(0, -1);
+  wrong.items[0].amountDecimal = "11.23";
+  const bytes = await renderInvoicePdf(wrong), inspection = await inspectInvoicePdf(bytes);
+  expect(inspection.qrDestinations).toEqual([testInvoiceUrl]);
+  expect(inspection.text).toMatch(/11\.23\s+USDC/);
+  const create = vi.fn();
+  const port = createInvoiceDocumentPort({ read: async () => ({ bytes, byteLength: bytes.length, contentType: "application/pdf" }), create },
+    { storageState: async () => "stored" });
+  const outcome = await port.createOrRead({ ...input, canonicalInvoiceJson: canonicalJson(document) }).then(() => null, (error) => error);
+  expect(outcome).toEqual(new DocumentVerificationError());
+  expect(create).not.toHaveBeenCalled();
+}, 30000);
+
 it.each<{ name: string; change(view: PublishedInvoiceView): void; printed: string }>([
   { name: "total 11.23 instead of 1.23", change: (view) => { view.amountDecimal = "11.23"; }, printed: "Totaldue11.23USDC" },
-  { name: "item 11.23 instead of 1.23", change: (view) => { view.items[0].amountDecimal = "11.23"; }, printed: "Confirmedwork11.23USDC" },
-  { name: "wrong total atomic count", change: (view) => { view.amountAtomic = "11230000000000000000"; }, printed: "Totaldue1.23USDC11230000000000000000atomicunits" },
-  { name: "wrong item atomic count", change: (view) => { view.items[0].amountAtomic = "11230000000000000000"; }, printed: "Confirmedwork1.23USDC11230000000000000000atomicunits" },
+  { name: "item 11.23 instead of 1.23", change: (view) => { view.items[0].amountDecimal = "11.23"; }, printed: "ConfirmedworkLineamount:11.23USDC" },
+  { name: "wrong total atomic count", change: (view) => { view.amountAtomic = "11230000000000000000"; }, printed: "Totaldue1.23USDCAtomicunits:11230000000000000000atomicunits" },
+  { name: "wrong item atomic count", change: (view) => { view.items[0].amountAtomic = "11230000000000000000"; }, printed: "ConfirmedworkLineamount:1.23USDCAtomicunits:11230000000000000000atomicunits" },
 ])("rejects a real PDF collision with $name despite the exact QR and other facts", async ({ change, printed }) => {
   const wrong = buildPublishedInvoiceView(document, testInvoiceUrl);
   change(wrong);
@@ -63,6 +89,34 @@ function multipleItems(): CanonicalInvoiceDocument {
   document.invoice.amountAtomic = "5910000000000000000";
   return document;
 }
+
+it("rejects an atomic count absorbing the next description's leading digit", async () => {
+  const document = multipleItems();
+  document.invoice.items[1].description = "1Review work";
+  const wrong = buildPublishedInvoiceView(document, testInvoiceUrl);
+  wrong.items[0].amountAtomic += "1";
+  wrong.items[1].description = "Review work";
+  const bytes = await renderInvoicePdf(wrong), inspection = await inspectInvoicePdf(bytes);
+  expect(inspection.qrDestinations).toEqual([testInvoiceUrl]);
+  expect(inspection.text.replace(/\s+/g, "")).toContain("Atomicunits:12300000000000000001atomicunits");
+  const create = vi.fn();
+  const port = createInvoiceDocumentPort({ read: async () => ({ bytes, byteLength: bytes.length, contentType: "application/pdf" }), create },
+    { storageState: async () => "stored" });
+  const outcome = await port.createOrRead({ ...input, canonicalInvoiceJson: canonicalJson(document) }).then(() => null, (error) => error);
+  expect(outcome).toEqual(new DocumentVerificationError());
+  expect(create).not.toHaveBeenCalled();
+}, 30000);
+
+it("accepts literal amount labels and digit-ended descriptions in repeated rows", async () => {
+  const document = multipleItems();
+  for (const item of document.invoice.items) item.description = "Line amount: 1.23 USDC Atomic units: 1230000000000000000 Work1";
+  const bytes = await renderInvoicePdf(buildPublishedInvoiceView(document, testInvoiceUrl));
+  const create = vi.fn();
+  const port = createInvoiceDocumentPort({ read: async () => ({ bytes, byteLength: bytes.length, contentType: "application/pdf" }), create },
+    { storageState: async () => "stored" });
+  expect((await port.createOrRead({ ...input, canonicalInvoiceJson: canonicalJson(document) })).bytes).toBe(bytes);
+  expect(create).not.toHaveBeenCalled();
+}, 30000);
 
 it.each<{ name: string; change(view: PublishedInvoiceView): void }>([
   { name: "swapped item decimal amounts", change(view) {
@@ -106,7 +160,7 @@ it("accepts exact decimal and atomic digits split across real PDF lines", async 
   const inspection = await inspectInvoicePdf(bytes);
   expect(inspection.qrDestinations).toEqual([testInvoiceUrl]);
   expect(inspection.text).toMatch(/123456789012345678901234567890\s+1234567890\.123456789012345678/);
-  expect(inspection.text).toMatch(/123456789012345678901234567890\s+1234567890123456789012345678 atomic units/);
+  expect(inspection.text).toMatch(/Atomic units:\s+123456789012345678901234567890\s+1234567890123456789012345678 atomic units/);
   const port = createInvoiceDocumentPort({ read: async () => ({ bytes, byteLength: bytes.length, contentType: "application/pdf" }), create: vi.fn() },
     { storageState: async () => "stored" });
   expect((await port.createOrRead({ ...input, canonicalInvoiceJson: canonicalJson(document) })).bytes).toBe(bytes);

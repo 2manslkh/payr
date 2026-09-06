@@ -109,15 +109,16 @@ export async function renderInvoicePdf(view: PublishedInvoiceView): Promise<Uint
             <View style={styles.item}>
               <InvoiceText style={styles.description}>{item.description}</InvoiceText>
               <View style={styles.amount}>
-                <InvoiceText>{item.amountDecimal} {view.asset}</InvoiceText>
-                <InvoiceText style={styles.atomic}>{item.amountAtomic} atomic units</InvoiceText>
+                {/* Fixed prefixes and unit suffixes isolate money from adjacent free-form descriptions. */}
+                <InvoiceText>Line amount: {item.amountDecimal} {view.asset}</InvoiceText>
+                <InvoiceText style={styles.atomic}>Atomic units: {item.amountAtomic} atomic units</InvoiceText>
               </View>
             </View>
           </View>)}
           <View style={styles.total} wrap={false}>
             <InvoiceText style={styles.label}>Total due</InvoiceText>
             <InvoiceText style={styles.totalAmount}>{view.amountDecimal} {view.asset}</InvoiceText>
-            <InvoiceText style={styles.atomic}>{view.amountAtomic} atomic units</InvoiceText>
+            <InvoiceText style={styles.atomic}>Atomic units: {view.amountAtomic} atomic units</InvoiceText>
           </View>
           {view.memo ? <View style={styles.section}><InvoiceText style={styles.label} minPresenceAhead={20}>Memo</InvoiceText>
             <InvoiceText>{view.memo}</InvoiceText></View> : null}

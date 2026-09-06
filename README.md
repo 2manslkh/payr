@@ -41,7 +41,7 @@ pnpm test:db:local
 pnpm exec supabase stop --no-backup
 ```
 
-Payr uses API port `57321`, Postgres `57322`, and shadow port `57320`. Reset is explicitly local and recreates the private PDF-only `documents` bucket. Only the active database steward may reset the shared stack during parallel work. Supabase's local services bind to all interfaces and use development credentials: do not expose these ports outside a trusted development network or use these credentials in production.
+Payr uses API port `57321`, Postgres `58322`, and shadow port `57320`. Reset is explicitly local and recreates the private PDF-only `documents` bucket. Only the active database steward may reset the shared stack during parallel work. Supabase's local services bind to all interfaces and use development credentials: do not expose these ports outside a trusted development network or use these credentials in production.
 
 `pnpm test:db:local` and `pnpm test:e2e` use `scripts/run-local-tests.mjs` to capture only the running local Payr project's URL, database URL, anon key, and service-role key for the subprocess. They do not print keys, evaluate shell output, or write environment files. `pnpm test:db` remains the low-level suite and fails closed without local `SUPABASE_URL`, `SUPABASE_DB_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. Existing ignored `.env.test.local` configuration is supported; the launcher overrides inherited Supabase values. CI provisions separate ephemeral local stacks for the `database` and `browser` jobs, never hosted credentials.
 

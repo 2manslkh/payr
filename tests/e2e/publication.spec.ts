@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { expect, test as base } from "@playwright/test";
-import { createPublicationLinkEnv } from "../../src/config/env";
+import { createPublicationEnv, createPublicationLinkEnv } from "../../src/config/env";
 import { createSessionCodec } from "../../src/lib/auth/session";
 import { createPublicationRepository } from "../../src/lib/db/publication";
 import { createDraftRepository } from "../../src/lib/db/drafts";
@@ -9,7 +9,7 @@ import { SESSION_COOKIE, type ClientProfile, type SenderProfile } from "../../sr
 import type { DraftVersion } from "../../src/lib/invoices/contracts";
 import { createPublicationService } from "../../src/lib/invoices/publication";
 import { createInvoiceDraftService } from "../../src/lib/invoices/service";
-import type { SharedInvoiceLinks } from "../../src/lib/invoices/publication-contracts";
+import type { PublishedInvoiceResult, SharedInvoiceLinks } from "../../src/lib/invoices/publication-contracts";
 import { createTestDocumentPort, testPublicationSnapshot } from "../../src/lib/invoices/publication.test-support";
 import { seedBrowserWorkspace } from "./workspace-fixture";
 
@@ -60,7 +60,7 @@ function publicationFixture() {
   return { identity, actor, repository, draft, publish };
 }
 
-const test = base.extend<{ workspace: ReturnType<typeof publicationFixture> }>({
+const test = base.extend<{ workspace: ReturnType<typeof publicationFixture> & { sessionToken: string } }>({
   workspace: async ({ context, baseURL }, provide) => {
     expect(new URL(baseURL!).hostname).toBe("localhost");
     expect(new URL(process.env.NEXT_PUBLIC_APP_URL!).origin).toBe(new URL(baseURL!).origin);
@@ -70,29 +70,40 @@ const test = base.extend<{ workspace: ReturnType<typeof publicationFixture> }>({
       sessionKey: new Uint8Array(Buffer.from(process.env.SESSION_ENCRYPTION_KEY!, "base64")),
     }).seal(workspace.identity);
     await context.addCookies([{ name: SESSION_COOKIE, value: token, url: baseURL!.replace("http:", "https:") + "/", secure: true, httpOnly: true, sameSite: "Lax" }]);
-    await provide(workspace);
+    await provide({ ...workspace, sessionToken: token });
   },
 });
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
-test("real publication route fails closed without the R06 document provider and leaves the draft untouched", async ({ page, workspace }) => {
+test("real publication route finalizes with the test-only contract binding and compiled document producers", async ({ page, workspace, baseURL }) => {
+  test.setTimeout(60_000);
+  createPublicationEnv();
   const draft = await workspace.draft();
   await page.goto(`/app/invoices/${draft.draftId}`);
   await expect(page.getByRole("heading", { name: "Pending client changes" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Share links|Void invoice|Publish invoice/ })).toHaveCount(0);
-  const response = await page.evaluate(async ({ id, version, key }) => {
-    const result = await fetch(`/api/invoices/${id}/publish`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expectedVersion: version, approval: true, idempotencyKey: key }),
-    });
-    return { status: result.status, body: await result.json() };
-  }, { id: draft.draftId, version: draft.version, key: randomUUID() });
-  expect(response.status).toBe(503);
-  expect(["DOCUMENTS_NOT_CONFIGURED", "CONFIGURATION_ERROR"]).toContain(response.body.code);
+  // Keep real publication credentials in Node memory, outside browser state and artifacts.
+  const app = new URL(baseURL!);
+  const response = await fetch(new URL(`/api/invoices/${draft.draftId}/publish`, app), {
+    method: "POST", redirect: "manual",
+    headers: { Cookie: `${SESSION_COOKIE}=${workspace.sessionToken}`, Origin: app.origin, Host: app.host, "Content-Type": "application/json" },
+    body: JSON.stringify({ expectedVersion: draft.version, approval: true, idempotencyKey: randomUUID() }),
+  }).catch(() => { throw new Error("Compiled publication HTTP request failed"); });
+  const body: unknown = await response.json().catch(() => { throw new Error("Compiled publication returned invalid JSON"); });
+  const artifactFailed = typeof body === "object" && body !== null && "code" in body && "failureCode" in body
+    && body.code === "PUBLICATION_FAILED" && body.failureCode === "ARTIFACT_VERIFICATION_FAILED";
+  expect(response.status, artifactFailed
+    ? "Compiled publication: PUBLICATION_FAILED / ARTIFACT_VERIFICATION_FAILED"
+    : "Compiled publication must finalize").toBe(200);
+  const published = body as PublishedInvoiceResult;
   const data = await workspace.repository.statusData(workspace.actor, draft.draftId);
-  expect(data?.commercialState).toBe("draft");
-  expect(data?.invoiceNumber).toBeNull();
-  expect(data?.attempt).toBeNull();
+  expect(data?.commercialState).toBe("published");
+  expect(data?.invoiceNumber).toMatch(/^INV-\d{4}-\d{6,}$/);
+  expect(data?.attempt?.state).toBe("finalized");
+  expect(data?.attempt?.artifact?.qrVerified).toBe(true);
+  expect(published.invoiceId === draft.draftId && published.invoiceVersion === draft.version
+    && published.invoiceNumber === data?.invoiceNumber && published.pdfContentHash === data?.attempt?.artifact?.pdfContentHash
+    && published.documentCommitment === data?.attempt?.artifact?.documentCommitment).toBe(true);
 });
 
 test("real finalized fixture keeps credentials out of SSR/RSC, shares stable links explicitly, and void revokes access", async ({ page, context, workspace, baseURL }, testInfo) => {
@@ -129,7 +140,7 @@ test("real finalized fixture keeps credentials out of SSR/RSC, shares stable lin
   await expect(page.getByText("Publication finalized", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Approved client changes" })).toBeVisible();
   await expect(page.getByText(/Applied at publication/)).toBeVisible();
-  await expect(page.getByText(/Protected payment pages and PDF downloads are not yet available/).first()).toBeVisible();
+  await expect(page.getByText(/Protected invoice pages and PDF downloads are available\. Payment is not yet available/).first()).toBeVisible();
   expect(shareRequests).toBe(0);
   await expect(page.locator(".publication-links")).toHaveCount(0);
   await page.getByRole("button", { name: "Refresh record" }).click();

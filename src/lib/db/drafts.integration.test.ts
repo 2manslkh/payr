@@ -20,7 +20,7 @@ const address = { line1: "1 Test Road", city: "London", postalCode: "N1 1AA", co
 function fixture(sql: string): string {
   const database = new URL(process.env.SUPABASE_DB_URL!);
   if (process.env.SUPABASE_URL !== "http://127.0.0.1:57321" || database.protocol !== "postgresql:"
-    || database.hostname !== "127.0.0.1" || database.port !== "57322"
+    || database.hostname !== "127.0.0.1" || database.port !== "58322"
     || database.username !== "postgres" || database.pathname !== "/postgres") throw new Error("Local Payr fixtures only");
   return execFileSync("docker", ["exec", "-i", "supabase_db_payr", "psql", "-U", "postgres", "-d", "postgres",
     "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1"], {

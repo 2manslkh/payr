@@ -7,6 +7,9 @@ import { getDashboardSession } from "../../../../../lib/auth/runtime";
 import { DraftError } from "../../../../../lib/invoices/errors";
 import { invoiceId, ownerActor } from "../../../../../lib/invoices/projections";
 import { getDraftRepository } from "../../../../../lib/invoices/runtime";
+import { publicationView } from "../../../../../lib/invoices/lifecycle";
+import { getPublicationRepository } from "../../../../../lib/invoices/publication-runtime";
+import type { PublicationView } from "../../../../../lib/invoices/publication-contracts";
 
 export const metadata = { title: "Invoice | Payr" };
 
@@ -27,13 +30,22 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
     return <><PageHeading title="Invoice">Your workspace record.</PageHeading><InvoiceReadError href={`/app/invoices/${id}`} /></>;
   }
   if (!detail) notFound();
+  let publication: PublicationView | null = null;
+  try {
+    const data = await getPublicationRepository().statusData(ownerActor(session), id);
+    if (data && data.invoiceId === id && data.invoiceVersion === detail.invoice.version) {
+      publication = publicationView(data);
+    }
+  } catch {
+    // A failed status read must never become a ready/shareable fallback.
+  }
   return (
     <div className="invoice-surface">
       <Link className="text-link invoice-back" href="/app/invoices">Back to invoices</Link>
       <PageHeading title={invoiceTitle(detail.invoice)} action={<OpenClaude />}>
         Current version {detail.invoice.version}. Read-only facts saved with this version, not live profile data.
       </PageHeading>
-      <InvoiceDocument detail={detail} />
+      <InvoiceDocument detail={detail} publication={publication} />
       <InvoiceWorkflow />
     </div>
   );

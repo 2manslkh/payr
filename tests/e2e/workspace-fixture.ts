@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 
 export function seedBrowserWorkspace(identity: { workspaceId: string; ownerWallet: string }): void {
   const database = new URL(process.env.SUPABASE_DB_URL ?? "http://invalid");
-  if (database.protocol !== "postgresql:" || database.hostname !== "127.0.0.1" || database.port !== "57322"
+  if (database.protocol !== "postgresql:" || database.hostname !== "127.0.0.1" || database.port !== "58322"
     || database.username !== "postgres" || database.pathname !== "/postgres"
     || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(identity.workspaceId)
     || !/^0x[0-9a-f]{40}$/.test(identity.ownerWallet)) {

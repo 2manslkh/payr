@@ -18,7 +18,7 @@ try {
   const database = new URL(status.DB_URL);
   if (api.origin !== "http://127.0.0.1:57321" || api.username || api.password
     || database.protocol !== "postgresql:" || database.hostname !== "127.0.0.1"
-    || database.port !== "57322" || database.username !== "postgres" || database.pathname !== "/postgres"
+    || database.port !== "58322" || database.username !== "postgres" || database.pathname !== "/postgres"
     || typeof status.ANON_KEY !== "string" || !status.ANON_KEY
     || typeof status.SERVICE_ROLE_KEY !== "string" || !status.SERVICE_ROLE_KEY) {
     throw new Error("Unexpected local project");
@@ -42,6 +42,6 @@ try {
   });
   process.exitCode = result.status ?? 1;
 } catch {
-  console.error("Local database/browser tests require the running Payr stack on 5732x ports. Run pnpm db:start first.");
+  console.error("Local database/browser tests require the running Payr stack (API 57321, Postgres 58322). Run pnpm db:start first.");
   process.exitCode = 1;
 }

@@ -27,8 +27,8 @@ function resetFixtures(): void {
   const database = new URL(process.env.SUPABASE_DB_URL!);
   if (api.protocol !== "http:" || api.hostname !== "127.0.0.1" || api.port !== "57321"
     || database.protocol !== "postgresql:" || database.hostname !== "127.0.0.1"
-    || database.port !== "57322" || database.username !== "postgres" || database.pathname !== "/postgres") {
-    throw new Error("Repository fixtures require the local Payr Supabase runtime on 5732x ports");
+    || database.port !== "58322" || database.username !== "postgres" || database.pathname !== "/postgres") {
+    throw new Error("Repository fixtures require the local Payr Supabase runtime (API 57321, Postgres 58322)");
   }
 
   // Only fixture setup uses postgres. Every mutation under test goes through the service-role adapter.

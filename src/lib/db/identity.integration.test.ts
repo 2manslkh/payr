@@ -26,8 +26,8 @@ function fixture(sql: string): string {
   const database = new URL(process.env.SUPABASE_DB_URL!);
   if (process.env.SUPABASE_URL !== "http://127.0.0.1:57321"
     || database.protocol !== "postgresql:" || database.hostname !== "127.0.0.1"
-    || database.port !== "57322" || database.username !== "postgres" || database.pathname !== "/postgres") {
-    throw new Error("Identity fixtures require local Payr on 5732x");
+    || database.port !== "58322" || database.username !== "postgres" || database.pathname !== "/postgres") {
+    throw new Error("Identity fixtures require local Payr (API 57321, Postgres 58322)");
   }
   return execFileSync("docker", ["exec", "-i", "supabase_db_payr", "psql", "-U", "postgres", "-d", "postgres",
     "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1"], {

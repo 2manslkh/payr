@@ -1263,3 +1263,50 @@ summary {
     gap: 0.5rem;
   }
 }
+
+.publication-actions,
+.publication-links,
+.publication-confirmation {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.publication-actions > .actions,
+.publication-links .actions,
+.publication-confirmation .actions {
+  margin-top: 1rem;
+}
+.publication-links,
+.publication-confirmation {
+  margin-top: 1.5rem;
+  padding-block: 1.25rem;
+  border-block: 1px solid var(--rule);
+}
+.publication-links dd {
+  margin: 0.4rem 0 1rem;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  user-select: all;
+}
+.publication-error {
+  color: var(--red);
+}
+.publication-approval {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-height: 44px;
+  margin-top: 1rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.publication-approval input {
+  flex: 0 0 24px;
+  width: 24px;
+  min-height: 44px;
+  margin: 0;
+  accent-color: var(--navy);
+}
+.publication-actions [role="status"]:empty {
+  margin: 0;
+}

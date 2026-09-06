@@ -1,19 +1,28 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { Children, isValidElement, type ComponentProps, type ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { getDashboardSession } from "../lib/auth/runtime";
 import type { DraftRepository, DraftSnapshot, InvoiceDetail, InvoiceOverview, InvoiceSummary } from "../lib/invoices/contracts";
 import { DraftError } from "../lib/invoices/errors";
 import { getDraftRepository } from "../lib/invoices/runtime";
+import { getPublicationRepository } from "../lib/invoices/publication-runtime";
+import { publicationView } from "../lib/invoices/lifecycle";
+import type { PublicationRepository, PublicationStatusData } from "../lib/invoices/publication-contracts";
 import OverviewPage from "../app/(dashboard)/app/page";
 import InvoicesPage from "../app/(dashboard)/app/invoices/page";
-import InvoicePage from "../app/(dashboard)/app/invoices/[id]/page";
+import InvoicePage, { metadata } from "../app/(dashboard)/app/invoices/[id]/page";
+import { InvoiceDocument } from "./invoice-document";
+import { PublicationActions } from "./publication-actions";
 
 vi.mock("../lib/auth/runtime", async (original) => ({
   ...await original<typeof import("../lib/auth/runtime")>(), getDashboardSession: vi.fn(),
 }));
 vi.mock("../lib/invoices/runtime", () => ({ getDraftRepository: vi.fn() }));
+vi.mock("../lib/invoices/publication-runtime", () => ({ getPublicationRepository: vi.fn() }));
+vi.mock("../lib/invoices/lifecycle", () => ({ publicationView: vi.fn() }));
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
   redirect: (path: string) => { throw new Error(`redirect:${path}`); },
   notFound: () => { throw new Error("not-found"); },
 }));
@@ -48,6 +57,7 @@ const overview: InvoiceOverview = {
   receivablesAtomic: "0", attention: [invoice], latestSettlement: null,
 };
 const repository = { listInvoices: vi.fn(), getInvoiceDetail: vi.fn(), getOverview: vi.fn() };
+const publicationRepository = { statusData: vi.fn() };
 const pages = [
   { name: "overview", render: () => OverviewPage() },
   { name: "ledger", render: () => InvoicesPage({ searchParams: Promise.resolve({}) }) },
@@ -60,6 +70,9 @@ beforeEach(() => {
   repository.getOverview.mockResolvedValue(structuredClone(overview));
   repository.listInvoices.mockResolvedValue({ items: [invoice], hasMore: false });
   repository.getInvoiceDetail.mockResolvedValue(structuredClone(detail));
+  vi.mocked(getPublicationRepository).mockReturnValue(publicationRepository as unknown as PublicationRepository);
+  publicationRepository.statusData.mockResolvedValue({ invoiceId: id, invoiceVersion: 2, commercialState: "draft", attempt: null });
+  vi.mocked(publicationView).mockReturnValue({ state: null, failureCode: null, canShare: false, canVoid: false });
 });
 afterEach(cleanup);
 
@@ -67,6 +80,7 @@ it.each(pages)("$name independently rejects a missing session before repository 
   vi.mocked(getDashboardSession).mockResolvedValue(null);
   await expect(page()).rejects.toThrow("redirect:/login");
   expect(getDraftRepository).not.toHaveBeenCalled();
+  expect(getPublicationRepository).not.toHaveBeenCalled();
 });
 
 it("renders actual setup and draft attention without counting draft value as receivables or inventing settlement", async () => {
@@ -134,6 +148,8 @@ it("renders immutable snapshot facts, defaults, provenance, pending changes and 
   expect(html).not.toContain("<script>");
   render(result);
   expect(repository.getInvoiceDetail).toHaveBeenCalledExactlyOnceWith(actor, id);
+  expect(publicationRepository.statusData).toHaveBeenCalledExactlyOnceWith(actor, id);
+  expect(publicationView).toHaveBeenCalledExactlyOnceWith(await publicationRepository.statusData.mock.results[0].value);
   expect(screen.getByText("Immutable sender")).toBeDefined();
   expect(screen.getByRole("heading", { name: "Applied defaults" })).toBeDefined();
   expect(screen.getByRole("heading", { name: "Client provenance" })).toBeDefined();
@@ -200,4 +216,59 @@ it.each(pages)("$name never renders provider failure text or a false empty state
   expect(screen.getByRole("alert").textContent).toContain("could not load");
   expect(document.body.textContent).not.toContain("PRIVATE_PROVIDER");
   expect(screen.queryByText("No invoices yet")).toBeNull();
+});
+
+it("keeps publication metadata out of initial HTML and labels retained published changes as historical", async () => {
+  repository.getInvoiceDetail.mockResolvedValue({ ...detail, invoice: { ...invoice, invoiceNumber: "INV-2026-000001", commercialState: "published" } });
+  const privateData = {
+    invoiceId: id, invoiceVersion: 2, commercialState: "published",
+    snapshot: { memo: "PRIVATE_PUBLICATION_SNAPSHOT" },
+    attempt: { id: "PRIVATE_ATTEMPT", publicationSalt: "PRIVATE_SALT", storageKey: "PRIVATE_STORAGE", link: { tokenId: "PRIVATE_TOKEN", verifierHash: "PRIVATE_VERIFIER" }, invoiceUrl: "https://payr.example/i/PRIVATE_LINK" },
+  } as unknown as PublicationStatusData;
+  publicationRepository.statusData.mockResolvedValue(privateData);
+  vi.mocked(publicationView).mockReturnValue({ state: "finalized", failureCode: null, canShare: true, canVoid: true });
+  const result = await InvoicePage({ params: Promise.resolve({ id }) });
+  const html = renderToStaticMarkup(result);
+  expect(publicationView).toHaveBeenCalledExactlyOnceWith(privateData);
+  function clientProps(node: ReactNode): unknown[] {
+    if (!isValidElement<{ children?: ReactNode }>(node)) return [];
+    if (node.type === PublicationActions) return [node.props];
+    if (node.type === InvoiceDocument) return clientProps(InvoiceDocument(node.props as ComponentProps<typeof InvoiceDocument>));
+    return Children.toArray(node.props.children).flatMap(clientProps);
+  }
+  expect(clientProps(result)).toEqual([{ invoiceId: id, version: 2, state: "finalized", failureCode: null, canShare: true, canVoid: true }]);
+  expect(metadata).toEqual({ title: "Invoice | Payr" });
+  expect(html).not.toContain("PRIVATE_");
+  expect(html).not.toMatch(/href="[^\"]*\/(i|pay|receipt)\//);
+  render(result);
+  expect(screen.getByRole("heading", { name: "Approved client changes" })).toBeDefined();
+  expect(screen.getByText(/Applied at publication/)).toBeDefined();
+  expect(screen.queryByText(/No client profile has been changed by this draft/)).toBeNull();
+  expect(screen.getByRole("button", { name: "Share links" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Void invoice" })).toBeDefined();
+  expect(snapshot.proposedClientChanges.kind).toBe("update");
+});
+
+it.each(["paid", "voided", "expired"])("never offers void for a %s record even if projection flags disagree", async (state) => {
+  repository.getInvoiceDetail.mockResolvedValue({ ...detail, invoice: { ...invoice, commercialState: state === "paid" ? "published" : state, paymentStatus: state === "paid" ? "paid" : "unpaid" } });
+  vi.mocked(publicationView).mockReturnValue({ state: "finalized", failureCode: null, canShare: false, canVoid: true });
+  render(await InvoicePage({ params: Promise.resolve({ id }) }));
+  expect(screen.queryByRole("button", { name: "Void invoice" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Share links" })).toBeNull();
+});
+
+it.each(["repository unavailable", "repository", "view", "missing", "version mismatch", "invoice mismatch"])("fails closed on a publication %s read failure without hiding immutable facts", async (failure) => {
+  if (failure === "repository unavailable") vi.mocked(getPublicationRepository).mockImplementation(() => { throw new Error("PRIVATE_PROVIDER"); });
+  if (failure === "repository") publicationRepository.statusData.mockRejectedValue(new Error("PRIVATE_PROVIDER"));
+  if (failure === "view") vi.mocked(publicationView).mockImplementation(() => { throw new Error("PRIVATE_PROVIDER"); });
+  if (failure === "missing") publicationRepository.statusData.mockResolvedValue(null);
+  if (failure === "version mismatch") publicationRepository.statusData.mockResolvedValue({ invoiceId: id, invoiceVersion: 3 });
+  if (failure === "invoice mismatch") publicationRepository.statusData.mockResolvedValue({ invoiceId: "foreign", invoiceVersion: 2 });
+  const result = await InvoicePage({ params: Promise.resolve({ id }) });
+  expect(renderToStaticMarkup(result)).not.toContain("PRIVATE_PROVIDER");
+  render(result);
+  expect(screen.getByRole("alert").textContent).toContain("Publication status could not load");
+  expect(screen.getByText("Immutable sender")).toBeDefined();
+  expect(screen.queryByRole("button")).toBeNull();
+  expect(screen.queryByText("Publication finalized")).toBeNull();
 });

@@ -15,6 +15,14 @@ it.runIf(!!process.env.PAYR_TEST_PDF_PACKAGE_DIR).each([1, 18])(
     expect(result).toMatchObject({ pageCount, qrDestinations: [testInvoiceUrl] });
   }, 40000);
 
+it.runIf(!!process.env.PAYR_TEST_PDF_PACKAGE_DIR).each([
+  "empty-qr-candidate", "binary-qr-candidate", "chunk-qr-candidate",
+] as const)("handles %s before accepting or erasing a raster candidate", async (fault) => {
+  const result = await probePackagedInvoicePdf(process.env.PAYR_TEST_PDF_PACKAGE_DIR!, fault);
+  expect(result).toMatchObject({ pageCount: 1,
+    qrDestinations: fault === "empty-qr-candidate" ? [testInvoiceUrl] : [""] });
+}, 40000);
+
 it.runIf(!!process.env.PAYR_TEST_PDF_PACKAGE_DIR).each(["missing-jsqr", "broken-worker", "missing-font", "missing-native"] as const)(
   "keeps packaged %s failures retryable instead of burning an invoice number", async (fault) => {
     expect(await probePackagedInvoicePdf(process.env.PAYR_TEST_PDF_PACKAGE_DIR!, fault))

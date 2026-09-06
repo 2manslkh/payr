@@ -368,6 +368,10 @@ try {
       for (const [x, y, w, h] of regions) {
         const image = target.context.getImageData(x, y, w, h);
         code = jsQR(image.data, w, h, { inversionAttempts: "attemptBoth" });
+        if (code && !code.data.length && !code.binaryData.length && !code.chunks.length) {
+          code = undefined;
+          continue;
+        }
         if (code) { offsetX = x; offsetY = y; break; }
       }
       if (!code) break;

@@ -2,12 +2,15 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { expect, test } from "@playwright/test";
 import { keccak256 } from "viem";
-import { createPublicationLinkEnv } from "../../src/config/env";
+import { createIdentityEnv, createPublicationLinkEnv } from "../../src/config/env";
+import { createSessionCodec } from "../../src/lib/auth/session";
 import { createDraftRepository } from "../../src/lib/db/drafts";
 import { createPublicationRepository } from "../../src/lib/db/publication";
-import type { ClientProfile, SenderProfile } from "../../src/lib/identity/contracts";
+import { createPrivateDocumentStorage } from "../../src/lib/documents/invoice-storage";
+import { inspectInvoicePdf } from "../../src/lib/documents/pdf-verification";
+import { SESSION_COOKIE, type ClientProfile, type SenderProfile } from "../../src/lib/identity/contracts";
 import { createInvoiceDraftService } from "../../src/lib/invoices/service";
-import { createPublicationService } from "../../src/lib/invoices/publication";
+import type { PublishedInvoiceResult } from "../../src/lib/invoices/publication-contracts";
 import { createInvoiceLifecycleService } from "../../src/lib/invoices/lifecycle";
 import { createKeyedTokenCodec } from "../../src/lib/security/keyed-token";
 import { testPublicationSnapshot } from "../../src/lib/invoices/publication.test-support";
@@ -16,7 +19,11 @@ import { seedBrowserWorkspace } from "./workspace-fixture";
 test.use({ trace: "off", video: "off", screenshot: "off" });
 test.setTimeout(120_000);
 
-async function storedInvoice() {
+async function storedInvoice(baseURL: string) {
+  const app = new URL(baseURL);
+  if (app.hostname !== "localhost" || app.origin !== process.env.NEXT_PUBLIC_APP_URL) {
+    throw new Error("Protected document fixtures require the compiled local app");
+  }
   const api = new URL(process.env.SUPABASE_URL ?? "http://invalid");
   if (api.origin !== "http://127.0.0.1:57321" || api.username || api.password || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error("Protected document fixtures require the isolated local Supabase API");
@@ -45,19 +52,37 @@ async function storedInvoice() {
     idempotencyKey: randomUUID(), useDefaultTerms: true, client: { id: savedClient.id },
     items: snapshot.items.map((item) => ({ description: item.description, amount: item.amountDecimal })),
   });
-  // Real production producers, only local storage. No deterministic document adapter.
-  const { createDocumentRepository } = await import("../../src/lib/db/documents");
-  const { createInvoiceDocumentPort, createPrivateDocumentStorage } = await import("../../src/lib/documents/invoice-storage");
+  // Exercise compiled Next producers; Playwright must never transform the PDF JSX.
+  // Native fetch keeps the owner cookie and returned bearer URLs out of request artifacts.
+  const token = await createSessionCodec(createIdentityEnv()).seal(identity);
+  const response = await fetch(new URL(`/api/invoices/${draft.draftId}/publish`, app), {
+    method: "POST", redirect: "manual",
+    headers: { Cookie: `${SESSION_COOKIE}=${token}`, Origin: app.origin, Host: app.host, "Content-Type": "application/json" },
+    body: JSON.stringify({ expectedVersion: draft.version, approval: true, idempotencyKey: randomUUID() }),
+  }).catch(() => { throw new Error("Compiled publication HTTP request failed"); });
+  const body: unknown = await response.json().catch(() => { throw new Error("Compiled publication returned invalid JSON"); });
+  const artifactFailed = typeof body === "object" && body !== null && "code" in body && "failureCode" in body
+    && body.code === "PUBLICATION_FAILED" && body.failureCode === "ARTIFACT_VERIFICATION_FAILED";
+  expect(response.status, artifactFailed
+    ? "Compiled publication: PUBLICATION_FAILED / ARTIFACT_VERIFICATION_FAILED"
+    : "Compiled publication must finalize").toBe(200);
+  const published = body as PublishedInvoiceResult;
   const repository = createPublicationRepository(client);
   const storage = createPrivateDocumentStorage(client);
-  const port = createInvoiceDocumentPort(storage, createDocumentRepository(client));
-  const published = await createPublicationService(repository, {
-    getLinkConfig: () => createPublicationLinkEnv(),
-    getReservationConfig: () => ({ ...createPublicationLinkEnv(), activeKeyVersion: 1, chainId: 5042002, contractAddress: `0x${"3".repeat(40)}` }),
-    getDocuments: () => port,
-  }).publish(actor, { draftId: draft.draftId, expectedVersion: draft.version, approval: true, idempotencyKey: randomUUID() });
   const target = await repository.statusData(actor, draft.draftId);
-  if (!target?.attempt?.artifact) throw new Error("Protected invoice fixture did not finalize");
+  if (target?.commercialState !== "published" || target.attempt?.state !== "finalized" || !target.attempt.artifact?.qrVerified) {
+    throw new Error("Protected invoice fixture did not finalize");
+  }
+  expect(published.invoiceId === target.invoiceId && published.invoiceVersion === target.invoiceVersion
+    && published.invoiceNumber === target.invoiceNumber && published.pdfContentHash === target.attempt.artifact.pdfContentHash
+    && published.documentCommitment === target.attempt.artifact.documentCommitment).toBe(true);
+  let localLinks = false;
+  try {
+    const invoice = new URL(published.invoiceUrl);
+    localLinks = invoice.origin === app.origin && !invoice.username && !invoice.password && !invoice.search && !invoice.hash
+      && /^\/invoice\/[^/]+$/.test(invoice.pathname) && published.invoicePdfUrl === `${published.invoiceUrl}/pdf`;
+  } catch { /* Assert only a boolean, never the bearer URLs. */ }
+  expect(localLinks).toBe(true);
   const stored = await storage.read(target.attempt.storageKey);
   if (!stored) throw new Error("Protected invoice fixture has no stored PDF");
   return { published, target, stored, actor, repository };
@@ -70,9 +95,15 @@ const privateHeaders = {
   "permissions-policy": "camera=(), microphone=(), geolocation=()",
 };
 
-test("stored PDF and admitted HTML have exact bytes, private headers, nonce CSP and no internal DTO leakage", async ({ page, baseURL }) => {
-  const { published, target, stored, actor, repository } = await storedInvoice();
+test("protected invoice: compiled publication serves verified PDF and HTML with private headers, nonce CSP and no internal DTO leakage", async ({ page, baseURL }) => {
+  const { published, target, stored, actor, repository } = await storedInvoice(baseURL!);
   const attempt = target.attempt!;
+  const snapshot = attempt.snapshot;
+  const materialFields = [attempt.invoiceNumber, String(attempt.invoiceVersion), snapshot.issueDate, snapshot.dueDate, snapshot.payableUntil,
+    ...[snapshot.sender, snapshot.client].flatMap((party) => [party.businessName!, party.contactName!, party.contactEmail!,
+      ...Object.values(party.billingAddress!).filter((value): value is string => typeof value === "string")]),
+    snapshot.amountDecimal, snapshot.memo, snapshot.sender.payoutWallet, "USDC", "Arc",
+    ...snapshot.items.flatMap((item) => [item.description, item.amountDecimal])];
   const slug = new URL(published.invoiceUrl).pathname.split("/").at(-1)!;
   const secrets = [attempt.publicationSalt, attempt.storageKey, attempt.id, attempt.workspaceId, attempt.invoiceId, attempt.invoiceVersionId, attempt.link.tokenId, attempt.link.verifierHash];
   let consoleLeaked = false;
@@ -88,6 +119,7 @@ test("stored PDF and admitted HTML have exact bytes, private headers, nonce CSP 
   for (const headers of [{}, { RSC: "1" }, { RSC: "1", "Next-Router-Prefetch": "1", Purpose: "prefetch" }] as Record<string, string>[]) {
     const response = await fetchProtected(published.invoiceUrl, headers);
     expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")?.includes(headers.RSC ? "text/x-component" : "text/html")).toBe(true);
     for (const [name, value] of Object.entries(privateHeaders)) expect(response.headers.get(name) === value).toBe(true);
     const html = await response.text();
     expect(secrets.some((secret) => html.includes(secret))).toBe(false);
@@ -108,6 +140,13 @@ test("stored PDF and admitted HTML have exact bytes, private headers, nonce CSP 
   expect(pdf.headers.get("x-payr-content-hash") === published.pdfContentHash).toBe(true);
   expect(pdf.headers.get("content-disposition") === `attachment; filename="${published.pdfFilename}"`).toBe(true);
   for (const [name, value] of Object.entries(privateHeaders)) expect(pdf.headers.get(name) === value).toBe(true);
+  // Independently inspect final served bytes, not the producer's qrVerified claim.
+  const inspection = await inspectInvoicePdf(bytes);
+  const servedPdfQrMatches = inspection.qrDestinations.length === 1 && inspection.qrDestinations[0] === published.invoiceUrl;
+  expect(servedPdfQrMatches).toBe(true);
+  const compact = (value: string) => value.replace(/\s+/g, "");
+  expect(materialFields.every((field) => compact(inspection.text).includes(compact(field)))).toBe(true);
+  expect(compact(inspection.text).includes(compact(published.invoiceUrl))).toBe(true);
 
   // Navigate from an inert URL inside the browser, never give Playwright a bearer URL argument.
   await page.goto(baseURL!);
@@ -131,13 +170,8 @@ test("stored PDF and admitted HTML have exact bytes, private headers, nonce CSP 
     const canvas = createCanvas(image.width, image.height);
     const ctx = canvas.getContext("2d"); ctx.drawImage(image, 0, 0);
     const decoded = jsQR(new Uint8ClampedArray(ctx.getImageData(0, 0, image.width, image.height).data), image.width, image.height);
-    const snapshot = attempt.snapshot;
-    const materialFields = [attempt.invoiceNumber, snapshot.sender.businessName!, snapshot.sender.contactName!, snapshot.sender.contactEmail!,
-      snapshot.client.businessName, snapshot.client.contactName, snapshot.client.contactEmail,
-      snapshot.amountDecimal, snapshot.sender.payoutWallet, "USDC on Arc", "Commercial state", "Payment status",
-      ...snapshot.items.flatMap((item) => [item.description, item.amountDecimal])];
     browserPassed = layout && checks.controls && checks.nonce && focus && decoded?.data === published.invoiceUrl
-      && materialFields.every((field) => checks.text.includes(field));
+      && [...materialFields, "USDC on Arc", "Commercial state", "Payment status"].every((field) => checks.text.includes(field));
   } catch { /* A boolean below is the only retained failure evidence. */ }
   finally { await page.close(); }
   // Close before assertions so automatic error-context snapshots cannot retain the document.
@@ -158,7 +192,7 @@ test("stored PDF and admitted HTML have exact bytes, private headers, nonce CSP 
   // No screenshots of this scenario, even on failure. Visual evidence uses a separate inert fixture.
 });
 
-test("invalid invoice HTML, PDF, RSC and prefetch have the same true private 404", async ({ baseURL }) => {
+test("protected invoice: invalid HTML, PDF, RSC and prefetch have the same true private 404", async ({ baseURL }) => {
   let firstBody: string | undefined;
   for (const suffix of ["", "/pdf"]) {
     for (const headers of [{}, { RSC: "1" }, { RSC: "1", "Next-Router-Prefetch": "1", Purpose: "prefetch" }] as Record<string, string>[]) {

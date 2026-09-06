@@ -578,6 +578,7 @@ describe("Payr database security contract", () => {
         select (jsonb_populate_record(null::public.publication_attempts, to_jsonb(attempt) || jsonb_build_object(
           'id', gen_random_uuid(), 'invoice_id', '${invoiceId}', 'invoice_version_id', '${versionId}',
           'invoice_key', '0x${"3".repeat(64)}', 'invoice_token_id', gen_random_uuid(),
+          'invoice_number', 'PAYR-2026-0002', 'sequence_value', 2, 'storage_key', 'fixture/second.pdf',
           'state', '${state}', 'finalized_at', ${state === "finalized" ? "now()" : "null"},
           'pdf_content_type', ${contentType}
         ))).* from public.publication_attempts as attempt where id = '${ATTEMPT_A}';
@@ -628,6 +629,7 @@ describe("Payr database security contract", () => {
        insert into public.publication_attempts
        select (jsonb_populate_record(null::public.publication_attempts, to_jsonb(attempt) || jsonb_build_object(
          'id', gen_random_uuid(), 'invoice_version_id', '${versionId}',
+         'invoice_number', 'PAYR-2026-0002', 'sequence_value', 2, 'storage_key', 'fixture/second.pdf',
          'invoice_key', '0x${"3".repeat(64)}', 'invoice_token_id', gen_random_uuid()
        ))).* from public.publication_attempts as attempt where id = '${ATTEMPT_A}';
        rollback;`,
@@ -643,6 +645,7 @@ describe("Payr database security contract", () => {
         select (jsonb_populate_record(null::public.publication_attempts, to_jsonb(attempt) || jsonb_build_object(
           'id', '${state === "stored" ? activeAttemptId : randomUUID()}',
           'invoice_key', '0x${(state === "stored" ? "3" : "4").repeat(64)}', 'invoice_token_id', gen_random_uuid(),
+          'invoice_number', 'PAYR-2026-${state}', 'sequence_value', ${state === "stored" ? 2 : 3}, 'storage_key', 'fixture/${state}.pdf',
           'state', '${state}', 'finalized_at', null,
           'terminal_failure_code', ${state === "failed" ? "'RENDER_FAILED'" : "null"}
         ))).* from public.publication_attempts as attempt where id = '${ATTEMPT_A}';

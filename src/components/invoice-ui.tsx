@@ -18,7 +18,7 @@ export function InvoiceWorkflow() {
   return (
     <section className="ruled-section invoice-workflow" aria-labelledby="invoice-workflow-heading">
       <h2 id="invoice-workflow-heading">Draft in Claude. Review here.</h2>
-      <p>Drafts and revisions appear here as read-only records. They are not published invoices and do not create a payment request. Publication is not available in this release.</p>
+      <p>Drafts and revisions appear here as read-only records. They are not published invoices and do not create a payment request. New publication is unavailable until the real document provider is connected. Protected payment pages and PDF downloads are not yet available in this release.</p>
       <p>Claude MCP is not available yet. Open Claude starts a conversation; it does not connect Claude to Payr. There is no browser invoice editor.</p>
     </section>
   );

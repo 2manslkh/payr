@@ -112,7 +112,16 @@ test("protected invoice: compiled publication serves verified PDF and HTML with 
 
   // Node fetch keeps bearer URLs out of Playwright's request-step/exception artifacts.
   async function fetchProtected(url: string, headers: Record<string, string> = {}) {
-    try { return await fetch(url, { headers, redirect: "manual" }); }
+    try {
+      const response = await fetch(url, { headers, redirect: "manual" });
+      if (response.status !== 307) return response;
+      // Next validates the RSC cache-key before serving that representation.
+      for (const [name, value] of Object.entries(privateHeaders)) expect(response.headers.get(name) === value).toBe(true);
+      const original = new URL(url), next = new URL(response.headers.get("location") ?? "", original);
+      expect(Boolean(headers.RSC) && next.origin === original.origin && next.pathname === original.pathname
+        && next.searchParams.has("_rsc") && !next.hash).toBe(true);
+      return await fetch(next, { headers, redirect: "manual" });
+    }
     catch { throw new Error("Protected HTTP request failed"); }
   }
   const nonces = new Set<string>();
@@ -127,7 +136,10 @@ test("protected invoice: compiled publication serves verified PDF and HTML with 
     expect(csp.includes("'unsafe-inline'") || csp.includes("'unsafe-eval'")).toBe(false);
     expect(/script-src 'self' 'nonce-[A-Za-z0-9+/=]+'/.test(csp)).toBe(true);
     nonces.add(/'nonce-([^']+)'/.exec(csp)![1]);
-    expect(html.includes(published.pdfContentHash) && html.includes(published.documentCommitment)).toBe(true);
+    // Dynamic prefetches may omit document content; ordinary HTML/RSC must contain it.
+    if (!headers["Next-Router-Prefetch"]) {
+      expect(html.includes(published.pdfContentHash) && html.includes(published.documentCommitment), headers.RSC ? "RSC proof" : "HTML proof").toBe(true);
+    }
   }
   expect(nonces.size).toBe(3);
   const pdf = await fetchProtected(published.invoicePdfUrl);

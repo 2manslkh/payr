@@ -28,6 +28,7 @@ jobs:
       - run: pnpm test:unit
       - run: pnpm test:release
       - run: pnpm build
+      - run: pnpm test:documents:package
 
   browser:
     runs-on: ubuntu-latest

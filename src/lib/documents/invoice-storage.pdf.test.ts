@@ -18,7 +18,10 @@ const input = {
 
 it("accepts the actual stored PDF bytes without requiring a newly rendered byte match", async () => {
   const rendered = await renderInvoicePdf(buildPublishedInvoiceView(document, testInvoiceUrl));
-  const bytes = new Uint8Array([...rendered, ...new TextEncoder().encode("\n% stored artifact, not a new render\n")]);
+  // A different document ID changes bytes, not invoice facts or the valid envelope.
+  const source = Buffer.from(rendered).toString("latin1");
+  const bytes = new Uint8Array(Buffer.from(source.replace(/(\/ID\s*\[<)([0-9a-f])/i,
+    (_match, prefix: string, digit: string) => prefix + (digit === "0" ? "1" : "0")), "latin1"));
   const create = vi.fn();
   const port = createInvoiceDocumentPort({ read: async () => ({ bytes, byteLength: bytes.length, contentType: "application/pdf" }), create },
     { storageState: async () => "stored" });

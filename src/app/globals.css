@@ -199,14 +199,17 @@ code,
 .wordmark {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0;
   font-size: 1.65rem;
   font-weight: 600;
   letter-spacing: -0.035em;
 }
-.wordmark svg {
+.wordmark img {
   height: 36px;
   width: 36px;
+}
+.rail-brand .wordmark img {
+  filter: brightness(0) invert(1);
 }
 .public-header {
   max-width: 1200px;
@@ -820,7 +823,7 @@ summary {
   .wordmark {
     font-size: 1.45rem;
   }
-  .wordmark svg {
+  .wordmark img {
     height: 30px;
     width: 30px;
   }

@@ -334,7 +334,7 @@ try {
     isImageDecoderSupported: false, maxImageSize: 4000000, canvasMaxAreaInBytes: 16000000,
     CanvasFactory: BoundedCanvasFactory, BinaryDataFactory: LocalFontsOnly });
   const pdf = await loading.promise;
-  const qrDestinations = [], text = [];
+  const qrDestinations = [], text = [], textItems = [];
   let pixels = 0, characters = 0, operators = 0;
   if (pdf.numPages < 1 || pdf.numPages > 24 || pdf.isPureXfa) deny();
   if (await pdf.getJSActions() || await pdf.getFieldObjects() || await pdf.getAttachments()) deny();
@@ -353,6 +353,15 @@ try {
     const pageText = content.items.filter(item => "str" in item).map(item => item.str + (item.hasEOL ? "\n" : " ")).join("");
     if ((characters += pageText.length) > 200000) deny();
     text.push(pageText);
+    for (const item of content.items) {
+      if (!("str" in item) || !item.str.trim()) continue;
+      const measured = { page: number, text: item.str, x: item.transform[4], y: viewport.height / 2 - item.transform[5],
+        width: item.width, height: item.height };
+      if (textItems.length >= 10000 || ![measured.x, measured.y, measured.width, measured.height]
+          .every(value => Number.isFinite(value) && Math.abs(value) <= 1000000)
+          || measured.width < 0 || measured.height <= 0) deny();
+      textItems.push(measured);
+    }
     const factory = new BoundedCanvasFactory(), target = factory.create(width, height);
     await page.render({ canvas: target.canvas, canvasContext: target.context, viewport,
       background: "rgb(255,255,255)", annotationMode: pdfjs.AnnotationMode.DISABLE }).promise;
@@ -393,7 +402,8 @@ try {
   }
   if (unavailable) throw new Error("PDF resources unavailable");
   if (unsupported || !text.some(value => value.trim())) deny();
-  const result = { pageCount: pdf.numPages, qrDestinations, text: text.join("\n") };
+  const result = { pageCount: pdf.numPages, qrDestinations, text: text.join("\n"), textItems };
+  if (Buffer.byteLength(JSON.stringify(result), "utf8") > 2097152) deny();
   await loading.destroy();
   parentPort.postMessage({ status: "ok", inspection: result });
 } catch (error) {
@@ -432,7 +442,7 @@ export async function inspectInvoicePdf(bytes: Uint8Array): Promise<PdfInspectio
         if (result?.status === "ok") resolve(result.inspection);
         else reject(result?.status === "invalid" ? new DocumentVerificationError() : new DocumentUnavailableError());
       };
-      const timer = setTimeout(() => { void finish(); }, 20000);
+      const timer = setTimeout(() => { void finish(); }, 30000);
       worker.once("message", (result: WorkerResult) => { void finish(result); });
       worker.once("error", () => { void finish(); });
       worker.once("exit", () => { void finish(); });

@@ -29,6 +29,8 @@ it("renders immutable commercial facts and the exact 18-decimal amount with a vi
   const inspected = await inspectInvoicePdf(bytes);
   expect(inspected.pageCount).toBe(1);
   expect(inspected.qrDestinations).toEqual([testInvoiceUrl]);
+  const anchors = inspected.textItems.filter((item) => item.x === 42 && item.height === 7);
+  expect(anchors).toEqual([expect.objectContaining({ page: 1, text: "1", width: 3.892 })]);
   const text = inspected.text.replace(/\s+/g, " ");
   const facts = [view.invoiceNumber, `Version ${view.invoiceVersion}`, view.issueDate, view.dueDate, view.payableUntil,
     ...[view.sender, view.client].flatMap((party) => [party.businessName, party.contactName, party.contactEmail, ...party.addressLines]),
@@ -53,6 +55,9 @@ it("paginates 100 long items, long names, multiline addresses and the complete w
   const text = compact(inspected.text);
   expect(text.split("Lineamount:").length - 1).toBe(100);
   expect(text.split("Atomicunits:").length - 1).toBe(101);
+  const anchors = inspected.textItems.filter((item) => item.x === 42 && item.height === 7);
+  expect(anchors.map((item) => item.text)).toEqual(Array.from({ length: 100 }, (_, index) => String(index + 1)));
+  expect(anchors.every((item) => item.width <= 12 && item.y >= 40 && item.y <= 794)).toBe(true);
   for (const fact of [view.invoiceNumber, view.payoutWallet, view.memo, view.invoiceUrl, view.amountDecimal, view.amountAtomic,
     ...[view.sender, view.client].flatMap((party) => [party.businessName, party.contactName, party.contactEmail, ...party.addressLines]),
     ...view.items.map((item) => item.description)]) expect(text.includes(compact(fact)), "material fact parity").toBe(true);

@@ -13,6 +13,9 @@ it.runIf(!!process.env.PAYR_TEST_PDF_PACKAGE_DIR).each([1, 18])(
     const bytes = await renderInvoicePdf(buildPublishedInvoiceView(document, testInvoiceUrl));
     const result = await probePackagedInvoicePdf(process.env.PAYR_TEST_PDF_PACKAGE_DIR!, undefined, bytes);
     expect(result).toMatchObject({ pageCount, qrDestinations: [testInvoiceUrl] });
+    expect(result.textItems.length).toBeGreaterThan(0);
+    expect(new Set(result.textItems.map((item: { page: number }) => item.page)).size).toBe(pageCount);
+    expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(2097152);
   }, 40000);
 
 it.runIf(!!process.env.PAYR_TEST_PDF_PACKAGE_DIR).each([
@@ -90,6 +93,19 @@ it("extracts text and decodes the QR from actual PDF page pixels without consumi
   expect(bytes).toEqual(original);
 }, 20000);
 
+it("measures unscaled PDF coordinates with a top-down baseline and excludes blank text items", async () => {
+  const result = await inspectInvoicePdf(rawFixturePdf("BT /F1 10 Tf 1 0 0 1 42 780 Tm (123) Tj ET"));
+  expect(result.textItems).toHaveLength(1);
+  expect(result.textItems[0]).toMatchObject({ page: 1, text: "123", x: 42, y: 62, height: 10 });
+  expect(result.textItems[0].width).toBeCloseTo(16.68, 5);
+});
+
+it("bounds the number of measured text items before rasterization", async () => {
+  const pair = "BT /F1 10 Tf 1 0 0 1 42 780 Tm (1) Tj ET\nBT /F1 11 Tf 1 0 0 1 42 780 Tm (2) Tj ET\n";
+  expect((await inspectInvoicePdf(rawFixturePdf(pair.repeat(2)))).textItems).toHaveLength(4);
+  await expect(inspectInvoicePdf(rawFixturePdf(pair.repeat(5001)))).rejects.toBeInstanceOf(DocumentVerificationError);
+}, 20000);
+
 it("rejects PDF JavaScript and external streams without returning their contents or resource URLs", async () => {
   const text = "BT /F1 10 Tf 42 780 Td (Safe fixture text) Tj ET";
   for (const bytes of [
@@ -120,7 +136,7 @@ it.each(["timeout", "error"])("awaits real worker termination before settling a 
   try {
     let settled = false;
     const result = inspectInvoicePdf(bytes).catch((error: unknown) => error).then((value) => { settled = true; return value; });
-    if (mode === "timeout") await vi.advanceTimersByTimeAsync(20001);
+    if (mode === "timeout") await vi.advanceTimersByTimeAsync(30001);
     await terminated;
     expect(settled).toBe(false);
     release();

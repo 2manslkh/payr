@@ -7,6 +7,13 @@ import type { PublicationAttempt } from "../invoices/publication-contracts";
 import { createDraftRepository } from "./drafts";
 import { createDocumentRepository } from "./documents";
 import { createPublicationRepository } from "./publication";
+import { createKeyedTokenCodec } from "../security/keyed-token";
+import { createInvoiceAccessService } from "../documents/access";
+import { createAuthorizationService } from "../payments/authorize";
+import { createPayrRepositories } from "./repositories";
+import { privateKeyToAccount } from "viem/accounts";
+import { hashTypedData, keccak256 } from "viem";
+import { paymentTypedData } from "../domain/payment-authorization";
 
 const service = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
   auth: { autoRefreshToken: false, persistSession: false },
@@ -30,14 +37,14 @@ function fixture(sql: string) {
   }).trim();
 }
 
-async function reserve() {
+async function reserve(tokenId = randomUUID(), verifierHash = randomBytes(32).toString("hex")) {
   const snapshot = testPublicationSnapshot();
   const draft = await createDraftRepository(service).saveDraft(actor, { draftId: null, expectedVersion: null, snapshot,
     idempotencyKey: randomUUID(), requestFingerprint: randomBytes(32).toString("hex") });
   return publication.reserve(actor, { draftId: draft.draftId, expectedVersion: 1, approval: true,
     idempotencyKey: randomUUID(), requestFingerprint: randomBytes(32).toString("hex"), attemptId: randomUUID(),
-    invoiceKey: hash(), publicationSalt: hash(), tokenId: randomUUID(), keyVersion: 1,
-    verifierHash: randomBytes(32).toString("hex"), chainId: 5042002, contractAddress: `0x${"3".repeat(40)}` });
+    invoiceKey: hash(), publicationSalt: hash(), tokenId, keyVersion: 1,
+    verifierHash, chainId: 5042002, contractAddress: `0x${"3".repeat(40)}` });
 }
 
 async function finalize(a: PublicationAttempt) {
@@ -85,6 +92,28 @@ it("exposes candidate metadata only and reads the exact finalized live invoice w
   expect((await documents.readTarget(a.link.tokenId))!.attempt).toEqual(finalized);
   expect(await documents.findCandidate(randomUUID())).toBeNull();
   expect(await documents.readTarget(randomUUID())).toBeNull();
+});
+
+it("persists a real EIP-712 signature hash through bearer access and the authorization RPC before returning it", async () => {
+  const keys = new Map([[1, new Uint8Array(32).fill(7)]]);
+  const tokenId = randomUUID();
+  const token = createKeyedTokenCodec(keys).derive(tokenId, "invoice-bearer", 1);
+  const a = await finalize(await reserve(tokenId, token.verifierHash));
+  const account = privateKeyToAccount(`0x${"0".repeat(63)}1`);
+  const access = createInvoiceAccessService(documents, { keys, pepper: new Uint8Array(32).fill(8),
+    appOrigin: "https://example.test", explorerOrigin: "https://testnet.arcscan.app" });
+  const authorization = await createAuthorizationService({ access, repository: createPayrRepositories(service),
+    signer: { attestor: account.address, mode: "local-testnet", sign: (data) => account.signTypedData(data) },
+  }).authorize(token.slug, "local");
+  const typed = paymentTypedData(a.chainId, a.contractAddress, { ...authorization.message,
+    amount: BigInt(authorization.message.amount), authorizationValidUntil: BigInt(authorization.message.authorizationValidUntil),
+    payableUntil: BigInt(authorization.message.payableUntil) });
+  const row = JSON.parse(fixture(`select row_to_json(a) from public.payment_authorizations a where id='${authorization.authorizationId}';`));
+  expect(row.typed_data_digest).toBe(hashTypedData(typed));
+  expect(row.signature_hash).toBe(keccak256(authorization.signature));
+  expect(row.invoice_version_id).toBe(a.invoiceVersionId);
+  expect(JSON.stringify(row)).not.toContain(authorization.signature);
+  expect(fixture(`select count(*) from public.settlements where invoice_id='${a.invoiceId}';`)).toBe("0");
 });
 
 it("atomically caps fixed-minute IP, token and global IP-stage admission without retaining attacker keys after denial", async () => {

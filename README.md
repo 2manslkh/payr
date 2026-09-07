@@ -4,9 +4,15 @@ Payr helps independent developers turn confirmed work into an invoice, then reco
 
 ## Status
 
-R06 adds real invoice PDF/QR generation, immutable private storage, and protected HTML/PDF routes to the crash-safe publication protocol. Compiled publication, positioned money-row verification, exact served bytes, real QR decoding, and private response controls pass local integration gates. The protected release flow targets `v0.5.0`; tags and the merged PR record release completion. No hosted rollout or live payment proof is claimed.
+R07 adds the Arc native-USDC settlement contract, guarded testnet EIP-712 signer, persisted authorization API, and crash-safe operator payment/recovery tooling. The repaired application and one separately approved `1 USDC` testnet invoice payment are verified, including exact event/balance facts and authorization-row read-back. The protected release flow targets `v0.6.0`; the merged PR and annotated tag record release completion. Reconciliation, receipts, durable delivery, browser wallet payment, and Claude MCP remain later-tranche work. See [R07 evidence and operation](docs/ops/r07-settlement.md).
 
 **PDF text limitation:** invoice fields support printable ASCII plus LF line breaks only. Accented text, Thai, emoji, and other unsupported characters fail closed. Payr does not silently drop characters, transliterate names, or invent legal details. Confirm accurate supported facts before publication; an invalid document after reservation can permanently consume an invoice number.
+
+## Schedule and roadmap
+
+The submission deadline is **13 September 2026, 12:00 EDT / 16:00 UTC**, with an internal 14:00 UTC upload target. The [implementation calendar](docs/superpowers/plans/2026-09-04-payr-mvp-implementation-plan.md#deadline-and-calendar-override) supersedes the original 44-hour availability assumption and September 15 freeze. The user is developing `docs/architecture.excalidraw.svg`; the final video will be recorded after the deployed product flow is complete and before submission.
+
+[One-click mainnet deployment-readiness](docs/ops/mainnet-readiness.md) is a separate approved target due **30 September**, not a shipped capability. Marketplace settlement/escrow, invoice-history credit assessment, and undercollateralized USDC lending are the [post-MVP roadmap](PROJECT.md#future-credit-and-lending), not current features or claims of an existing Circle lending integration.
 
 ## Local development
 
@@ -26,6 +32,8 @@ pnpm test:unit
 pnpm test:release
 pnpm build
 pnpm test:documents:package
+pnpm test:contracts
+pnpm contracts:abi:check
 pnpm exec playwright install chromium
 pnpm db:start
 pnpm test:e2e
@@ -47,7 +55,7 @@ pnpm test:db:local
 pnpm exec supabase stop --no-backup
 ```
 
-Payr uses API port `57321`, Postgres `58322`, and shadow port `57320`. Reset is explicitly local and recreates the private PDF-only `documents` bucket. Only the active database steward may reset the shared stack during parallel work. Supabase's local services bind to all interfaces and use development credentials: do not expose these ports outside a trusted development network or use these credentials in production.
+Payr uses API port `57321`, Postgres `58322`, and shadow port `57320`. Reset is explicitly local and recreates the private PDF-only `documents` bucket. Only the active database steward may reset the shared stack during parallel work. Database/browser fixtures can erase local data; use a disposable runner with its own Docker daemon for release checks while the approved demo is preserved. A different worktree alone does not isolate the hard-coded test container. Supabase's local services bind to all interfaces and use development credentials: do not expose these ports outside a trusted development network or use these credentials in production.
 
 `pnpm test:db:local` and `pnpm test:e2e` use `scripts/run-local-tests.mjs` to capture only the running local Payr project's URL, database URL, anon key, and service-role key for the subprocess. They do not print keys, evaluate shell output, or write environment files. `pnpm test:db` remains the low-level suite and fails closed without local `SUPABASE_URL`, `SUPABASE_DB_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. Existing ignored `.env.test.local` configuration is supported; the launcher overrides inherited Supabase values. CI provisions separate ephemeral local stacks for the `database` and `browser` jobs, never hosted credentials.
 
@@ -59,6 +67,12 @@ curl http://127.0.0.1:3000/api/health
 ```
 
 The health endpoint returns only `{ "status": "ok", "commit": string | null }`; it never returns configuration values.
+
+### Settlement authorization
+
+R07 uses native 18-decimal USDC on Arc Testnet (`5042002`) and an immutable, unfunded attestor; Privy is not used. Follow the [configuration and live-operation runbook](docs/ops/r07-settlement.md) rather than supplying client-side payment facts. `POST /api/invoice/[slug]/authorize` accepts no payload bytes and returns a signature only after authorization persistence. Issuance never marks an invoice paid.
+
+The operator script requires an explicit testnet guard and exact human confirmation. It caps gas at `0.1 testnet USDC` and durably retains the public transaction identity in an exclusive local `.operator-payment.json` before broadcast. On any ambiguous result, retain the journal and run `pnpm tsx scripts/operator-pay.ts --recover` from the same directory. Recovery is read-only and requires no payer key. The recorded demo invoice is already paid onchain: never pay it again to repeat evidence.
 
 ### Identity console
 

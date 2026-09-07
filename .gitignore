@@ -19,3 +19,4 @@ contracts/broadcast/
 *.pdf
 .DS_Store
 .vercel/
+.operator-payment.json

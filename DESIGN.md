@@ -15,7 +15,7 @@ Payr treats every invoice as a versioned financial record: drafted, published, a
 
 The visual system is a restrained, document-led workspace. Cool light surfaces carry routine operations; concentrated Payr Navy regions mark cryptographic proof and final settlement. Generous space establishes hierarchy, while ruled ledgers, aligned figures, and explicit state language preserve operational density.
 
-The existing arrow-R monogram remains the recognizable mark. The production wordmark is refined and standardized as `Payr`; it must not retain the inconsistent `PayR` capitalization.
+The existing arrow-R monogram remains the recognizable mark. Written and accessible names are standardized as `Payr`. The user-approved 2026-09-07 graphical treatment combines live `Pay` text with the v2 R monogram; this is an explicit visual exception, not permission to spell the product `PayR` in copy.
 
 **Key Characteristics:**
 
@@ -91,7 +91,7 @@ The system is flat by default. Hierarchy comes from tonal fields, rules, spacing
 
 Controls and bounded surfaces use restrained, gently curved corners, provisionally in the 8-12px range until implementation establishes the exact scale. Tables and document regions favor straight rules and larger continuous planes. Pills are limited to compact statuses and environment labels; they are not the default button or container shape.
 
-The arrow-R geometry may inform directional indicators and progress lines, but it must not become a repeated decorative motif. The refined wordmark must use `Payr` capitalization and preserve the monogram's forward-motion idea.
+The arrow-R geometry may inform directional indicators and progress lines, but it must not become a repeated decorative motif. Preserve the approved `Pay` plus R-monogram wordmark treatment, with `Payr` in accessible names and written copy.
 
 ## Do's and Don'ts
 

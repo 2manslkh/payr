@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { DocumentAccessConfig } from "../lib/documents/contracts";
 import type { IdentityConfig } from "../lib/identity/contracts";
 import type { PublicationConfig, PublicationLinkConfig } from "../lib/invoices/publication-contracts";
+import { ARC_TESTNET_CHAIN_ID } from "../lib/chain/arc";
 
 const isAllowedAppUrl = (value: string) => {
   const url = new URL(value);
@@ -133,4 +134,25 @@ export function createPublicationEnv(value: unknown = process.env): PublicationC
   }).parse(value);
   if (!links.keys.has(parsed.LINK_ACTIVE_KEY_VERSION)) throw new Error("Active publication link key is unavailable");
   return { ...links, activeKeyVersion: parsed.LINK_ACTIVE_KEY_VERSION, chainId: parsed.ARC_CHAIN_ID, contractAddress: parsed.NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS };
+}
+
+export function createPaymentEnv(value: unknown = process.env) {
+  const address = z.string().regex(/^0x[0-9a-fA-F]{40}$/)
+    .refine((value) => !/^0x0{40}$/.test(value)).transform((value) => value.toLowerCase() as `0x${string}`);
+  const parsed = z.object({
+    PAYR_SIGNER_MODE: z.literal("local-testnet"), ALLOW_TESTNET_LOCAL_SIGNER: z.literal("true"),
+    PAYR_MONEY_MODE: z.literal("testnet"), ARC_CHAIN_ID: z.literal(String(ARC_TESTNET_CHAIN_ID)),
+    ARC_RPC_URL: z.string().url().refine((value) => new URL(value).protocol === "https:"),
+    NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS: address, PAYR_ATTESTOR_ADDRESS: address,
+    PAYR_RETAINED_SETTLEMENT_CONTRACTS: z.string().default("").transform((value) => value === "" ? [] : value.split(","))
+      .pipe(z.array(address).max(20)),
+    TESTNET_ATTESTOR_PRIVATE_KEY: z.string().regex(/^0x[0-9a-fA-F]{64}$/).transform((value) => value as `0x${string}`),
+  }).parse(value);
+  return {
+    signerMode: parsed.PAYR_SIGNER_MODE, allowLocalSigner: true as const, moneyMode: parsed.PAYR_MONEY_MODE,
+    chainId: ARC_TESTNET_CHAIN_ID, rpcUrl: parsed.ARC_RPC_URL,
+    contractAddress: parsed.NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS, attestor: parsed.PAYR_ATTESTOR_ADDRESS,
+    trustedContracts: [parsed.NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS, ...parsed.PAYR_RETAINED_SETTLEMENT_CONTRACTS],
+    privateKey: parsed.TESTNET_ATTESTOR_PRIVATE_KEY,
+  };
 }

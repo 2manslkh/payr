@@ -9,6 +9,26 @@ permissions:
   contents: read
 
 jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.4.0
+      - run: pnpm install --frozen-lockfile
+      - run: forge fmt --root contracts --check
+      - run: forge build --root contracts
+      - run: pnpm test:contracts
+      - run: pnpm contracts:abi:check
+
   web:
     runs-on: ubuntu-latest
     steps:

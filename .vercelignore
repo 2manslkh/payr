@@ -1,0 +1,13 @@
+.env*
+!.env.example
+.git/
+.worktrees/
+node_modules/
+.next/
+contracts/
+test-results/
+playwright-report/
+coverage/
+*.tsbuildinfo
+scripts/*.local.*
+.operator-payment.json

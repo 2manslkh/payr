@@ -19,7 +19,9 @@
     "test:db": "vitest run --config vitest.db.config.ts",
     "test:db:local": "node scripts/run-local-tests.mjs db",
     "test:release": "node --test scripts/release-utils.test.mjs",
-    "test:documents:package": "node scripts/test-document-package.mjs",
+    "test:documents:package": "node scripts/check-function-traces.mjs && node scripts/test-document-package.mjs",
+    "test:contracts": "forge test --root contracts",
+    "contracts:abi:check": "node scripts/export-contract-abi.mjs --check",
     "test:watch": "vitest --config vitest.config.ts",
     "test:e2e": "node scripts/run-local-tests.mjs browser",
     "db:start": "supabase start",
@@ -47,6 +49,7 @@
   },
   "devDependencies": {
     "@next/env": "16.3.4",
+    "@openzeppelin/contracts": "5.4.0",
     "@playwright/test": "1.62.1",
     "@testing-library/react": "latest",
     "@types/node": "latest",

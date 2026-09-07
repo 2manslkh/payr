@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "payr.deployment.v1",
+  "chainId": 5042002,
+  "rpcHost": "rpc.testnet.arc.network",
+  "explorerBase": "https://testnet.arcscan.app",
+  "contractAddress": "0x21bf4df6beb22edb1a71f6dc7b92ffbab122a49a",
+  "attestor": "0x8b403c73c428ccbc6c1c90219d772f09a93d3f51",
+  "deploymentTransaction": "0xf1b341101893e172ce4590decbd9f047d59ede2455675d435749173caefdfd30",
+  "deploymentBlock": "60849043",
+  "bytecodeHash": "0x9a3c332804d39011337612d8652f399d816fbcd97b6fc465d098b177a750760e"
+}

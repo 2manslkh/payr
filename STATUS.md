@@ -1,14 +1,14 @@
 # Status
 
-Last updated: 2026-09-06
+Last updated: 2026-09-07
 
 ## Stage
 
-R00-R06 are released through `v0.5.0` at `482c5768a3a1c411716daaff3bc9d7552ad2ed7a`. R06 real invoice PDF/QR, immutable private Storage, protected HTML/PDF routes, compiled publication, and positioned money-row verification passed local and protected CI gates. The annotated tag and post-merge checks are verified in PR #7. Hosted product rollout is not claimed.
+R00-R06 are released through `v0.5.0` at `482c5768a3a1c411716daaff3bc9d7552ad2ed7a`. R06 real invoice PDF/QR, immutable private Storage, protected HTML/PDF routes, compiled publication, and positioned money-row verification passed local and protected CI gates. The annotated tag and post-merge checks are verified in PR #7. R07 implementation and its real operator-payment/authorization read-back gate are now complete and deployed, but unreleased. The full browser-payment/reconciled-receipt journey is not yet proven.
 
 ## Single current objective
 
-Reconcile useful pending work in atomic commits, then proceed to R07 under the corrected calendar and confirmed operator capacity. Complete the deployed core product before final video recording; the official submission deadline is 13 September 2026 at 12:00 EDT / 16:00 UTC, with an internal 14:00 UTC upload target.
+Continue R08 reconciliation, receipts, and durable delivery using the verified R07 payment, without paying the demo invoice again. The isolated R07 snapshot is hosted; concurrent root R08/R09 work was not deployed with it. See `docs/ops/r07-settlement.md`. Complete the deployed core product before final video recording; the official submission deadline is 13 September 2026 at 12:00 EDT / 16:00 UTC, with an internal 14:00 UTC upload target.
 
 ## Selected concept
 
@@ -21,14 +21,18 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 ## Now
 
 - Preserve the completed R06 implementation and its [verified release read-back](https://github.com/2manslkh/payr/pull/7#issuecomment-5560122806); do not repeat released work.
+- R07 uses the existing service-only authorization RPC, pinned OpenZeppelin/Foundry contract, explicit testnet guards, and retained frozen-deployment allowlisting. Privy is not used.
+- R07 contract deployed with explicit user approval on 7 September: `0x21bf4df6beb22edb1a71f6dc7b92ffbab122a49a`, Arc testnet block `60849043`. Creation bytecode, receipt, code, and immutable unfunded attestor were read back; metadata is in `contracts/deployments/arc-testnet.json`.
+- The separately approved `1 USDC` operator payment for `DEMO-2026-000001` succeeded in transaction `0xf909a57a92e1b1bc046da1ae20a340108daf730d63e6772796c4225c49c6b84f`, block `60875360`, log `507`. Exact event/balance facts and hosted authorization digest/signature hash were independently verified. Gas was `0.00150551453184 USDC`; no second payment or email was sent. R08 must independently persist settlement; read-back still showed zero settlement rows.
+- R07 completion snapshot `.worktrees/r07-finish` passed `pnpm verify` (1,694 unit tests, 10 release tests, build, 35 compiled-document tests), 15 Foundry tests (256 fuzz runs), formatting, and ABI drift. Independent reviews were repaired and re-reviewed. Earlier 434 DB and 44 browser passes remain historical; destructive fixture suites were not rerun against the preserved demo. Protected CI/release for current changes remains pending.
 - Preserve the required post-build package gate: `web` and local `pnpm verify` run `pnpm test:documents:package`, not only pre-build units.
 - Keep `https://payrlink.xyz` and its secret-free health route as the intended public origin; `https://payr-sandy.vercel.app` is the verified fallback.
 - Use the official 13 September 12:00 EDT / 16:00 UTC submission deadline; cross-check the authenticated dashboard and resolve discrepancies using the earlier cutoff. The original September 15 freeze is superseded.
 - Reconcile remaining human capacity with the implementation plan's R07-R10 dated gates. Its 27-hour figure was an R05-checkpoint estimate, not current availability; account for completed R06 and operator/integration costs. Freeze features on 11 September at 23:59 UTC and protect final proof/recording on 12 September plus two hours of core-blocker contingency before upload.
 - The user is building `docs/architecture.excalidraw.svg` in parallel. Preserve it; review its final content against deployed behavior. Record the final 2-4 minute video only after the product flow works, before submission.
 - Plan the separate one-click mainnet readiness milestone by 30 September under `docs/ops/mainnet-readiness.md`; implementation and readiness are not yet claimed.
-- Complete the remaining Resend, funded-wallet, receipt-inbox, and Claude connector human prerequisite checks.
-- Verify the intended hosted Supabase configuration before deployed product integration. Local Payr uses API `57321`, Postgres `58322`, and shadow port `57320`.
+- Complete the remaining receipt-inbox and Claude connector human prerequisite checks. Resend sender-domain verification and one approved invoice delivery are proven. Deployment/payer wallets were funded with 20 testnet USDC each and verified; keep their keys local-only.
+- Preserve the selected hosted Supabase project and production keys. Local Payr remains separate on API `57321`, Postgres `58322`, and shadow port `57320`; the local approved draft must not be wiped by test fixtures.
 - Track the four approved `assets/brand/` reference files unchanged; derive production web assets separately.
 - Apply `DESIGN.md` as core interface work inside Tasks 3-8; do not defer the approved system to contingency polish.
 
@@ -48,13 +52,13 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 
 - Remaining capacity must fit the confirmed submission deadline and final recording/upload buffers; a missed calendar gate requires an explicit scope or availability decision.
 - Real EOA signatures and identity transactions pass against local Supabase; they are not a live funded-wallet payment, Claude connector, or email delivery.
-- Resend sender-domain SPF/DKIM verification and two receipt-inbox tests are not yet proven.
-- Hosted Supabase and deployment configuration remain unverified by this tranche. Local config, migrations, reset, and hostile-access tests pass.
-- Hosted R06 validation remains open. Real publication requires configured chain/contract/link keys and Supabase; no fake adapter or browser authoring is provided.
+- Resend reports `noreply.payrlink.xyz` verified and the approved demo invoice email delivered. Two real receipt-inbox tests and durable receipt delivery remain unproven.
+- Hosted Supabase project `grutkfsoekcpwdksgasm` and production Payr configuration are now established. All five existing migrations were applied and read back as up to date; the documents bucket is private.
+- Hosted R06 publication and protected page/PDF read-back passed for approved demo invoice `DEMO-2026-000001`. The PDF is 18,795 bytes and matches its frozen hash. One explicitly approved initial-invoice email was sent through Resend and read back as delivered; this is not an R08 receipt or durable-outbox implementation.
 - PDF fields support printable ASCII plus LF only; unsupported text fails closed without transliteration or invented legal facts. Receipts are R08, wallet authorization/payment R07/R09, and MCP R09; R06 does not deliver payments, receipts, or email.
-- Claude custom-connector availability and funded Arc deployment/payer balances require human confirmation.
+- Claude custom-connector availability remains unverified. Arc operator payment is proven; browser-wallet and reconciled receipt/delivery proof remain.
 - Privy's optional policy-controlled EIP-712 signing and contract compatibility are unproven and are not a core blocker.
-- Arc testnet RPC, chain, explorer, and native-USDC behavior are verified; Task 6 live deployment/payment still requires funded-wallet evidence.
+- Arc testnet RPC, chain, explorer, native-USDC behavior, Task 6 contract deployment, real operator payment, and authorization-row read-back are verified. No additional payment is authorized by this document.
 - One-click mainnet deployment-readiness is an approved target due 30 September, but its workflow, mainnet signer/environment, official network facts, and sponsor-accepted readiness evidence remain unverified.
 
 ## Known Risks
@@ -68,6 +72,7 @@ Protected HTML has a remaining verification gap for denial-status uniformity if 
 - Public repository: `https://github.com/2manslkh/payr`.
 - Latest release: `v0.5.0` at `482c5768a3a1c411716daaff3bc9d7552ad2ed7a`, [PR #7](https://github.com/2manslkh/payr/pull/7).
 - Root pending work is being reconciled on `integration/root-updates`; the clean R06 release worktree remains at `.worktrees/r06-integration`.
+- R07-only deployment snapshot and its retained payment journal are in `.worktrees/r07-finish`, based on `4decffb` plus selected uncommitted R07 files. Vercel `dpl_Em186jttjVwZWFxLA4ukZKdPJrLo` is verified `Ready`; this is not a tagged release or a deployment of the concurrent root R08/R09 work.
 - Public shell: `https://payrlink.xyz`; health reports the deployed integration commit without configuration details.
 - The four approved `assets/brand/` reference files are part of R00.
 
@@ -75,10 +80,10 @@ Protected HTML has a remaining verification gap for denial-status uniformity if 
 
 - Product: GREEN - the user, pain, promise, onchain necessity, and non-goals are approved.
 - Design: GREEN - `Commit Ledger`, the responsive surface model, and brand treatment are approved; implemented fidelity remains unproven.
-- Engineering: YELLOW - released document/publication and structural security gates pass; live payment and hosted integration proof remain.
+- Engineering: YELLOW - released document/publication, hosted invoice/email, and real R07 operator payment are verified; browser payment, reconciliation, receipts, and durable delivery remain.
 - Demo: YELLOW - the causal three-minute sequence and honest fallback are defined, but unexercised by this tranche.
 - Submission: RED - repository and health shell exist; the user-owned architecture diagram is in progress. End-to-end product proof, final diagram verification, post-product video recording, and submitted dashboard confirmation remain outstanding.
 
 ## Next review gate
 
-Confirm remaining capacity and R07's F4 contract/signing/deployment interfaces before fanout. R07 requires adversarial contract tests and a real operator testnet payment; no live transaction is authorized by this status document. The implementation plan targets R07 by 8 September, R08 by 10 September, and R09 by the 11 September feature freeze. Escalate missed gates rather than consuming the final video/submission reserve. Historical evidence retains its observation dates.
+Review the completed R07 evidence and working F4 interface in `docs/superpowers/freezes/2026-09-07-f4-settlement.md`, then complete R08 against the recorded payment. The snapshot used coordinator-only packaging isolation, not implementation-agent fanout. Preserve its payment journal and do not redeploy the contract or repay the invoice to repeat verification. Protected release/CI and disposable DB/browser regressions remain separate gates. Confirm remaining capacity and F5 before implementation fanout. No further live transaction is authorized by this status document. The implementation plan targets R07 by 8 September, R08 by 10 September, and R09 by the 11 September feature freeze. Escalate missed gates rather than consuming the final video/submission reserve. Historical evidence retains its observation dates.

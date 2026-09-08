@@ -1,5 +1,5 @@
 import { apiError, getIdentityRuntime, privateJson, requireRequestSession } from "../../../lib/auth/runtime";
-import { saveSenderSchema } from "../../../lib/identity/contracts";
+import { IdentityError, saveSenderRequestSchema } from "../../../lib/identity/contracts";
 import { parseIdentityInput } from "../../../lib/profiles/input";
 
 export async function GET(request: Request) {
@@ -15,8 +15,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const identity = await requireRequestSession(request, true);
-    const input = await parseIdentityInput(request, saveSenderSchema);
+    const { expectedProfileId, ...input } = await parseIdentityInput(request, saveSenderRequestSchema);
     const { repository } = getIdentityRuntime();
+    // The captured session supplies authority; the immutable ID binds the user's reviewed form.
+    const profile = await repository.getProfile(identity);
+    if (profile.id !== expectedProfileId) throw new IdentityError("PROFILE_CHANGED", 409);
     return privateJson({ profile: await repository.saveProfile(identity, input) });
   } catch (error) {
     return apiError(error);

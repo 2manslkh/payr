@@ -49,6 +49,7 @@ it("composes real signatures, atomic nonce consumption, sessions, profiles and r
   expect(profile.payoutWallet).toBe(owner.address.toLowerCase());
   const billingAddress = { line1: "1 Test Road", city: "London", postalCode: "N1 1AA", countryCode: "GB" };
   const saved = await saveProfile(request("/api/profile", {
+    expectedProfileId: profile.id,
     expectedRevision: profile.revision, businessName: "Test Studio", billingAddress,
     contactName: "Test Owner", contactEmail: "owner@example.test", invoicePrefix: "INV", defaultPaymentTermsDays: 30,
   }));
@@ -99,4 +100,24 @@ it("composes real signatures, atomic nonce consumption, sessions, profiles and r
   expect(activity.status).toBe(200);
   const events = (await activity.json()).events;
   expect(events.some((event: { action: string; outcome: string }) => event.action === "invoice:status" && event.outcome === "denied")).toBe(true);
+
+  // A second-tab login replaces the shared cookie but not the first tab's loaded form.
+  const nextChallengeResponse = await issue(request("/api/auth/nonce", { purpose: "payr-login-v1", wallet: replacement.address }));
+  expect(nextChallengeResponse.status).toBe(200);
+  const nextChallenge = await nextChallengeResponse.json();
+  const nextLogin = await verify(request("/api/auth/verify", {
+    nonceId: nextChallenge.nonceId, signature: await replacement.signMessage({ message: nextChallenge.message }),
+  }));
+  expect(nextLogin.status).toBe(200);
+  cookie = nextLogin.headers.get("set-cookie")!.split(";")[0];
+  const otherProfile = (await (await getProfile(request("/api/profile"))).json()).profile;
+  expect(otherProfile.id).not.toBe(profile.id);
+  expect(otherProfile.revision).toBe(profile.revision);
+  const staleSave = await saveProfile(request("/api/profile", {
+    expectedProfileId: profile.id, expectedRevision: profile.revision, businessName: "Wrong workspace", billingAddress,
+    contactName: "Test Owner", contactEmail: "owner@example.test", invoicePrefix: "INV", defaultPaymentTermsDays: 30,
+  }));
+  expect(staleSave.status).toBe(409);
+  expect(await staleSave.json()).toEqual({ error: { code: "PROFILE_CHANGED" } });
+  expect((await (await getProfile(request("/api/profile"))).json()).profile).toEqual(otherProfile);
 });

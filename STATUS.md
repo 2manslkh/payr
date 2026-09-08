@@ -1,14 +1,14 @@
 # Status
 
-Last updated: 2026-09-07
+Last updated: 2026-09-08
 
 ## Stage
 
-R00-R06 are released through `v0.5.0` at `482c5768a3a1c411716daaff3bc9d7552ad2ed7a`. R06 real invoice PDF/QR, immutable private Storage, protected HTML/PDF routes, compiled publication, and positioned money-row verification passed local and protected CI gates. The annotated tag and post-merge checks are verified in PR #7. R07 implementation and its real operator-payment/authorization read-back gate are now complete and deployed, but unreleased. The full browser-payment/reconciled-receipt journey is not yet proven.
+R00-R07 are released through `v0.6.0` at `0d122231b0252f587a59868022b65dea83f6d525` ([PR #8](https://github.com/2manslkh/payr/pull/8)). The annotated tag and post-merge CI are verified. R07 includes the contract, authorization, and real operator-payment gate, not the complete browser-payment/receipt/Claude journey. The current patch adds review fixes; release completion is identified by its merged PR and tag, not by this pre-release document.
 
 ## Single current objective
 
-Continue R08 reconciliation, receipts, and durable delivery using the verified R07 payment, without paying the demo invoice again. The isolated R07 snapshot is hosted; concurrent root R08/R09 work was not deployed with it. See `docs/ops/r07-settlement.md`. Complete the deployed core product before final video recording; the official submission deadline is 13 September 2026 at 12:00 EDT / 16:00 UTC, with an internal 14:00 UTC upload target.
+Release the isolated publication/profile reliability fixes under `docs/ops/review-fixes.md`, then continue receipts, durable delivery, and Claude integration using the existing verified payment. Preserve the separate root client-payment/reconciliation work and its deployment evidence; it is not included in this patch. Do not pay the demo invoice again. Complete the deployed core product before final video recording; submission is due 13 September at 16:00 UTC, with an internal 14:00 UTC upload target.
 
 ## Selected concept
 
@@ -23,8 +23,8 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 - Preserve the completed R06 implementation and its [verified release read-back](https://github.com/2manslkh/payr/pull/7#issuecomment-5560122806); do not repeat released work.
 - R07 uses the existing service-only authorization RPC, pinned OpenZeppelin/Foundry contract, explicit testnet guards, and retained frozen-deployment allowlisting. Privy is not used.
 - R07 contract deployed with explicit user approval on 7 September: `0x21bf4df6beb22edb1a71f6dc7b92ffbab122a49a`, Arc testnet block `60849043`. Creation bytecode, receipt, code, and immutable unfunded attestor were read back; metadata is in `contracts/deployments/arc-testnet.json`.
-- The separately approved `1 USDC` operator payment for `DEMO-2026-000001` succeeded in transaction `0xf909a57a92e1b1bc046da1ae20a340108daf730d63e6772796c4225c49c6b84f`, block `60875360`, log `507`. Exact event/balance facts and hosted authorization digest/signature hash were independently verified. Gas was `0.00150551453184 USDC`; no second payment or email was sent. R08 must independently persist settlement; read-back still showed zero settlement rows.
-- R07 completion snapshot `.worktrees/r07-finish` passed `pnpm verify` (1,694 unit tests, 10 release tests, build, 35 compiled-document tests), 15 Foundry tests (256 fuzz runs), formatting, and ABI drift. Independent reviews were repaired and re-reviewed. Earlier 434 DB and 44 browser passes remain historical; destructive fixture suites were not rerun against the preserved demo. Protected CI/release for current changes remains pending.
+- The separately approved `1 USDC` operator payment for `DEMO-2026-000001` succeeded in transaction `0xf909a57a92e1b1bc046da1ae20a340108daf730d63e6772796c4225c49c6b84f`, block `60875360`, log `507`. Exact event/balance facts and hosted authorization digest/signature hash were independently verified. Gas was `0.00150551453184 USDC`. The zero-settlement observation in the R07 record is historical; later root client-payment evidence records reconciliation of that same event. This patch does not repeat the payment or modify hosted records.
+- R07 completion snapshot `.worktrees/r07-finish` passed `pnpm verify` (1,694 unit tests, 10 release tests, build, 35 compiled-document tests), 15 Foundry tests (256 fuzz runs), formatting, and ABI drift. PR #8 and post-merge CI passed; R07 is released. Patch gates use a separate disposable daemon and loopback network, never the preserved demo fixtures.
 - Preserve the required post-build package gate: `web` and local `pnpm verify` run `pnpm test:documents:package`, not only pre-build units.
 - Keep `https://payrlink.xyz` and its secret-free health route as the intended public origin; `https://payr-sandy.vercel.app` is the verified fallback.
 - Use the official 13 September 12:00 EDT / 16:00 UTC submission deadline; cross-check the authenticated dashboard and resolve discrepancies using the earlier cutoff. The original September 15 freeze is superseded.
@@ -70,9 +70,9 @@ Protected HTML has a remaining verification gap for denial-status uniformity if 
 ## Repository
 
 - Public repository: `https://github.com/2manslkh/payr`.
-- Latest release: `v0.5.0` at `482c5768a3a1c411716daaff3bc9d7552ad2ed7a`, [PR #7](https://github.com/2manslkh/payr/pull/7).
+- Verified release baseline: `v0.6.0` at `0d122231b0252f587a59868022b65dea83f6d525`, [PR #8](https://github.com/2manslkh/payr/pull/8). Consult annotated tags and merged PRs for subsequent release completion.
 - Root pending work is being reconciled on `integration/root-updates`; the clean R06 release worktree remains at `.worktrees/r06-integration`.
-- R07-only deployment snapshot and its retained payment journal are in `.worktrees/r07-finish`, based on `4decffb` plus selected uncommitted R07 files. Vercel `dpl_Em186jttjVwZWFxLA4ukZKdPJrLo` is verified `Ready`; this is not a tagged release or a deployment of the concurrent root R08/R09 work.
+- The historical R07-only deployment snapshot and payment journal remain in `.worktrees/r07-finish`. The reviewed R07 source was subsequently released in PR #8. Root browser/reconciliation deployment work has its own evidence and must not be overwritten by deploying this narrower patch snapshot.
 - Public shell: `https://payrlink.xyz`; health reports the deployed integration commit without configuration details.
 - The four approved `assets/brand/` reference files are part of R00.
 
@@ -80,7 +80,7 @@ Protected HTML has a remaining verification gap for denial-status uniformity if 
 
 - Product: GREEN - the user, pain, promise, onchain necessity, and non-goals are approved.
 - Design: GREEN - `Commit Ledger`, the responsive surface model, and brand treatment are approved; implemented fidelity remains unproven.
-- Engineering: YELLOW - released document/publication, hosted invoice/email, and real R07 operator payment are verified; browser payment, reconciliation, receipts, and durable delivery remain.
+- Engineering: YELLOW - released document/publication, hosted invoice/email, and real R07 operator payment are verified. Root browser/reconciliation work remains outside this patch; receipt generation, durable receipt delivery, and the complete Claude journey remain completion gates.
 - Demo: YELLOW - the causal three-minute sequence and honest fallback are defined, but unexercised by this tranche.
 - Submission: RED - repository and health shell exist; the user-owned architecture diagram is in progress. End-to-end product proof, final diagram verification, post-product video recording, and submitted dashboard confirmation remain outstanding.
 

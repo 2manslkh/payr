@@ -59,6 +59,7 @@ export function PayoutChange({
         throw new ConsoleError("VALIDATION_ERROR", 400);
       // Refresh the snapshot before asking the server to bind its revision and exact old/new values.
       const { profile: current } = await consoleApi<{ profile: SenderProfile }>("/api/profile");
+      if (current.id !== profile.id) throw new ConsoleError("PROFILE_CHANGED", 409);
       onSaved(current);
       const nonce = await consoleApi<NonceResponse>("/api/auth/nonce", {
         purpose: "payr-payout-change-v1",

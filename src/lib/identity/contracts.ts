@@ -28,6 +28,7 @@ export const saveSenderSchema = z.object({
   defaultPaymentTermsDays: z.number().int().min(0).max(365),
 }).strict();
 export type SaveSenderInput = z.infer<typeof saveSenderSchema>;
+export const saveSenderRequestSchema = saveSenderSchema.extend({ expectedProfileId: z.string().uuid() });
 
 export const saveClientSchema = z.object({
   id: z.string().uuid().nullable(),

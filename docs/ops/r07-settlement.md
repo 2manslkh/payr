@@ -1,5 +1,7 @@
 # R07 Settlement Authorization
 
+Release update, 8 September 2026: R07 was released as annotated `v0.6.0` at `0d122231b0252f587a59868022b65dea83f6d525` in [PR #8](https://github.com/2manslkh/payr/pull/8), with successful post-merge CI. The completion/deployment observations below retain their original dates; statements that R07 was uncommitted or unreleased describe that earlier checkpoint. Later client-payment/reconciliation work is separate from this R07 evidence. Current review fixes are documented in [review-fixes.md](review-fixes.md).
+
 ## Scope
 
 R07 adds the immutable Arc native-USDC settlement contract, EIP-712 authorization, a guarded local testnet signer, the protected authorization API, and manual operator deployment/payment tooling. R08 still owns reconciliation, receipts, and delivery; R09 owns browser payment and Claude MCP. Authorization never marks an invoice paid.

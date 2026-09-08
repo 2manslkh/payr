@@ -25,13 +25,15 @@ This is the R03 integration contract. `PROJECT.md`, `DESIGN.md`, and Task 3 rema
 | `/api/auth/verify` | POST `{nonceId, signature}` | `{session}` and a new cookie on login, `{session, profile}` after payout change |
 | `/api/auth/logout` | POST, exact origin/host | `{ok: true}` and expired cookie |
 | `/api/auth/session` | GET | `{session}` or authenticated failure |
-| `/api/profile` | GET; POST `saveSenderSchema` | `{profile}` |
+| `/api/profile` | GET; POST `saveSenderRequestSchema` | `{profile}` |
 | `/api/clients` | GET; POST `saveClientSchema` | `{clients}` / `{client}` |
 | `/api/connectors` | GET; POST `{expiresInDays: integer 1..30}` | `{connectors}` / `{connector, token, endpointUrl}` |
 | `/api/connectors/[id]/revoke` | POST, UUID route parameter | `{connector}` |
 | `/api/activity` | GET | `{events}` (at most 100, newest first) |
 
 All ordinary mutation objects are strict, including nested addresses. Normal profile writes cannot contain payout or owner fields. Create-client requests use `id: null, expectedRevision: null`; updates require both values. Dashboard client provenance is persisted server-side as confirmed `user_provided` for each provided billing field, never accepted from request JSON. Default payment terms are integer days, 0..365, stored as canonical decimal text in `default_terms`.
+
+8 September interface correction: sender HTTP writes additionally require `expectedProfileId` from the profile the user reviewed, alongside the existing `expectedRevision`. Missing/malformed IDs return `INVALID_INPUT` (400); a session-authorized profile mismatch returns `PROFILE_CHANGED` (409) without mutation. The ID asserts identity and never supplies workspace authority. The HTTP handler strips it before calling the unchanged `SaveSenderInput` service-only RPC. The console retains the ID for the lifetime of its edited form; profile/payout refresh cannot rebind unsaved edits to a different workspace. Direct HTTP consumers must adopt this required field, and older Settings tabs must reload. This incompatible HTTP contract correction requires a major release under `docs/ops/versioning.md`; it does not declare the entire MVP complete.
 
 ## Connectors
 

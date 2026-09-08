@@ -22,11 +22,12 @@ const config = {
   appOrigin: "https://payrlink.xyz", chainId: 5042002,
   sessionKey: new Uint8Array(32).fill(7), connectorPepper: new Uint8Array(32).fill(8),
 };
-const senderInput: SaveSenderInput = {
+const senderFields: SaveSenderInput = {
   expectedRevision: 1, businessName: "Example Studio", contactName: "Owner", contactEmail: "owner@example.com",
   billingAddress: { line1: "1 Main St", city: "London", postalCode: "SW1A 1AA", countryCode: "GB" },
   invoicePrefix: "INV", defaultPaymentTermsDays: 30,
 };
+const senderInput = { ...senderFields, expectedProfileId: identity.workspaceId };
 const clientInput: SaveClientInput = {
   id: null, expectedRevision: null, alias: "example", businessName: "Client Studio", contactName: "Client",
   contactEmail: "client@example.com", billingAddress: senderInput.billingAddress,
@@ -95,13 +96,26 @@ it("saves the strict sender schema and delegates write-origin authorization to t
   const request = post({ ...senderInput, businessName: "  Example Studio  ", contactEmail: "OWNER@EXAMPLE.COM" });
   const response = await POST(request);
   expect(requireRequestSession).toHaveBeenCalledExactlyOnceWith(request, true);
-  expect(repository.saveProfile).toHaveBeenCalledExactlyOnceWith(identity, senderInput);
+  expect(repository.saveProfile).toHaveBeenCalledExactlyOnceWith(identity, senderFields);
   expect(await response.json()).toEqual({ profile });
 });
 
 it("rejects payout injection before touching the repository", async () => {
   const response = await POST(post({ ...senderInput, payoutWallet: `0x${"2".repeat(40)}` }));
   expectFailure(response, "INVALID_INPUT", 400);
+  expect(repository.saveProfile).not.toHaveBeenCalled();
+});
+
+it("requires the reviewed profile identity before allowing a sender write", async () => {
+  const response = await POST(post(senderFields));
+  expectFailure(response, "INVALID_INPUT", 400);
+  expect(repository.saveProfile).not.toHaveBeenCalled();
+});
+
+it("rejects a stale tab after the session switches to a different profile at the same revision", async () => {
+  repository.getProfile.mockResolvedValue({ ...profile, id: foreignId, revision: senderInput.expectedRevision });
+  const response = await POST(post({ ...senderInput, expectedProfileId: profile.id }));
+  expectFailure(response, "PROFILE_CHANGED", 409);
   expect(repository.saveProfile).not.toHaveBeenCalled();
 });
 
@@ -228,7 +242,7 @@ it.each([
 ] as const)("rejects stale $name revisions without a success envelope", async ({ handler, input, operation }) => {
   repository[operation].mockRejectedValue(new IdentityError("REVISION_CONFLICT", 409));
   const response = await handler(post(input));
-  expect(repository[operation]).toHaveBeenCalledExactlyOnceWith(identity, input);
+  expect(repository[operation]).toHaveBeenCalledExactlyOnceWith(identity, operation === "saveProfile" ? senderFields : input);
   expectFailure(response, "REVISION_CONFLICT", 409);
 });
 

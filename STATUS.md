@@ -26,6 +26,7 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 - R07 contract deployed with explicit user approval on 7 September: `0x21bf4df6beb22edb1a71f6dc7b92ffbab122a49a`, Arc testnet block `60849043`. Creation bytecode, receipt, code, and immutable unfunded attestor were read back; metadata is in `contracts/deployments/arc-testnet.json`.
 - Preserve `DEMO-2026-000001` and its original payment `0xf909a57a92e1b1bc046da1ae20a340108daf730d63e6772796c4225c49c6b84f`, block `60875360`, log `507`. The user separately approved `DEMO-2026-000002` for real receipt delivery because the original frozen issuer address is non-deliverable. The new 0.01 testnet USDC payment, reconciled receipt, and one same-address/both-role delivered email are recorded in the R08 runbook; neither payment may be repeated under the consumed approvals.
 - R07 release passed `pnpm verify` (1,694 unit tests, 10 release tests, build, 35 compiled-document tests), 434 isolated database tests, 44 browser tests, 15 Foundry tests (256 fuzz runs), formatting, ABI drift, and protected pre/post-merge CI. The preserved demo database was not reset. R08 requires its own later release gates.
+- The original R07 zero-settlement observation is historical; later root browser/reconciliation work recorded the same event without repaying. Preserve its separate deployment evidence. Full fixture gates use an isolated private daemon, never the retained demo.
 - Preserve the required post-build package gate: `web` and local `pnpm verify` run `pnpm test:documents:package`, not only pre-build units.
 - Keep `https://payrlink.xyz` and its secret-free health route as the intended public origin; `https://payr-sandy.vercel.app` is the verified fallback.
 - Use the official 13 September 12:00 EDT / 16:00 UTC submission deadline; cross-check the authenticated dashboard and resolve discrepancies using the earlier cutoff. The original September 15 freeze is superseded.
@@ -74,6 +75,7 @@ Protected HTML has a remaining verification gap for denial-status uniformity if 
 - Latest fetched release baseline: `v1.1.0`, [PR #10](https://github.com/2manslkh/payr/pull/10). R08 originated at `v0.6.0` and is not part of those tags; integration and `v1.2.0` release are pending.
 - Root pending work is being reconciled on `integration/root-updates`; the clean R06 release worktree remains at `.worktrees/r06-integration`.
 - The R07 deployment snapshot and retained payment journal remain in `.worktrees/r07-finish`. Its implementation was subsequently released through PR #8. Vercel `dpl_Em186jttjVwZWFxLA4ukZKdPJrLo` was verified `Ready` before tagging; this does not claim deployment of any R08/R09 changes.
+- Production wallet UI lives in a separately approved combined deployment. Do not replace it with the narrower release snapshot without integrating and checking the wallet source.
 - Public shell: `https://payrlink.xyz`; health reports the deployed integration commit without configuration details.
 - The four approved `assets/brand/` reference files are part of R00.
 

@@ -139,7 +139,7 @@ The exact parameter/result TypeScript forms are in `src/lib/db/repositories.ts`;
 ## Deferred Decisions
 
 - Invoice-number presentation, publication and receipt object-key formats, link lifetimes, connector limits, worker lease durations, and retry schedules freeze in their owning later tranche.
-- The framing/implementation retry-jitter contradiction must be resolved before F5. R02 does not implement retry timing.
+- The retry-jitter contradiction was reconciled on 8 September: Task 7.5 follows the framing spec's capped jittered backoff for receipt/email work, with an injectable random source for deterministic boundary tests. R02 does not implement retry timing; F3 publication retains its separate lease-expiry protocol.
 - Later migrations may add transaction functions only after their owning freeze. They may not weaken R02 tenant, privilege, immutability, idempotency, or event-identity rules.
 
 ## Required Red Evidence

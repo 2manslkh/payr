@@ -43,6 +43,8 @@ it.each(["invoice", "receipt"])("keeps the %s logo small even without HTML dimen
     image.removeAttribute("width");
     image.removeAttribute("height");
     const style = getComputedStyle(image);
+    expect(style.fontSize).toBe("28px");
+    expect(style.lineHeight).toBe("28px");
     expect(style.width).toBe("28px");
     expect(style.height).toBe("28px");
     expect(style.maxWidth).toBe("28px");

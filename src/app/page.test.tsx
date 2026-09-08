@@ -1,10 +1,11 @@
 import { render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import HomePage, { metadata as homeMetadata } from "./page";
 import { generateMetadata, viewport } from "./layout";
 
-afterEach(() => vi.unstubAllEnvs());
+beforeEach(() => vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
 describe("HomePage", () => {
   it("defines Payr search and social metadata without a site-wide homepage canonical", () => {
@@ -17,7 +18,7 @@ describe("HomePage", () => {
     expect(homeMetadata.alternates.canonical).toBe("/");
     expect(metadata.alternates).toBeUndefined();
     expect(viewport.themeColor).toBe("#071B3B");
-    expect(metadata.description).toContain("payments and receipts are in development");
+    expect(metadata.description).toContain("Client wallet payments, automatic reconciliation, Claude integration and receipts are coming next");
   });
   it.each([undefined, "https://payr.example", "http://localhost:3125"])("uses a validated metadata origin: %s", (origin) => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", origin);
@@ -37,9 +38,11 @@ describe("HomePage", () => {
   it("renders the Payr product promise", () => {
     render(<HomePage />);
 
-    expect(screen.getByRole("heading", { name: "Invoice. Settle. Reconcile." })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "From finished work to verified payment." })).toBeDefined();
     expect(screen.getByRole("link", { name: "Sign in to Payr" }).getAttribute("href")).toBe("/login");
     expect(screen.getByRole("img", { name: "Payr" }).querySelector("img")?.getAttribute("style")).toBeNull();
-    expect(screen.getByText(/Wallet payments and receipts are still in development/)).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Shipping the work isn't the end of the work." })).toBeDefined();
+    expect(screen.getByText(/Receipt generation and email delivery are in development/)).toBeDefined();
+    expect(screen.getByRole("navigation", { name: "Workflow stages" }).querySelectorAll("a")).toHaveLength(5);
   });
 });

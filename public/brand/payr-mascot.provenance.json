@@ -1,0 +1,7 @@
+{
+  "source": "assets/brand/source/mascot.png",
+  "output": "public/brand/payr-mascot.webp",
+  "approval": "User approved a small supporting role on the landing page, 2026-09-08.",
+  "conversion": "cwebp -q 88 -resize 360 0",
+  "originalGenerator": "Not recorded. This existing asset is not claimed to be Codex-generated."
+}

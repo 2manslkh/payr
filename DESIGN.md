@@ -110,3 +110,13 @@ The arrow-R geometry may inform directional indicators and progress lines, but i
 - **Don't** use glass effects, crypto neon, decorative gradients, generic coin art, or a dashboard card mosaic.
 - **Don't** embed a simulated Payr chatbot or add a browser invoice editor; creation remains agent-first.
 - **Don't** expose Bills as an MVP capability or introduce batch/autonomous payment controls.
+
+## Root Landing Demonstration
+
+The public root page extends Commit Ledger with a user-approved **Living Document** composition: a large left-aligned product promise, one illustrative invoice, a problem explanation, and a scroll-driven document-to-settlement story. Page chrome, capability rows, and controls remain flat. Perspective, structural shadows, paper deformation, and a verification check are limited to inert explanatory artwork, not resting application cards.
+
+The landing preserves the current rendered Helvetica Neue/system sans stack and live global tokens. Its artwork uses client-only Three.js and shaders with projected HTML lettering. Explanations and actions remain semantic HTML. A MetaMask payment preview uses a decorative, scroll-pressed Pay button and a checkmark that replaces its contents inside the same white popup. No wallet SDK or payment operation runs on the landing page. The receipt preview adds a full-size sheet and a user-requested red PAID stamp; upcoming labels distinguish the product vision from this release's implemented capabilities.
+
+Mobile uses a compact scene; short screens and reduced-motion mode return to ordinary non-sticky reading. An explicit control disables animation. Missing JavaScript, WebGL, or graphics context does not remove the content or sign-in action. Each renderer effect owns its canvas so development Strict Mode cannot retire the replacement renderer's context.
+
+The existing cat is approved for a small supporting role at the closing CTA. New Codex artwork was deferred with user approval after native generation failed; existing assets and geometric illustrations must not be described as newly generated imagery. Route-specific decisions and verification live in `.impeccable/landing-brief.md`.

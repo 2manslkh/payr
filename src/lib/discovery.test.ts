@@ -4,12 +4,20 @@ import { afterEach, expect, it, vi } from "vitest";
 import { discoveryOrigin } from "./discovery";
 import { GET as robots } from "../app/robots.txt/route";
 import sitemap from "../app/sitemap";
-import { GET as discovery } from "../app/.well-known/[...discovery]/route";
+import { GET as discovery, OPTIONS as discoveryOptions } from "../app/.well-known/[...discovery]/route";
 import { GET as openapi } from "../app/openapi.json/route";
 import { mcpServerInfo } from "./mcp/info";
 import { GET as markdown } from "../app/index.md/route";
 
 afterEach(() => vi.unstubAllEnvs());
+
+it("allows public card browser preflights without credentials", () => {
+  const response = discoveryOptions();
+  expect(response.status).toBe(204);
+  expect(response.headers.get("access-control-allow-origin")).toBe("*");
+  expect(response.headers.get("access-control-allow-headers")).toBe("Content-Type, If-None-Match");
+  expect(response.headers.has("access-control-allow-credentials")).toBe(false);
+});
 
 const get = (resource: string) => discovery(new Request(`https://untrusted.test/.well-known/${resource}`), {
   params: Promise.resolve({ discovery: resource.split("/") }),
@@ -74,6 +82,7 @@ it("publishes current discovery formats without private endpoints or fake OAuth"
   for (const resource of ["ai-catalog.json", "ard.json"]) {
     const response = await get(resource);
     expect(response.headers.get("access-control-allow-origin")).toBe("*");
+    expect(response.headers.get("content-type")).toBe(resource === "ai-catalog.json" ? "application/ai-catalog+json" : "application/json");
     const manifest = await response.json();
     expect(manifest.entries).toHaveLength(2);
     for (const entry of manifest.entries) {

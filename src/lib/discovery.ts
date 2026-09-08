@@ -10,7 +10,7 @@ export const discoveryLinks = [
   '</docs/api.md>; rel="service-doc"; type="text/markdown"',
   '</openapi.json>; rel="service-desc"; type="application/json"',
   '</sitemap.xml>; rel="sitemap"; type="application/xml"',
-  '</.well-known/ai-catalog.json>; rel="describedby"; type="application/json"',
+  '</.well-known/ai-catalog.json>; rel="ai-catalog describedby"; type="application/ai-catalog+json"',
   '</.well-known/agent-skills/index.json>; rel="describedby"; type="application/json"',
 ].join(", ");
 

@@ -20,6 +20,7 @@ Canonical URLs use validated `NEXT_PUBLIC_APP_URL`, falling back to `https://pay
 - DNS-AID: requires authoritative DNS access, confirmed provider SVCB support, interoperable draft parameters, and a real service/index binding. No DNS records or DNSSEC settings were changed. Never publish a connector secret in DNS. Before enabling, check the current DNS-AID draft and the provider's parameter support; do not invent experimental key codes or claim an ALPN the TLS service does not negotiate. DNSSEC verification requires the parent DS chain, not just enabling zone signing.
 - WebMCP: not implemented. The September 2026 draft uses `document.modelContext.registerTool()`, unlike the older scanner's `navigator.modelContext.provideContext()`. Shipping this needs a supported browser target and an approved browser-tool surface with authorization, cancellation, and user confirmation tests. The remote MCP connector is not WebMCP.
 - Older scanners may expect superseded MCP-card fields or ARD formats. Do not add fake capabilities or public endpoints solely to pass a scanner.
+- The experimental card uses the required reverse-DNS catalog identity `xyz.payrlink/payr`; the shipped MCP initialize response retains its existing `Payr` name for existing clients. The version is shared. This advisory identity mismatch is a known low-priority interoperability limitation; do not use the card as an authentication claim.
 
 ## Verification After Deployment
 

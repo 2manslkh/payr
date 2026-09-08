@@ -32,6 +32,7 @@ export async function GET(_request: Request, context: { params: Promise<{ discov
   }
   if (resource === "mcp/server-card.json") {
     headers.set("Content-Type", "application/mcp-server-card+json");
+    headers.set("Access-Control-Expose-Headers", "ETag");
     return Response.json({
       $schema: "https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json",
       name: "xyz.payrlink/payr", version: mcpServerInfo.version,
@@ -40,6 +41,7 @@ export async function GET(_request: Request, context: { params: Promise<{ discov
     }, { headers });
   }
   if (resource === "ai-catalog.json" || resource === "ard.json") {
+    if (resource === "ai-catalog.json") headers.set("Content-Type", "application/ai-catalog+json");
     const entries = [{
       identifier: `urn:air:${new URL(origin).hostname}:skill:payr-create-invoice`,
       displayName: "Payr Invoice Workflow", type: "text/markdown", url: skillUrl,
@@ -59,5 +61,6 @@ export async function GET(_request: Request, context: { params: Promise<{ discov
 export function OPTIONS() {
   return new Response(null, { status: 204, headers: {
     "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, If-None-Match",
   } });
 }

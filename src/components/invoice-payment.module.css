@@ -1,0 +1,37 @@
+.payment { margin-top: 24px; }
+.states { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding-block: 20px; border-block: 1px solid var(--rule); }
+.states dt, .cost dt, .account > span { color: var(--muted); font-size: 0.875rem; }
+.states dd { font-weight: 600; }
+.paid { color: #0f6b4f; }
+.explanation { margin-block: 20px; font-size: 1rem; line-height: 1.6; }
+.connections { display: grid; gap: 10px; }
+.payment button, .payment a { min-height: 44px; overflow-wrap: anywhere; }
+.payment button { padding: 12px 16px; border: 1px solid var(--navy); border-radius: 8px; cursor: pointer; font: inherit; background: var(--paper); color: var(--navy); }
+.payment button:hover:not(:disabled) { background: #e8eef3; }
+.payment button:disabled { cursor: not-allowed; opacity: 0.55; }
+.payment button:focus-visible, .payment a:focus-visible { outline: 3px solid var(--navy); outline-offset: 4px; }
+.payment .pay { width: 100%; margin-top: 20px; background: var(--navy); color: var(--paper); font-weight: 600; }
+.payment .pay:hover:not(:disabled) { background: #193758; }
+.account { display: grid; gap: 8px; margin-block: 20px; }
+.account code { overflow-wrap: anywhere; font-size: 0.875rem; }
+.account button { justify-self: start; border-color: var(--rule); }
+.secondary { width: 100%; }
+.cost { padding-top: 16px; margin-top: 20px; border-top: 1px solid var(--rule); }
+.cost > div + div { margin-top: 12px; }
+.cost dd { font-size: 0.875rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pending, .proof { margin-top: 24px; }
+.pending a, .proof a { display: flex; align-items: center; padding-block: 10px; text-decoration: underline; }
+.pending button, .check { width: 100%; margin-top: 12px; }
+.proof { background: var(--navy); color: var(--paper); padding: 24px; border-radius: 8px; }
+.proof p { margin-top: 12px; line-height: 1.5; }
+.proof h3:not(:first-child) { margin-top: 24px; }
+.proof a { color: var(--paper); }
+.proof a:focus-visible { outline-color: var(--paper); }
+.error { margin-top: 20px; color: #b42318; line-height: 1.6; }
+.dialog { max-width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 28px; margin: auto; border: 1px solid var(--rule); border-radius: 12px; background: var(--paper); color: var(--ink); overflow-y: auto; }
+.dialog::backdrop { background: rgb(7 27 59 / 65%); }
+.dialog h3 { font-size: 1.35rem; }
+.dialog p { margin-block: 16px; line-height: 1.5; }
+.dialog img { display: block; max-width: 100%; height: auto; margin-inline: auto; }
+.dialog a { display: flex; align-items: center; justify-content: center; text-decoration: underline; margin-top: 12px; }
+.dialog button { width: 100%; }

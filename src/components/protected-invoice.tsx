@@ -2,6 +2,8 @@ import type { PublishedInvoiceView } from "../lib/documents/contracts";
 import type { InvoiceStatusResult } from "../lib/domain/status";
 import { PayrWordmark } from "./payr-wordmark";
 import styles from "./protected-invoice.module.css";
+import { InvoicePayment } from "./invoice-payment";
+import type { PaymentSetup, PaymentStatusView } from "../lib/payments/payment-contracts";
 
 export type ProtectedInvoiceProps = Pick<InvoiceStatusResult, "commercialState" | "paymentStatus" | "displayStatus"> & {
   view: PublishedInvoiceView;
@@ -10,11 +12,12 @@ export type ProtectedInvoiceProps = Pick<InvoiceStatusResult, "commercialState" 
   documentCommitment: string;
   receipt?: InvoiceStatusResult["receipt"];
   receiptEmailState?: InvoiceStatusResult["receiptEmail"]["state"];
+  payment?: { setup: PaymentSetup; initialStatus: PaymentStatusView };
 };
 
 // Commit Ledger extension: read the frozen document, review exact payment facts,
 // and download its immutable PDF. No workspace chrome or payment simulation.
-export function ProtectedInvoice({ view, qrDataUrl, pdfContentHash, documentCommitment, commercialState, paymentStatus, displayStatus, receipt, receiptEmailState }: ProtectedInvoiceProps) {
+export function ProtectedInvoice({ view, qrDataUrl, pdfContentHash, documentCommitment, commercialState, paymentStatus, displayStatus, receipt, receiptEmailState, payment }: ProtectedInvoiceProps) {
   const commercialLabels = { draft: "Draft", published: "Published", voided: "Voided", expired: "Expired" };
   return (
     <main className={styles.surface}>
@@ -71,7 +74,7 @@ export function ProtectedInvoice({ view, qrDataUrl, pdfContentHash, documentComm
               <div><dt>Full payout wallet</dt><dd><code>{view.payoutWallet}</code></dd></div>
               <div><dt>Technical payable deadline</dt><dd><time dateTime={view.payableUntil}>{view.payableUntil}</time></dd></div>
             </dl>
-            <dl className={styles.state}>
+            {payment ? <><InvoicePayment {...payment} invoiceUrl={view.invoiceUrl} /><noscript>Wallet controls require JavaScript. Reload to update settlement and receipt progress. Do not send a direct transfer.</noscript></> : <><dl className={styles.state}>
               <div><dt>Commercial state</dt><dd>{commercialLabels[commercialState]}</dd></div>
               <div><dt>Payment status</dt><dd className={paymentStatus === "paid" ? styles.paid : undefined}>{paymentStatus === "paid" ? "Paid" : "Unpaid"}</dd></div>
             </dl>
@@ -84,7 +87,7 @@ export function ProtectedInvoice({ view, qrDataUrl, pdfContentHash, documentComm
               <p>{({ pending: "Receipt queued.", rendering: "Receipt is being generated.", retry_wait: "Receipt generation will retry.", failed: "Receipt generation needs attention.", ready: "Verified receipt available." })[receipt.state]}</p>
               {receipt.state === "ready" && receipt.pageUrl && <a className={styles.invoiceLink} href={receipt.pageUrl} referrerPolicy="no-referrer">View receipt</a>}
               {receiptEmailState && <p>Email status: {receiptEmailState === "sent" ? "Accepted by email provider" : receiptEmailState.replaceAll("_", " ")}</p>}
-            </section>}
+            </section>}</>}
           </section>
         </aside>
         <section className={styles.linkSection} aria-labelledby="invoice-link-heading">

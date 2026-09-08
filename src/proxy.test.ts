@@ -63,6 +63,18 @@ it("does not match authenticated app routes or assets", () => {
   }
 });
 
+it.each(["payable", "paid", "voided", "expired", "pdf", "status", "invalid"])("limits the approved wallet CSP exception to payable HTML (%s)", async (kind) => {
+  vi.stubEnv("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID", "1".repeat(32));
+  resolve.mockResolvedValue(kind === "invalid" ? null : { commercialState: kind === "voided" ? "voided" : "published",
+    settlement: kind === "paid" ? {} : null, payableUntil: kind === "expired" ? "2000-01-01T00:00:00Z" : "2099-01-01T00:00:00Z" });
+  const path = `/invoice/test${["pdf", "status"].includes(kind) ? `/${kind}` : ""}`;
+  const response = await proxy(new NextRequest(`https://example.test${path}`));
+  const csp = response.headers.get("content-security-policy")!;
+  expect(csp.includes("walletconnect")).toBe(kind === "payable");
+  expect(csp).not.toMatch(/unsafe-inline|unsafe-eval|\*/);
+  expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+});
+
 it("serves the credential-free operational fallback as a private 503 after IP admission", async () => {
   const response = await proxy(new NextRequest("https://example.test/invoice/system/unavailable"));
   expect(response.status).toBe(503);

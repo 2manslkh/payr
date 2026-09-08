@@ -107,6 +107,19 @@ test("protected invoice: compiled publication serves verified PDF and HTML with 
   const slug = new URL(published.invoiceUrl).pathname.split("/").at(-1)!;
   const secrets = [attempt.publicationSalt, attempt.storageKey, attempt.id, attempt.workspaceId, attempt.invoiceId, attempt.invoiceVersionId, attempt.link.tokenId, attempt.link.verifierHash];
   let consoleLeaked = false;
+  let documentNonce = "";
+  page.on("response", (response) => {
+    if (response.request().resourceType() === "document") {
+      documentNonce = /'nonce-([^']+)'/.exec(response.headers()["content-security-policy"] ?? "")?.[1] ?? "";
+    }
+  });
+  await page.addInitScript(() => {
+    const state = { scriptOrStyleViolations: 0 };
+    Object.assign(window, { payrCspCheck: state });
+    document.addEventListener("securitypolicyviolation", (event) => {
+      if (/^(script|style)-src/.test(event.effectiveDirective)) state.scriptOrStyleViolations++;
+    });
+  });
   page.on("console", (message) => { consoleLeaked ||= [...secrets, slug].some((value) => message.text().includes(value)); });
   page.on("pageerror", (error) => { consoleLeaked ||= [...secrets, slug].some((value) => error.message.includes(value)); });
 
@@ -163,16 +176,21 @@ test("protected invoice: compiled publication serves verified PDF and HTML with 
   // Navigate from an inert URL inside the browser, never give Playwright a bearer URL argument.
   await page.goto(baseURL!);
   let browserPassed = false;
+  let browserChecks: Record<string, boolean> = {};
   try {
     await page.evaluate((url) => { window.location.assign(url); }, published.invoiceUrl);
     await page.getByRole("heading", { name: `Invoice ${published.invoiceNumber}`, exact: true }).waitFor({ timeout: 10_000 });
+    await page.getByText("Commercial state", { exact: true }).waitFor();
     const layout = await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
-    const checks = await page.evaluate(() => ({
+    const checks = await page.evaluate((nonce) => ({
       controls: [...document.querySelectorAll("a")].every((link) => link.getBoundingClientRect().height >= 44),
-      nonce: [...document.scripts].every((script) => Boolean(script.nonce)),
+      // Turbopack's lazy external chunks use the existing same-origin CSP source.
+      nonce: Boolean(nonce) && [...document.scripts].every((script) => script.src
+        ? new URL(script.src).origin === location.origin : script.nonce === nonce),
+      csp: (window as unknown as { payrCspCheck: { scriptOrStyleViolations: number } }).payrCspCheck.scriptOrStyleViolations === 0,
       qr: document.querySelector<HTMLImageElement>('img[alt="QR code for this protected invoice"]')?.src ?? "",
       text: document.querySelector("main")?.textContent ?? "",
-    }));
+    }), documentNonce);
     const download = page.getByRole("link", { name: "Download invoice PDF" });
     await download.focus();
     const focus = await download.evaluate((element) => getComputedStyle(element).outlineStyle !== "none");
@@ -182,12 +200,13 @@ test("protected invoice: compiled publication serves verified PDF and HTML with 
     const canvas = createCanvas(image.width, image.height);
     const ctx = canvas.getContext("2d"); ctx.drawImage(image, 0, 0);
     const decoded = jsQR(new Uint8ClampedArray(ctx.getImageData(0, 0, image.width, image.height).data), image.width, image.height);
-    browserPassed = layout && checks.controls && checks.nonce && focus && decoded?.data === published.invoiceUrl
-      && [...materialFields, "USDC on Arc", "Commercial state", "Payment status"].every((field) => checks.text.includes(field));
+    browserChecks = { layout, controls: checks.controls, nonce: checks.nonce, csp: checks.csp, focus, qr: decoded?.data === published.invoiceUrl,
+      material: [...materialFields, "USDC on Arc", "Commercial state", "Payment status"].every((field) => checks.text.includes(field)) };
+    browserPassed = Object.values(browserChecks).every(Boolean);
   } catch { /* A boolean below is the only retained failure evidence. */ }
   finally { await page.close(); }
   // Close before assertions so automatic error-context snapshots cannot retain the document.
-  expect(browserPassed).toBe(true);
+  expect(browserPassed, JSON.stringify(browserChecks)).toBe(true);
   expect(consoleLeaked).toBe(false);
   const wrongPurpose = createKeyedTokenCodec(createPublicationLinkEnv().keys).derive(attempt.link.tokenId, "receipt-bearer", attempt.link.keyVersion).slug;
   const wrongResponse = await fetchProtected(`${baseURL}/invoice/${wrongPurpose}`);

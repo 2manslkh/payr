@@ -8,12 +8,19 @@ export async function proxy(request: NextRequest) {
   const kind = request.nextUrl.pathname.startsWith("/receipt/") ? "Receipt" : "Invoice";
   try {
     const runtime = kind === "Receipt" ? createReceiptRuntime() : createDocumentRuntime();
-    headers = createPrivateHeaders("rpcOrigins" in runtime ? runtime.rpcOrigins : []);
-    const match = /^\/(invoice|receipt)\/([^/]+)(?:\/pdf)?\/?$/.exec(request.nextUrl.pathname);
+    const rpcOrigins = "rpcOrigins" in runtime ? runtime.rpcOrigins : [];
+    headers = createPrivateHeaders(rpcOrigins);
+    const match = /^\/(invoice|receipt)\/([^/]+)(?:\/(pdf|status))?\/?$/.exec(request.nextUrl.pathname);
     const ip = process.env.VERCEL === "1" ? request.headers.get("x-vercel-forwarded-for") ?? "local" : "local";
     const target = await runtime.access.resolve(match?.[2] ?? "", ip);
     if (request.nextUrl.pathname === `/${kind.toLowerCase()}/system/unavailable`) return privateDocumentError(503, headers, kind);
-    if (!target || !match || !["GET", "HEAD"].includes(request.method)) return privateDocumentError(404, headers, kind);
+    if (!target || !match || (kind === "Receipt" && match[3] === "status") || !["GET", "HEAD"].includes(request.method)) return privateDocumentError(404, headers, kind);
+
+    if (kind === "Invoice" && !match[3] && "commercialState" in target && target.commercialState === "published"
+      && target.settlement === null && target.payableUntil !== null && Date.parse(target.payableUntil) > Date.now()
+      && /^[0-9a-f]{32}$/.test(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "")) {
+      headers = createPrivateHeaders(rpcOrigins, true);
+    }
 
     const requestHeaders = new Headers(request.headers);
     for (const name of [...requestHeaders.keys()]) {

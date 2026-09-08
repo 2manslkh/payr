@@ -324,6 +324,24 @@ describe("F3 publication RPC transactions", () => {
     expectFixtureFailure(`update public.publication_attempts set terminal_failure_code = 'PROFILE_CONFLICT' where id = '${failed!.id}';`, "PUBLICATION_IMMUTABLE");
   });
 
+  it.each(["rendering", "stored"])("does not let an older retryable %s attempt starve newer recovery", async (state) => {
+    const older = await repository.reserve(actor, await reservation());
+    const first = (await repository.claim(older.id, randomUUID()))!;
+    if (state === "stored") await repository.store({ ...fence(first), artifact });
+    const newer = await repository.reserve(actor, await reservation());
+    expireLease(older.id);
+    const retried = (await repository.claim(null, randomUUID()))!;
+    expect(retried.id).toBe(older.id);
+    expireLease(older.id);
+    // A persistent operational failure expires again, but must yield to untouched work.
+    const next = (await repository.claim(null, randomUUID()))!;
+    expect(next.id).toBe(newer.id);
+    expect(next.fence).toBe("1");
+    expect(await repository.store({ ...fence(first), artifact })).toBeNull();
+    const recovered = (await repository.claim(null, randomUUID()))!;
+    expect(recovered).toMatchObject({ id: older.id, fence: "3", state });
+  });
+
   it("reclaims rendering and stored attempts with exact text fences and immutable artifact facts", async () => {
     const input = await reservation();
     const reserved = await repository.reserve(actor, input);

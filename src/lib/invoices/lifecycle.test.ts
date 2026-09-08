@@ -212,6 +212,22 @@ it("regenerates identical invoice and receipt links from stored keys after rotat
   expect(await restarted.share(actor, id)).toEqual({ invoiceUrl, invoicePdfUrl: `${invoiceUrl}/pdf`, pdfFilename: "INV-2030-000001.pdf" });
 });
 
+it.each(["expired", "revoked"])("reveals an independent receipt after retiring the %s invoice bearer key", async (reason) => {
+  const value = published();
+  value.settlement = settlement;
+  value.receipt = readyReceipt();
+  const keys = new Map([[2, new Uint8Array(32).fill(9)]]);
+  const token = createKeyedTokenCodec(keys).derive(value.receipt.link.tokenId, "receipt-bearer", 2);
+  value.receipt.link.keyVersion = 2;
+  value.receipt.link.verifierHash = token.verifierHash;
+  if (reason === "expired") value.attempt!.link.expiresAt = now.toISOString();
+  else value.attempt!.link.revokedAt = now.toISOString();
+  const result = await setup(value, { ...config, keys }).service.status(actor, id);
+  expect(result.invoiceDocument).toBeNull();
+  expect(result.receipt).toMatchObject({ state: "ready", pageUrl: `https://payr.test/receipt/${token.slug}` });
+  expect(result.paymentStatus).toBe("paid");
+});
+
 it.each(["invoice", "receipt"])("fails closed for %s unknown stored key or mismatched verifier without active-key fallback", async (kind) => {
   for (const mismatch of [false, true]) {
     const value = published();

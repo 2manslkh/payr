@@ -56,7 +56,7 @@ it("renders safe initial HTML with no automatic request, credentials, links or p
   render(<PublicationActions {...props} />);
   expect(fetcher).not.toHaveBeenCalled();
   expect(document.querySelector("form")).toBeNull();
-  expect(screen.getByText(/Protected invoice pages and PDF downloads are available\. Payment is not yet available/)).toBeDefined();
+  expect(screen.getByText(/Protected invoice pages and PDF downloads are available\. A shared link is not evidence/)).toBeDefined();
   expect(screen.queryByRole("button", { name: /publish/i })).toBeNull();
 });
 

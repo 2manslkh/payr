@@ -21,6 +21,9 @@ const actions: Record<string, string> = {
   "invoice:publish": "Invoice publication request",
   "invoice:status": "Invoice status request",
   "invoice:void": "Invoice void request",
+  "settlement.recorded": "Payment settlement recorded",
+  "receipt.generate": "Receipt generation",
+  "receipt.deliver": "Receipt email request",
 };
 const outcomes: Record<string, string> = {
   succeeded: "Completed",
@@ -28,6 +31,8 @@ const outcomes: Record<string, string> = {
   denied: "Denied",
   failed: "Failed",
   rate_limited: "Rate limited",
+  retry_wait: "Retry scheduled",
+  manual_review: "Needs review",
 };
 
 export function Activity() {
@@ -56,7 +61,7 @@ export function Activity() {
             <div className="empty-state">
               <h3>No recorded activity yet</h3>
               <p>
-                Actual sign-in, profile, and connection events will appear here as they are recorded. No
+                Actual account, invoice, settlement, receipt, and delivery events will appear here as they are recorded. No
                 example events are shown.
               </p>
             </div>
@@ -98,6 +103,7 @@ export function Activity() {
           <p className="section-copy muted">
             This log shows event type, outcome, time, and connection ID only. It does not expose request
             bodies, billing details, wallet signatures, credentials, or protected URLs.
+            Email completion means provider acceptance, not confirmation of inbox delivery.
           </p>
         </section>
       )}

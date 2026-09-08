@@ -1,0 +1,6 @@
+.settlement { padding: 28px; background: var(--navy); color: var(--paper); }
+.settlement dt { color: #c5d1e2; }
+.settlement p { line-height: 1.6; }
+.proof > div { padding-bottom: 16px; border-bottom: 1px solid var(--rule); }
+.proof a { display: inline-flex; min-height: 44px; align-items: center; }
+@media (max-width: 800px) { .settlement { padding: 24px; } }

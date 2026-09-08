@@ -50,7 +50,7 @@ export function createInvoiceAccessService(repository: DocumentRepository, confi
   };
 }
 
-function normalizeDocumentIp(value: string): string {
+export function normalizeDocumentIp(value: string): string {
   if (value.length > 45 || value.includes("%")) return "local";
   if (isIP(value) === 4) return value;
   if (isIP(value) !== 6) return "local";

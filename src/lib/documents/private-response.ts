@@ -26,7 +26,7 @@ export function createPrivateHeaders(rpcOrigins: readonly string[] = []): Header
   });
 }
 
-export function privateDocumentError(status: 404 | 503, headers = createPrivateHeaders()): Response {
+export function privateDocumentError(status: 404 | 503, headers = createPrivateHeaders(), kind: "Invoice" | "Receipt" = "Invoice"): Response {
   headers.set("Content-Type", "text/plain; charset=utf-8");
-  return new Response(status === 404 ? "Invoice not found.\n" : "Invoice temporarily unavailable. Try again later.\n", { status, headers });
+  return new Response(status === 404 ? `${kind} not found.\n` : `${kind} temporarily unavailable. Try again later.\n`, { status, headers });
 }

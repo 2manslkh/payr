@@ -3,6 +3,7 @@ import { PayrWordmark } from "../components/payr-wordmark";
 import Image from "next/image";
 import { InvoiceIllustration } from "../components/landing/invoice-illustration";
 import { WorkflowStory } from "../components/landing/workflow-story";
+import { SkillInstall } from "../components/landing/skill-install";
 import styles from "./page.module.css";
 
 export const metadata = { alternates: { canonical: "/" } };
@@ -26,6 +27,7 @@ export default function HomePage() {
           <div className={styles.heroCopy}>
             <h1 id="hero-title">From finished work to <span>verified payment.</span></h1>
             <p>USDC invoicing for independent developers. Connect confirmed billing details, protected payment links, and invoice-linked settlement proof.</p>
+            <SkillInstall />
             <div className={styles.heroActions}>
               <Link className={`button ${styles.primaryAction}`} href="/login">Sign in to Payr <Arrow /></Link>
               <a className={styles.textAction} href="#workflow">See the workflow <Arrow down /></a>

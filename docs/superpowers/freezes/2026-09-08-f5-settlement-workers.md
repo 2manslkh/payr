@@ -1,6 +1,6 @@
 # F5 Settlement Workers
 
-Status: implemented sequentially; frozen when this document, schemas, types, and regression tests are committed together in the R08 implementation commit. No implementation fanout took place before that boundary. Original base: `v0.6.0` / `0d122231b0252f587a59868022b65dea83f6d525`.
+Status: committed freeze at `7f36510`, with reviewed jitter-policy correction at `492274f` after integrating `v1.1.0`. No implementation fanout took place before that boundary. Original base: `v0.6.0` / `0d122231b0252f587a59868022b65dea83f6d525`.
 
 ## Consumer Contract
 

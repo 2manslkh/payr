@@ -8,7 +8,7 @@ R00-R07 were released through `v0.6.0` in PR #8. R08 reconciliation, immutable r
 
 ## Single current objective
 
-Commit R08 atomically, integrate current `main`, and complete the protected `v1.2.0` release gates. See `docs/ops/r08-receipts-delivery.md` and the F5 freeze. Do not repay either demo invoice or resend the delivered receipt. Production-wide receipt email remains disabled. Preserve the 11 September feature freeze and final recording/upload buffers before the 13 September 16:00 UTC submission deadline.
+R08 is committed atomically as `7f36510`, current `main` integrated as `9581c5b`, and the reviewed jitter policy forward-fixed as `492274f`. Complete clean-tree release preparation and protected `v1.2.0` PR/merge/tag verification. See `docs/ops/r08-receipts-delivery.md` and F5. Do not repay either demo invoice or resend the delivered receipt. Production-wide receipt email remains disabled. Preserve the 11 September feature freeze and final recording/upload buffers before the 13 September 16:00 UTC submission deadline.
 
 ## Selected concept
 
@@ -89,4 +89,4 @@ Protected HTML has a remaining verification gap for denial-status uniformity if 
 
 ## Next review gate
 
-Integrate `v1.1.0` without dropping its reviewed fixes/landing page, rerun complete isolated DB/browser/build/package checks, and prepare the version-only final release commit. Review findings were reproduced, repaired, and re-reviewed with 139 focused tests passing. An intermittent 18-page PDF worker timeout remains documented; do not waive a red gate. Operator mode is explicit, not unattended delivery proof. See `docs/ops/r08-receipts-delivery.md`. This status document grants no new external-operation approval. Preserve final recording/upload reserves and the R09 feature-freeze deadline.
+The integrated gate passed at `492274f`: all ten migrations reset/linted, 462 database tests, 1,832 unit/PDF tests (13 skipped), 10 release-tool tests, build and five PDF traces, 35 compiled-document tests, and 68 desktop/mobile browser tests. Prepare the version-only final commit and verify protected PR/merge/tag/post-merge CI. The earlier intermittent 18-page PDF timeout remains documented, but the complete integrated gate is green. Operator mode is explicit, not unattended delivery proof. See `docs/ops/r08-receipts-delivery.md`. This status document grants no new external-operation approval. Preserve final recording/upload reserves and the R09 feature-freeze deadline.

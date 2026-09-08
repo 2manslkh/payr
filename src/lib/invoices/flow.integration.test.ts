@@ -114,6 +114,7 @@ it.each(["sender", "client"] as const)("reads a legacy %s country over HTTP and 
   const corrected = await (kind === "sender" ? saveProfile : saveClient)(new Request(`http://localhost:3124/api/${kind === "sender" ? "profile" : "clients"}`, {
     method: "POST", headers: { host: "localhost:3124", origin: "http://localhost:3124", cookie, "content-type": "application/json" },
     body: JSON.stringify(kind === "sender" ? {
+      expectedProfileId: sender.id,
       expectedRevision: sender.revision, businessName: sender.businessName, billingAddress: address, contactName: sender.contactName,
       contactEmail: sender.contactEmail, invoicePrefix: sender.invoicePrefix, defaultPaymentTermsDays: sender.defaultPaymentTermsDays,
     } : {

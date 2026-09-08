@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 import {
   saveClientSchema,
-  saveSenderSchema,
+  saveSenderRequestSchema,
   type ClientProfile,
   type SenderProfile,
 } from "../lib/identity/contracts";
@@ -16,6 +16,7 @@ type Props =
 
 export function BillingForm(props: Props) {
   const id = useId();
+  const [reviewedProfileId] = useState(props.initial?.id ?? null);
   const [revision, setRevision] = useState(props.initial?.revision ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -44,8 +45,10 @@ export function BillingForm(props: Props) {
     setSaved(false);
     try {
       if (props.kind === "sender") {
-        const parsed = saveSenderSchema.safeParse({
+        if (props.initial.id !== reviewedProfileId) throw new ConsoleError("PROFILE_CHANGED", 409);
+        const parsed = saveSenderRequestSchema.safeParse({
           ...contact,
+          expectedProfileId: reviewedProfileId,
           expectedRevision: revision,
           invoicePrefix: text("invoicePrefix"),
           defaultPaymentTermsDays: Number(text("defaultPaymentTermsDays")),
@@ -86,6 +89,7 @@ export function BillingForm(props: Props) {
               (client) => client.id === props.initial?.id,
             );
       if (!current) throw new ConsoleError("NOT_FOUND", 404);
+      if (props.kind === "sender" && current.id !== reviewedProfileId) throw new ConsoleError("PROFILE_CHANGED", 409);
       setLatest(current);
     } catch (failure) {
       setError(failure);

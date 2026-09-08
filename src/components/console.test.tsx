@@ -8,7 +8,7 @@ import { BillingForm } from "./billing-form";
 import { Clients } from "./clients";
 import { Connections } from "./connections";
 import { ConsoleError, errorMessage } from "./console-api";
-import { PayoutChange } from "./settings";
+import { PayoutChange, Settings } from "./settings";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/app/clients" }));
 const owner = "0x1111111111111111111111111111111111111111";
@@ -72,6 +72,7 @@ it("saves all sender fields without payout or owner data", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Save sender details" }));
   await screen.findByText("Saved to your workspace.");
   expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({
+    expectedProfileId: profile.id,
     expectedRevision: 1,
     businessName: "Edited Studio",
     contactName: "Alex",
@@ -152,6 +153,55 @@ it("preserves edits after failure and explicitly reviews a newer revision before
     businessName: "My edit",
     expectedRevision: 3,
   });
+});
+
+it("never rebinds unsaved sender edits when the parent's profile identity changes", async () => {
+  const fetcher = vi.fn().mockResolvedValue(json({ profile: { ...profile, id: client.id, revision: 2 } }));
+  vi.stubGlobal("fetch", fetcher);
+  const view = render(<BillingForm kind="sender" initial={profile} onSaved={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText("Business name"), { target: { value: "Original workspace edit" } });
+  view.rerender(<BillingForm kind="sender" initial={{ ...profile, id: client.id }} onSaved={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Save sender details" }));
+  await screen.findByText(/Your signed-in workspace changed/);
+  expect(fetcher).not.toHaveBeenCalled();
+  expect((screen.getByLabelText("Business name") as HTMLInputElement).value).toBe("Original workspace edit");
+});
+
+it("does not let payout refresh adopt a second login's workspace into an edited Settings form", async () => {
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce(json({ profile }))
+    .mockResolvedValueOnce(json({ profile: { ...profile, id: client.id, payoutWallet: newWallet } }))
+    .mockResolvedValueOnce(json({ error: { code: "PROFILE_CHANGED" } }, 409));
+  vi.stubGlobal("fetch", fetcher);
+  render(session(<Settings />));
+  await screen.findByLabelText("Business name");
+  fireEvent.change(screen.getByLabelText("Business name"), { target: { value: "Original workspace edit" } });
+  fireEvent.change(screen.getByLabelText("New payout wallet"), { target: { value: newWallet } });
+  fireEvent.click(screen.getByRole("button", { name: "Review payout change" }));
+  await screen.findByText(/Your signed-in workspace changed/);
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole("button", { name: "Sign payout change" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Save sender details" }));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3));
+  expect(fetcher.mock.calls.map((call) => call[0])).toEqual(["/api/profile", "/api/profile", "/api/profile"]);
+  expect(JSON.parse(fetcher.mock.calls[2][1].body)).toMatchObject({ expectedProfileId: profile.id, businessName: "Original workspace edit" });
+});
+
+it("does not adopt another workspace's profile during revision-conflict review", async () => {
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce(json({ error: { code: "REVISION_CONFLICT" } }, 409))
+    .mockResolvedValueOnce(json({ profile: { ...profile, id: client.id, revision: 3 } }));
+  vi.stubGlobal("fetch", fetcher);
+  render(<BillingForm kind="sender" initial={profile} onSaved={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText("Business name"), { target: { value: "My unsaved edit" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save sender details" }));
+  await screen.findByRole("alert");
+  fireEvent.click(screen.getByRole("button", { name: "Review latest saved version" }));
+  await screen.findByText(/Your signed-in workspace changed/);
+  expect(screen.queryByRole("button", { name: "Use latest revision, keep my edits" })).toBeNull();
+  expect((screen.getByLabelText("Business name") as HTMLInputElement).value).toBe("My unsaved edit");
+  expect((screen.getByRole("button", { name: "Save sender details" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(fetcher).toHaveBeenCalledTimes(2);
 });
 
 it("creates a client with null CAS fields then updates with its returned identity", async () => {

@@ -11,6 +11,6 @@ export function payrEmailLogo(origin: string): string {
   } catch { return "Payr"; }
   return `<table role="presentation" cellpadding="0" cellspacing="0"><tr>
 <td style="vertical-align:middle;color:#071B3B;font-family:Helvetica,Arial,sans-serif;font-size:28px;line-height:28px;font-weight:600">Pay</td>
-<td width="28" height="28" style="width:28px;height:28px;vertical-align:middle;font-size:0;line-height:0"><img src="${logoUrl}" width="28" height="28" alt="r" style="display:block;width:28px;height:28px;max-width:28px;max-height:28px;border:0"></td>
+<td width="28" height="28" style="width:28px;height:28px;vertical-align:middle;font-size:0;line-height:0"><img src="${logoUrl}" width="28" height="28" alt="r" style="display:block;width:28px;height:28px;max-width:28px;max-height:28px;border:0;color:#071B3B;font-family:Helvetica,Arial,sans-serif;font-size:28px;line-height:28px;font-weight:600"></td>
 </tr></table>`;
 }

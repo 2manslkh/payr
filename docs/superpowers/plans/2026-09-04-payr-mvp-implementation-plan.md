@@ -1281,7 +1281,7 @@ Worker protocol:
 2. Do not send until receipt is `ready`; regenerate receipt/invoice links at send time after any process restart.
 3. Persist `provider_request_started_at` before calling Resend, then send with the same provider idempotency key for that logical row.
 4. On confirmed success, fenced-update to `sent` with provider message ID.
-5. On definite transient failure, fenced-update to `retry_wait` with deterministic `next_attempt_at = now + min(30s * 2^attempt, 30m)`. The committed MVP adds no jitter so boundary and recovery behavior stay exact.
+5. On definite transient failure, fenced-update to `retry_wait` with capped exponential backoff and jitter, as required by the framing spec. Set `cap = min(30s * 2^attempt, 30m)`, sample a delay between half and all of that cap, and persist `next_attempt_at = now + delay` once in the fenced update. Inject the jitter source in tests to verify both bounds deterministically; jitter never changes the separate 24-hour ambiguous-send cutoff. This receipt/outbox policy does not replace F3 publication's existing lease-expiry recovery protocol.
 6. A stale `sending` row whose provider request may have escaped is ambiguous. Retry automatically with the same key only while `now < first_provider_attempt_at + 24h`.
 7. At exactly or beyond that 24-hour boundary, an ambiguous row becomes `manual_review`; never blindly resend it because Resend's idempotency protection may have expired.
 8. A permanent provider rejection becomes `failed`. Receipt/settlement remain intact.

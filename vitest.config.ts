@@ -1,6 +1,7 @@
 import { defineConfig } from "vitest/config";
 
 const pdfTests = [
+  "src/lib/documents/receipt-pdf.test.tsx",
   "src/lib/documents/invoice-pdf.test.tsx",
   "src/lib/documents/invoice-storage.pdf.test.ts",
   "src/lib/documents/pdf-verification.test.ts",

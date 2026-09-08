@@ -8,10 +8,12 @@ const maxBytes = 10485760;
 const uuid = z.string().uuid().refine((value) => value === value.toLowerCase());
 
 function keyParts(key: string) {
+  const receipt = typeof key === "string" && /^workspace\/([0-9a-f-]{36})\/receipt\/([0-9a-f-]{36})\.pdf$/.exec(key);
+  if (receipt && [receipt[1], receipt[2]].every((id) => uuid.safeParse(id).success)) return { kind: "receipt" as const };
   const match = typeof key === "string" && /^workspace\/([0-9a-f-]{36})\/invoice\/([0-9a-f-]{36})\/([1-9][0-9]{0,9})\/attempt\/([0-9a-f-]{36})\.pdf$/.exec(key);
   if (!match || ![match[1], match[2], match[4]].every((id) => uuid.safeParse(id).success)
     || Number(match[3]) > 2147483647) throw new DocumentVerificationError();
-  return { invoiceId: match[2], invoiceVersion: Number(match[3]) };
+  return { kind: "invoice" as const, invoiceId: match[2], invoiceVersion: Number(match[3]) };
 }
 
 function verifyEnvelope(document: StoredDocument) {
@@ -60,6 +62,7 @@ export function createInvoiceDocumentPort(storage: PrivateDocumentStorage, repos
   return { async createOrRead(input) {
     try {
       const key = keyParts(input.storageKey);
+      if (key.kind !== "invoice") throw new DocumentVerificationError();
       if (!/^0x[0-9a-f]{64}$/.test(input.publicationSalt)) throw new DocumentVerificationError();
       // Lazy producer loading also lets private reads operate independently of the renderer.
       const { parseCanonicalInvoiceDocument, buildPublishedInvoiceView } = await import("./invoice-view");

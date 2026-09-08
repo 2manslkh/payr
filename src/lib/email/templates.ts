@@ -38,8 +38,10 @@ function renderEmail(input: {
   amountDecimal: string; amountLabel: string; settled: boolean;
   rows: [string, string][]; action: [string, string]; secondary?: [string, string];
   logoOrigin?: string;
+  network?: "Arc" | "Arc Testnet";
 }): EmailContent {
   const { subject, previewText, heading, introduction, amountDecimal, amountLabel, settled, rows, action, secondary } = input;
+  const network = input.network ?? "Arc";
   // Invalid destinations remain literal text, never executable links. Do not normalize bearer URLs.
   const link = ([label, url]: [string, string], primary = false) => {
     let safe = false;
@@ -51,7 +53,7 @@ function renderEmail(input: {
     return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="${primary ? "display:inline-block;background:#071B3B;color:#FFFFFF;padding:16px 24px;border-radius:8px;font-weight:600;text-decoration:none" : "color:#071B3B;text-decoration:underline"}">${escapeHtml(label)}</a>`;
   };
   const footer = "Keep this email private. Its document links may grant access to invoice or receipt details.";
-  const textBody = ["Payr", subject, introduction, `${amountLabel}: ${amountDecimal} USDC on Arc`,
+  const textBody = ["Payr", subject, introduction, `${amountLabel}: ${amountDecimal} USDC on ${network}`,
     ...rows.map(([label, value]) => `${label}: ${value}`), `${action[0]}: ${action[1]}`,
     ...(secondary ? [`${secondary[0]}: ${secondary[1]}`] : []), footer].join("\n");
   const htmlBody = `<!doctype html>
@@ -68,7 +70,7 @@ ${payrEmailLogo(input.logoOrigin ?? action[1])}
 <p style="margin:0 0 28px">${escapeHtml(introduction)}</p>
 <p style="margin:0 0 4px;color:#606A76;font-size:14px">${escapeHtml(amountLabel)}</p>
 <p style="margin:0 0 4px;color:#071B3B;font-size:32px;line-height:1.25;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;word-break:break-word">${escapeHtml(amountDecimal)} USDC</p>
-<p style="margin:0 0 28px;color:#606A76;font-size:14px">${settled ? "Settlement verified on Arc" : "Pay with USDC on Arc"}</p>
+<p style="margin:0 0 28px;color:#606A76;font-size:14px">${settled ? `Settlement verified on ${network}` : `Pay with USDC on ${network}`}</p>
 <table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;border-collapse:collapse;font-size:14px">
 ${rows.map(([label, value]) => `<tr><th scope="row" align="left" valign="top" width="35%" style="padding:12px 8px 12px 0;border-top:1px solid #DDE2E6;color:#606A76;font-weight:400">${escapeHtml(label)}</th><td align="right" style="padding:12px 0;border-top:1px solid #DDE2E6;overflow-wrap:anywhere;word-break:break-word;${label === "Transaction" ? "font-family:Consolas,monospace;" : ""}">${escapeHtml(value)}</td></tr>`).join("\n")}
 </table>
@@ -104,11 +106,12 @@ export function buildReceiptEmail(input: ReceiptEmailInput, logoOrigin?: string)
   const settledAt = date.toISOString().replace("T", " ").replace(".000Z", " UTC").replace("Z", " UTC");
   return renderEmail({
     logoOrigin,
+    network: "Arc Testnet",
     subject: `${heading}: ${input.invoiceNumber}`,
-    previewText: `${input.amountDecimal} USDC settled on Arc for invoice ${input.invoiceNumber}.`,
+    previewText: `${input.amountDecimal} USDC settled on Arc Testnet for invoice ${input.invoiceNumber}.`,
     heading,
-    introduction: issuer ? "Payment for your invoice has been verified on Arc. Your receipt records the settlement details."
-      : "Payment for this invoice has been verified on Arc. Keep the receipt for your records.",
+    introduction: issuer ? "Payment for your invoice has been verified on Arc Testnet. Your receipt records the settlement details."
+      : "Payment for this invoice has been verified on Arc Testnet. Keep the receipt for your records.",
     amountDecimal: input.amountDecimal, amountLabel: issuer ? "Amount received" : input.audience === "both" ? "Amount settled" : "Amount paid", settled: true,
     rows: [["Invoice", input.invoiceNumber], ["Issuer", input.businessName], ["Billed to", input.clientBusinessName], ["Settled at", settledAt], ["Transaction", input.transactionHash]],
     action: ["View Receipt", input.receiptUrl],

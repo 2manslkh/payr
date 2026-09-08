@@ -1225,7 +1225,7 @@ The repository insertion has no commercial-state predicate. It records every eve
 
 - `POST /api/reconcile/transaction` accepts only a transaction hash, applies abuse limits, and ignores all supplied payment facts.
 - The route may return pending/not-found while RPC propagation completes, but never Paid without an inserted event.
-- `GET /api/jobs/reconcile` requires timing-safe `Authorization: Bearer <CRON_SECRET>`, reads bounded ranges from deployment/cursor to latest committed block, calls the same verifier, and advances the cursor only after the complete range succeeds.
+- `GET /api/jobs/reconcile` requires timing-safe `Authorization: Bearer <CRON_SECRET>`, reads bounded ranges from deployment/cursor to latest committed block, and calls the same verifier. Per the user-approved 8 September clarification in `DECISIONS.md`, it checkpoints the verified event prefix with a block/log compare-and-set position; it advances beyond a fetched range only after every remaining candidate succeeds. Partial failure preserves earlier verified checkpoints and never skips the failing candidate.
 - Duplicate invocation returns the same settlement and creates no duplicate receipt-document/email-delivery work.
 - A valid event creates settlement, a pending receipt-document row/link token, and deduplicated logical delivery rows transactionally.
 

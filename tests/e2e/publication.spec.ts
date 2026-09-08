@@ -140,7 +140,7 @@ test("real finalized fixture keeps credentials out of SSR/RSC, shares stable lin
   await expect(page.getByText("Publication finalized", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Approved client changes" })).toBeVisible();
   await expect(page.getByText(/Applied at publication/)).toBeVisible();
-  await expect(page.getByText(/Protected invoice pages and PDF downloads are available\. Payment is not yet available/).first()).toBeVisible();
+  await expect(page.getByText(/Protected invoice pages and PDF downloads are available\. A shared link is not evidence/).first()).toBeVisible();
   expect(shareRequests).toBe(0);
   await expect(page.locator(".publication-links")).toHaveCount(0);
   await page.getByRole("button", { name: "Refresh record" }).click();

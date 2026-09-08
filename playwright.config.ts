@@ -13,6 +13,7 @@ const baseURL = `http://localhost:${port}`;
 process.env.PAYR_E2E_SESSION_KEY ??= randomBytes(32).toString("base64");
 process.env.PAYR_E2E_CONNECTOR_PEPPER ??= randomBytes(32).toString("base64");
 process.env.PAYR_E2E_LINK_KEY ??= randomBytes(32).toString("base64");
+process.env.PAYR_E2E_CRON_SECRET ??= randomBytes(32).toString("base64");
 const identityEnvironment = {
   NEXT_PUBLIC_APP_URL: baseURL,
   // Test-only publication binding, not a claim that a contract is deployed here.
@@ -22,6 +23,8 @@ const identityEnvironment = {
   CONNECTOR_TOKEN_PEPPER: process.env.PAYR_E2E_CONNECTOR_PEPPER,
   LINK_ACTIVE_KEY_VERSION: "1",
   LINK_TOKEN_KEY_V1: process.env.PAYR_E2E_LINK_KEY,
+  CRON_SECRET: process.env.PAYR_E2E_CRON_SECRET,
+  PAYR_RECEIPT_EMAIL_ENABLED: "false",
 };
 Object.assign(process.env, identityEnvironment);
 

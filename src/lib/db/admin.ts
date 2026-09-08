@@ -8,7 +8,7 @@ type SupabaseAdminEnvironment = Readonly<{
 export function createSupabaseAdminClient(environment: SupabaseAdminEnvironment = {
   SUPABASE_URL: process.env.SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-}) {
+}, fetcher?: typeof fetch) {
   const supabaseUrl = environment.SUPABASE_URL;
   const serviceRoleKey = environment.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -26,6 +26,7 @@ export function createSupabaseAdminClient(environment: SupabaseAdminEnvironment 
   }
 
   return createClient(supabaseUrl, serviceRoleKey, {
+    ...(fetcher ? { global: { fetch: fetcher } } : {}),
     auth: {
       autoRefreshToken: false,
       detectSessionInUrl: false,

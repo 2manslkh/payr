@@ -4,6 +4,8 @@ import type { PublicationView } from "../lib/invoices/publication-contracts";
 import { DateValue } from "./console-ui";
 import { commercialLabels } from "./invoice-ui";
 import { PublicationActions } from "./publication-actions";
+import { SettlementProof } from "./settlement-proof";
+import type { SettlementManagementView } from "../lib/invoices/lifecycle";
 
 const clientLabels: Record<ClientField, string> = {
   businessName: "Business name", billingAddress: "Billing address", contactName: "Contact name", contactEmail: "Contact email",
@@ -27,7 +29,7 @@ function Provenance({ value }: { value: DraftSnapshot["clientProvenance"][Client
   return <>Web source, declared confirmed: <span className="invoice-source">{value.url}</span></>;
 }
 
-export function InvoiceDocument({ detail, publication }: { detail: InvoiceDetail; publication: PublicationView | null }) {
+export function InvoiceDocument({ detail, publication, proof = null }: { detail: InvoiceDetail; publication: PublicationView | null; proof?: SettlementManagementView | null }) {
   const { invoice, version, history } = detail;
   const snapshot = version?.snapshot;
   const published = invoice.commercialState !== "draft";
@@ -144,14 +146,15 @@ export function InvoiceDocument({ detail, publication }: { detail: InvoiceDetail
         <section className="invoice-rail-section">
           <h2>Record state</h2>
           <dl className="invoice-facts">
-            <dt>Commercial state</dt><dd>{commercialLabels[invoice.commercialState]}</dd>
+            <dt>Commercial state</dt><dd>{commercialLabels[proof?.commercialState ?? invoice.commercialState]}</dd>
             <dt>Payment</dt>
-            <dd className={invoice.paymentStatus === "paid" ? "invoice-paid" : undefined}>{invoice.paymentStatus === "paid" ? "Paid" : "Unpaid"}</dd>
+            <dd className={proof || invoice.paymentStatus === "paid" ? "invoice-paid" : undefined}>{proof || invoice.paymentStatus === "paid" ? "Paid" : "Unpaid"}</dd>
             <dt>Invoice ID</dt><dd className="technical">{invoice.id}</dd>
             <dt>Updated</dt><dd><DateValue value={invoice.updatedAt} /></dd>
           </dl>
-          <p className="muted">{invoice.paymentStatus === "paid" ? "A settlement is recorded. Commercial state remains a separate fact." : "No settlement is recorded for this invoice."}</p>
+          <p className="muted">{proof || invoice.paymentStatus === "paid" ? "A settlement is recorded. Commercial state remains a separate fact." : "No settlement is recorded for this invoice."}</p>
         </section>
+        {proof && <SettlementProof invoiceId={invoice.id} version={invoice.version} proof={proof} />}
         {publication ? (
           <PublicationActions
             invoiceId={invoice.id}

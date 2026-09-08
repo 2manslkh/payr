@@ -22,7 +22,7 @@ it("revalidates independently, uses the shared formatter/QR, and sends only prec
   } as unknown as PublicationAttempt;
   attempt.artifact!.invoiceDataHash = keccak256(toHex(canonicalPublicationJson(attempt)));
   mocks.resolve.mockResolvedValue({ invoiceId: attempt.invoiceId, invoiceVersion: 1, invoiceNumber: attempt.invoiceNumber,
-    commercialState: "published", payableUntil: "2000-01-01T00:00:00Z", voidedAt: null, settlement: null,
+    commercialState: "published", payableUntil: "2000-01-01T00:00:00Z", voidedAt: null, settlement: null, receipt: null,
     attempt, deliveries: [{ normalizedRecipient: "private-delivery" }] });
   mocks.runtime.mockReturnValue({ access: { resolve: mocks.resolve }, config: { appOrigin: "https://configured.test" } });
   mocks.parse.mockReturnValue({ parsed: true });
@@ -33,7 +33,8 @@ it("revalidates independently, uses the shared formatter/QR, and sends only prec
   expect(mocks.view).toHaveBeenCalledExactlyOnceWith({ parsed: true }, "https://configured.test/invoice/inert");
   expect(mocks.qr).toHaveBeenCalledExactlyOnceWith("https://configured.test/invoice/inert");
   expect(result.props).toEqual({ view: { invoiceNumber: attempt.invoiceNumber }, qrDataUrl: "data:image/png;base64,inert",
-    pdfContentHash: "pdf-hash", documentCommitment: "commitment", commercialState: "expired", paymentStatus: "unpaid", displayStatus: "Expired" });
+    pdfContentHash: "pdf-hash", documentCommitment: "commitment", commercialState: "expired", paymentStatus: "unpaid", displayStatus: "Expired",
+    receipt: { state: "not_applicable", pageUrl: null, pdfUrl: null, pdfFilename: null, pdfContentHash: null }, receiptEmailState: "not_applicable" });
 });
 
 it("does not render invoice facts when the target disappears after Proxy admission", async () => {

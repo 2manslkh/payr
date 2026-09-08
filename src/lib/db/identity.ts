@@ -45,7 +45,7 @@ const admission = z.discriminatedUnion("outcome", [
 ]);
 const audit = z.object({
   id: uuid, tokenId: uuid.nullable(), action: z.string().regex(/^[a-z][a-z0-9_.:-]{0,63}$/),
-  outcome: z.enum(["allowed", "denied", "rate_limited", "succeeded"]), createdAt: timestamp,
+  outcome: z.enum(["allowed", "denied", "rate_limited", "succeeded", "failed", "retry_wait", "manual_review"]), createdAt: timestamp,
 }).strict();
 const errorStatuses: Readonly<Record<string, number>> = {
   NOT_FOUND: 404, NONCE_INVALID_OR_USED: 400, INVALID_INPUT: 400, REVISION_CONFLICT: 409,

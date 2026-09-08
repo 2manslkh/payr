@@ -59,6 +59,17 @@ beforeEach(() => {
   producer.commitment.mockReturnValue(proof);
 });
 
+it("allows only the exact private receipt object key without accepting it as an invoice target", async () => {
+  const storageKey = `workspace/${id}/receipt/${id}.pdf`;
+  const bytes = object("receipt").bytes;
+  const upload = vi.fn().mockResolvedValue({ data: { path: storageKey }, error: null });
+  const storage = createPrivateDocumentStorage({ storage: { from: () => ({ upload }) } } as unknown as SupabaseClient);
+  expect(await storage.create(storageKey, bytes)).toBe("created");
+  expect(upload).toHaveBeenCalledWith(storageKey, bytes, { contentType: "application/pdf", upsert: false });
+  await expect(createInvoiceDocumentPort({ read: vi.fn(), create: vi.fn() }, { storageState: vi.fn() })
+    .createOrRead({ ...input, storageKey })).rejects.toEqual(new DocumentVerificationError());
+});
+
 it("reads and verifies the downloaded collision winner rather than the rendered upload bytes", async () => {
   const winner = object("winner"), read = vi.fn().mockResolvedValueOnce(null).mockResolvedValue(winner);
   const create = vi.fn().mockResolvedValue("exists"), storageState = vi.fn().mockResolvedValue("rendering");

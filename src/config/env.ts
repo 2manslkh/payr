@@ -3,6 +3,7 @@ import type { DocumentAccessConfig } from "../lib/documents/contracts";
 import type { IdentityConfig } from "../lib/identity/contracts";
 import type { PublicationConfig, PublicationLinkConfig } from "../lib/invoices/publication-contracts";
 import { ARC_TESTNET_CHAIN_ID } from "../lib/chain/arc";
+import { receiptSenderSchema } from "../lib/email/address";
 
 const isAllowedAppUrl = (value: string) => {
   const url = new URL(value);
@@ -155,4 +156,26 @@ export function createPaymentEnv(value: unknown = process.env) {
     trustedContracts: [parsed.NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS, ...parsed.PAYR_RETAINED_SETTLEMENT_CONTRACTS],
     privateKey: parsed.TESTNET_ATTESTOR_PRIVATE_KEY,
   };
+}
+
+export function createReconciliationEnv(value: unknown = process.env) {
+  const publication = createPublicationEnv(value);
+  const address = z.string().regex(/^0x[0-9a-fA-F]{40}$/).refine((value) => !/^0x0{40}$/.test(value))
+    .transform((value) => value.toLowerCase() as `0x${string}`);
+  const parsed = z.object({
+    ARC_RPC_URL: z.string().url(),
+    PAYR_RECONCILIATION_START_BLOCK: z.string().max(78).regex(/^(0|[1-9][0-9]*)$/).refine((value) => BigInt(value) < (1n << 256n)),
+    PAYR_RETAINED_SETTLEMENT_CONTRACTS: z.string().default("").transform((value) => value === "" ? [] : value.split(","))
+      .pipe(z.array(address).max(20)),
+  }).parse(value);
+  const contracts = [publication.contractAddress, ...parsed.PAYR_RETAINED_SETTLEMENT_CONTRACTS];
+  if (publication.chainId !== ARC_TESTNET_CHAIN_ID || new URL(parsed.ARC_RPC_URL).protocol !== "https:") throw new Error("Invalid settlement configuration");
+  return { ...publication, rpcUrl: parsed.ARC_RPC_URL, contracts: [...new Set(contracts)], startBlock: BigInt(parsed.PAYR_RECONCILIATION_START_BLOCK) };
+}
+
+export function createReceiptDeliveryEnv(value: unknown = process.env) {
+  const enabled = z.object({ PAYR_RECEIPT_EMAIL_ENABLED: z.enum(["true", "false"]).default("false") }).parse(value);
+  if (enabled.PAYR_RECEIPT_EMAIL_ENABLED === "false") return null;
+  const parsed = z.object({ RESEND_API_KEY: z.string().min(1).max(512), RESEND_FROM_EMAIL: receiptSenderSchema }).parse(value);
+  return { apiKey: parsed.RESEND_API_KEY, from: parsed.RESEND_FROM_EMAIL };
 }

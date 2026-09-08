@@ -8,11 +8,13 @@ export type ProtectedInvoiceProps = Pick<InvoiceStatusResult, "commercialState" 
   qrDataUrl: string;
   pdfContentHash: string;
   documentCommitment: string;
+  receipt?: InvoiceStatusResult["receipt"];
+  receiptEmailState?: InvoiceStatusResult["receiptEmail"]["state"];
 };
 
 // Commit Ledger extension: read the frozen document, review exact payment facts,
 // and download its immutable PDF. No workspace chrome or payment simulation.
-export function ProtectedInvoice({ view, qrDataUrl, pdfContentHash, documentCommitment, commercialState, paymentStatus, displayStatus }: ProtectedInvoiceProps) {
+export function ProtectedInvoice({ view, qrDataUrl, pdfContentHash, documentCommitment, commercialState, paymentStatus, displayStatus, receipt, receiptEmailState }: ProtectedInvoiceProps) {
   const commercialLabels = { draft: "Draft", published: "Published", voided: "Voided", expired: "Expired" };
   return (
     <main className={styles.surface}>
@@ -77,7 +79,12 @@ export function ProtectedInvoice({ view, qrDataUrl, pdfContentHash, documentComm
               ? "A verified settlement is recorded. The commercial state remains a separate fact."
               : commercialState === "expired"
                 ? "The payment deadline has passed. This immutable invoice remains available to read and download."
-                : "No verified settlement is recorded. Payment is not available on this page. Do not send a direct transfer as a substitute."}</p>
+               : "No verified settlement is recorded. Payment is not available on this page. Do not send a direct transfer as a substitute."}</p>
+            {receipt && receipt.state !== "not_applicable" && <section className={styles.section} aria-label="Receipt progress"><h2>Receipt</h2>
+              <p>{({ pending: "Receipt queued.", rendering: "Receipt is being generated.", retry_wait: "Receipt generation will retry.", failed: "Receipt generation needs attention.", ready: "Verified receipt available." })[receipt.state]}</p>
+              {receipt.state === "ready" && receipt.pageUrl && <a className={styles.invoiceLink} href={receipt.pageUrl} referrerPolicy="no-referrer">View receipt</a>}
+              {receiptEmailState && <p>Email status: {receiptEmailState === "sent" ? "Accepted by email provider" : receiptEmailState.replaceAll("_", " ")}</p>}
+            </section>}
           </section>
         </aside>
         <section className={styles.linkSection} aria-labelledby="invoice-link-heading">

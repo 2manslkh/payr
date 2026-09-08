@@ -1,0 +1,9 @@
+.proof { padding: 24px; background: var(--navy); color: var(--paper); overflow-wrap: anywhere; }
+.proof h2 { font-size: 1.125rem; }
+.amount { margin-block: 16px 8px; font-size: 1.75rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.proof dl { margin-top: 24px; }
+.proof dl > div + div { margin-top: 20px; }
+.proof dt { color: #c5d1e2; font-size: 0.875rem; }
+.proof dd { margin: 6px 0 0; line-height: 1.6; }
+.proof a { color: inherit; display: inline-flex; align-items: center; min-height: 44px; }
+.proof a:focus-visible { outline: 3px solid var(--paper); outline-offset: 4px; }

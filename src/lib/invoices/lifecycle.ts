@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { canonicalJson } from "../domain/canonical-json";
-import { isPayable } from "../domain/invoice";
-import { buildInvoiceStatus, type InvoiceStatusFacts } from "../domain/status";
+import { deriveEffectiveCommercialState, deriveSettledAfterVoid, isPayable } from "../domain/invoice";
+import { buildInvoiceStatus, deriveReceiptEmailState, type InvoiceStatusFacts } from "../domain/status";
 import { IdentityError, walletSchema } from "../identity/contracts";
 import { PublicationError, type InvoiceLifecycleService, type PublicationLinkConfig, type PublicationRepository, type PublicationStatusData, type PublicationView } from "./publication-contracts";
 import { publicationLink } from "./publication-links";
@@ -26,8 +26,11 @@ export function createInvoiceLifecycleService(repository: PublicationRepository,
       const data = await repository.statusData(parsedActor.data, id.data);
       if (!data) throw new PublicationError("NOT_FOUND", 404);
       const { attempt, receipt, settlement } = data;
+      const observedAt = now();
       let invoiceDocument: InvoiceStatusFacts["invoiceDocument"] = null;
-      if (attempt?.state === "finalized" && attempt.finalizedAt !== null && attempt.artifact) {
+      // Retired keys for dead invoice bearers must not block a separately live receipt.
+      if (attempt?.state === "finalized" && attempt.finalizedAt !== null && attempt.artifact
+        && (getConfig().keys.has(attempt.link.keyVersion) || publicationView(data, observedAt).canShare)) {
         const pageUrl = publicationLink(attempt.link, "invoice-bearer", getConfig());
         invoiceDocument = {
           state: "ready", pageUrl, pdfUrl: `${pageUrl}/pdf`,
@@ -48,7 +51,7 @@ export function createInvoiceLifecycleService(repository: PublicationRepository,
       // Project every nested DTO: repository rows may acquire private fields without changing this response.
       return buildInvoiceStatus({
         invoiceId: data.invoiceId, invoiceVersion: data.invoiceVersion, invoiceNumber: data.invoiceNumber ?? null,
-        commercialState: data.commercialState, payableUntil: data.payableUntil ?? null, now: now(),
+        commercialState: data.commercialState, payableUntil: data.payableUntil ?? null, now: observedAt,
         voidedAt: data.voidedAt == null ? null : new Date(data.voidedAt),
         settlement: settlement === null ? null : {
           chainId: settlement.chainId, contractAddress: settlement.contractAddress, invoiceVersion: settlement.invoiceVersion,
@@ -93,6 +96,27 @@ export function createInvoiceLifecycleService(repository: PublicationRepository,
     },
   };
 }
+
+export function settlementManagementView(data: PublicationStatusData, explorerOrigin: string, now = new Date()) {
+  const s = data.settlement;
+  if (!s) return null;
+  const receipt = data.receipt;
+  return {
+    commercialState: data.payableUntil === null ? data.commercialState
+      : deriveEffectiveCommercialState(data.commercialState, now, new Date(data.payableUntil)),
+    settledAfterVoid: deriveSettledAfterVoid(data.voidedAt === null ? null : new Date(data.voidedAt), { blockTime: new Date(s.blockTime) }),
+    settlement: { chainId: s.chainId, contractAddress: s.contractAddress, invoiceVersion: s.invoiceVersion,
+      transactionHash: s.transactionHash, logIndex: s.logIndex, blockNumber: s.blockNumber, blockTime: s.blockTime,
+      payer: s.payer, payee: s.payee, amountDecimal: s.amountDecimal, amountAtomic: s.amountAtomic, documentCommitment: s.documentCommitment },
+    transactionUrl: new URL(`/tx/${s.transactionHash}`, explorerOrigin).href,
+    receiptState: receipt?.state ?? "not_applicable" as const,
+    receiptPdfContentHash: receipt?.state === "ready" ? receipt.artifact?.pdfContentHash ?? null : null,
+    canRevealReceipt: receipt?.state === "ready" && receipt.link.revokedAt === null && receipt.link.activatedAt !== null
+      && Date.parse(receipt.link.activatedAt) <= now.getTime() && Date.parse(receipt.link.expiresAt) > now.getTime(),
+    receiptEmailState: deriveReceiptEmailState(true, data.deliveries),
+  };
+}
+export type SettlementManagementView = NonNullable<ReturnType<typeof settlementManagementView>>;
 
 export function publicationView(data: PublicationStatusData | null, now: Date = new Date()): PublicationView {
   const attempt = data?.attempt;

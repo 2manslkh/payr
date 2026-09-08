@@ -19,6 +19,11 @@ const identityEnvironment = {
   // Test-only publication binding, not a claim that a contract is deployed here.
   NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS: `0x${"3".repeat(40)}`,
   ARC_CHAIN_ID: "5042002",
+  PAYR_MONEY_MODE: "testnet",
+  NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: "1".repeat(32),
+  // Public synthetic signer matches payment-page.spec.ts; no server signing key is needed.
+  PAYR_ATTESTOR_ADDRESS: "0x7e5f4552091a69125d5dfcb7b8c2659029395bdf",
+  ARC_RPC_URL: "https://rpc.testnet.arc.network",
   SESSION_ENCRYPTION_KEY: process.env.PAYR_E2E_SESSION_KEY,
   CONNECTOR_TOKEN_PEPPER: process.env.PAYR_E2E_CONNECTOR_PEPPER,
   LINK_ACTIVE_KEY_VERSION: "1",

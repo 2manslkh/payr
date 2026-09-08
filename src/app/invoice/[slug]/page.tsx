@@ -7,6 +7,9 @@ import { buildPublishedInvoiceView, parseCanonicalInvoiceDocument } from "../../
 import { invoiceQrDataUrl } from "../../../lib/documents/invoice-pdf";
 import { createDocumentRuntime } from "../../../lib/documents/runtime";
 import { canonicalPublicationJson, publicationLink } from "../../../lib/invoices/publication-links";
+import { createWalletPaymentEnv } from "../../../config/env";
+import { publicPaymentStatus } from "../../../lib/payments/public-status";
+import { validatePaymentStatus } from "../../../lib/payments/payment-contracts";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,6 +50,13 @@ export default async function InvoicePage({ params }: { params: Promise<{ slug: 
       props = { view, qrDataUrl, pdfContentHash: artifact.pdfContentHash, documentCommitment: artifact.documentCommitment,
         commercialState: status.commercialState, paymentStatus: status.paymentStatus, displayStatus: status.displayStatus,
         receipt: status.receipt, receiptEmailState: status.receiptEmail.state };
+      const wallet = createWalletPaymentEnv();
+      if (wallet && document.chainId === 5042002) {
+        const setup = { ...wallet, invoiceKey: document.invoiceKey, contractAddress: document.contractAddress,
+          documentCommitment: artifact.documentCommitment, payee: view.payoutWallet as `0x${string}`,
+          amountAtomic: view.amountAtomic, amountDecimal: view.amountDecimal, payableUntil: view.payableUntil };
+        props.payment = { setup, initialStatus: validatePaymentStatus(publicPaymentStatus(target, runtime.config), setup) };
+      }
     }
   } catch {
     // Server Components cannot set a 503 status. Never throw provider errors (or

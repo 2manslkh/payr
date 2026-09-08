@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { DocumentUnavailableError } from "./contracts";
 
-export function createPrivateHeaders(rpcOrigins: readonly string[] = []): Headers {
+export function createPrivateHeaders(rpcOrigins: readonly string[] = [], walletConnect = false): Headers {
   const nonce = randomBytes(24).toString("base64");
   for (const origin of rpcOrigins) {
     try {
@@ -20,7 +20,8 @@ export function createPrivateHeaders(rpcOrigins: readonly string[] = []): Header
     "Content-Security-Policy": [
       "default-src 'self'", "base-uri 'none'", "object-src 'none'", "frame-ancestors 'none'",
       "form-action 'self'", "img-src 'self' data:",
-      `connect-src 'self'${rpcOrigins.length ? ` ${[...new Set(rpcOrigins)].join(" ")}` : ""}`,
+      `connect-src 'self'${rpcOrigins.length ? ` ${[...new Set(rpcOrigins)].join(" ")}` : ""}${walletConnect ? " wss://relay.walletconnect.org https://verify.walletconnect.org https://verify.walletconnect.com" : ""}`,
+      ...(walletConnect ? ["frame-src https://verify.walletconnect.org https://verify.walletconnect.com"] : []),
       `script-src 'self' 'nonce-${nonce}'`, `style-src 'self' 'nonce-${nonce}'`,
     ].join("; "),
   });

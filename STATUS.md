@@ -4,11 +4,11 @@ Last updated: 2026-09-08
 
 ## Stage
 
-R00-R07 were released through `v0.6.0` in PR #8. R08 reconciliation, immutable receipts, durable delivery, and protected proof UI are implemented sequentially, with one scoped real receipt email reported delivered and its attachment bytes verified. In parallel, `main` advanced through review fixes and the landing page to `v1.1.0`. The user approved preserving those releases while integrating R08 for `v1.2.0`; integrated gates and release remain pending.
+R08 is released as `v1.2.0` at `8a87a76898badfc03dd9dc506ea3c3637e74a9dc` (PR #11). R09 client payment integration and four-tool Claude MCP are implemented and locally verified in `.worktrees/r09-client-mcp`, preserving the released R08 and landing/review fixes. R09 changes are uncommitted, undeployed, and unreleased; live Claude and full external-wallet proof remain separate gates.
 
 ## Single current objective
 
-R08 is committed atomically as `7f36510`, current `main` integrated as `9581c5b`, and the reviewed jitter policy forward-fixed as `492274f`. Complete clean-tree release preparation and protected `v1.2.0` PR/merge/tag verification. See `docs/ops/r08-receipts-delivery.md` and F5. Do not repay either demo invoice or resend the delivered receipt. Production-wide receipt email remains disabled. Preserve the 11 September feature freeze and final recording/upload buffers before the 13 September 16:00 UTC submission deadline.
+Obtain the next R09 checkpoint/release and deployment approvals, then perform the redacted deployed Claude smoke and separately approved external-wallet rehearsal. Local gates and review repairs are recorded in `docs/ops/r09-implementation.md`; operator steps are in `docs/ops/mcp-claude-smoke.md`. Do not repay either demo invoice or resend the delivered receipt. Production-wide receipt email remains disabled. Preserve the 11 September feature freeze and final recording/upload buffers before the 13 September 16:00 UTC submission deadline.
 
 ## Selected concept
 
@@ -20,7 +20,7 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 
 ## Now
 
-- R08 work is isolated on `integration/r08-reconciliation`, originally based on `v0.6.0`. Preserve root R09/dashboard work, environment files, the demo database, and payment journals. Verified-event-prefix checkpointing and full sequential implementation are explicitly approved. The R08 implementation commit is the F5 freeze boundary.
+- R09 work is isolated on `integration/r09-client-mcp`, based on released `v1.2.0` and committed F5. Root was a read-only wallet donor; its dashboard/install/branding work, environment files, demo database, and journals remain untouched. R08's verified-event-prefix, receipt/outbox, fairness/jitter, and protected access boundaries are preserved.
 - Preserve the completed R06 implementation and its [verified release read-back](https://github.com/2manslkh/payr/pull/7#issuecomment-5560122806); do not repeat released work.
 - R07 uses the existing service-only authorization RPC, pinned OpenZeppelin/Foundry contract, explicit testnet guards, and retained frozen-deployment allowlisting. Privy is not used.
 - R07 contract deployed with explicit user approval on 7 September: `0x21bf4df6beb22edb1a71f6dc7b92ffbab122a49a`, Arc testnet block `60849043`. Creation bytecode, receipt, code, and immutable unfunded attestor were read back; metadata is in `contracts/deployments/arc-testnet.json`.
@@ -72,7 +72,7 @@ Protected HTML has a remaining verification gap for denial-status uniformity if 
 ## Repository
 
 - Public repository: `https://github.com/2manslkh/payr`.
-- Latest fetched release baseline: `v1.1.0`, [PR #10](https://github.com/2manslkh/payr/pull/10). R08 originated at `v0.6.0` and is not part of those tags; integration and `v1.2.0` release are pending.
+- Latest locally verified release baseline: `v1.2.0`, [PR #11](https://github.com/2manslkh/payr/pull/11), `8a87a76898badfc03dd9dc506ea3c3637e74a9dc`. R09 starts here and has no release tag yet.
 - Root pending work is being reconciled on `integration/root-updates`; the clean R06 release worktree remains at `.worktrees/r06-integration`.
 - The R07 deployment snapshot and retained payment journal remain in `.worktrees/r07-finish`. Its implementation was subsequently released through PR #8. Vercel `dpl_Em186jttjVwZWFxLA4ukZKdPJrLo` was verified `Ready` before tagging; this does not claim deployment of any R08/R09 changes.
 - Production wallet UI lives in a separately approved combined deployment. Do not replace it with the narrower release snapshot without integrating and checking the wallet source.
@@ -83,10 +83,10 @@ Protected HTML has a remaining verification gap for denial-status uniformity if 
 
 - Product: GREEN - the user, pain, promise, onchain necessity, and non-goals are approved.
 - Design: GREEN - `Commit Ledger`, the responsive surface model, and brand treatment are approved; implemented fidelity remains unproven.
-- Engineering: YELLOW - reconciliation, receipt bytes, and scoped durable delivery are verified; integrated R08 release gates and the remaining R09 browser/Claude flow are outstanding.
+- Engineering: YELLOW - R08 is released; R09 passes 1,948 unit/PDF, 467 isolated DB, 72 desktop/mobile browser, 10 release-tool, and 35 compiled-document tests plus build/lint/typecheck. Protected R09 CI/release, deployed Claude, and external-wallet proof remain outstanding.
 - Demo: YELLOW - the causal three-minute sequence and honest fallback are defined, but unexercised by this tranche.
 - Submission: RED - repository and health shell exist; the user-owned architecture diagram is in progress. End-to-end product proof, final diagram verification, post-product video recording, and submitted dashboard confirmation remain outstanding.
 
 ## Next review gate
 
-The integrated gate passed at `492274f`: all ten migrations reset/linted, 462 database tests, 1,832 unit/PDF tests (13 skipped), 10 release-tool tests, build and five PDF traces, 35 compiled-document tests, and 68 desktop/mobile browser tests. Prepare the version-only final commit and verify protected PR/merge/tag/post-merge CI. The earlier intermittent 18-page PDF timeout remains documented, but the complete integrated gate is green. Operator mode is explicit, not unattended delivery proof. See `docs/ops/r08-receipts-delivery.md`. This status document grants no new external-operation approval. Preserve final recording/upload reserves and the R09 feature-freeze deadline.
+Review the R09 handoff and authorize its next checkpoint/deployment or release step. Both independent review axes have no unresolved findings after repairs; the complete local and disposable Linux gates pass. R08's earlier intermittent 18-page PDF timeout remains historical risk, not hidden by the current pass. Operator mode is explicit, not unattended delivery proof. See `docs/ops/r09-implementation.md` and preserve R08's separately dated live evidence. This status document grants no new external-operation approval. Preserve final recording/upload reserves and the R09 feature-freeze deadline.

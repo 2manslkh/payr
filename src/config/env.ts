@@ -179,3 +179,18 @@ export function createReceiptDeliveryEnv(value: unknown = process.env) {
   const parsed = z.object({ RESEND_API_KEY: z.string().min(1).max(512), RESEND_FROM_EMAIL: receiptSenderSchema }).parse(value);
   return { apiKey: parsed.RESEND_API_KEY, from: parsed.RESEND_FROM_EMAIL };
 }
+
+export function createWalletPaymentEnv(value: unknown = process.env) {
+  if (!z.object({ NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().optional() }).parse(value).NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID) return null;
+  const parsed = z.object({
+    NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().regex(/^[0-9a-f]{32}$/),
+    NEXT_PUBLIC_APP_URL: publicEnvSchema.shape.NEXT_PUBLIC_APP_URL,
+    PAYR_MONEY_MODE: z.literal("testnet"), ARC_CHAIN_ID: z.literal(String(ARC_TESTNET_CHAIN_ID)),
+    ARC_RPC_URL: z.string().url(),
+    PAYR_ATTESTOR_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).refine((value) => !/^0x0{40}$/.test(value)),
+  }).parse(value);
+  const rpc = new URL(parsed.ARC_RPC_URL);
+  if (rpc.protocol !== "https:" || rpc.username || rpc.password || rpc.pathname !== "/" || rpc.search || rpc.hash) throw new Error("Public payment RPC must be credential-free");
+  return { projectId: parsed.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID, appOrigin: parsed.NEXT_PUBLIC_APP_URL,
+    rpcUrl: parsed.ARC_RPC_URL, attestor: parsed.PAYR_ATTESTOR_ADDRESS.toLowerCase() as `0x${string}` };
+}

@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createPrivateHeaders, privateDocumentError } from "./lib/documents/private-response";
 import { createDocumentRuntime } from "./lib/documents/runtime";
 import { createReceiptRuntime } from "./lib/receipts/runtime";
+import { discoveryLinks } from "./lib/discovery";
 
 export async function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname === "/") {
+    return NextResponse.next({ headers: { Link: discoveryLinks } });
+  }
   let headers = createPrivateHeaders();
   const kind = request.nextUrl.pathname.startsWith("/receipt/") ? "Receipt" : "Invoice";
   try {
@@ -36,4 +40,4 @@ export async function proxy(request: NextRequest) {
 }
 
 // No prefetch/RSC exclusions: every protected representation crosses admission.
-export const config = { matcher: ["/invoice/:path*", "/receipt/:path*"] };
+export const config = { matcher: ["/", "/invoice/:path*", "/receipt/:path*"] };

@@ -1,6 +1,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { mcpServerInfo } from "./info";
 import type { InvoiceActor } from "../invoices/contracts";
 import { DraftError } from "../invoices/errors";
 import { PublicationError } from "../invoices/publication-contracts";
@@ -62,7 +63,7 @@ const safeCodes = new Set(["INVALID_INPUT", "PROHIBITED_FIELD", "PAYLOAD_TOO_LAR
   "INVOICE_NOT_VOIDABLE", "LINK_UNAVAILABLE", "CONFIGURATION_ERROR", "DOCUMENTS_NOT_CONFIGURED"]);
 
 export function createMcpServer(actor: InvoiceActor, services: McpServices) {
-  const server = new Server({ name: "Payr", version: "1.2.0" }, { capabilities: { tools: {} } });
+  const server = new Server(mcpServerInfo, { capabilities: { tools: {} } });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
   server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
     try {

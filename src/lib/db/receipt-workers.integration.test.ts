@@ -23,12 +23,12 @@ it("claims a receipt once with a string fence and its immutable invoice and sett
     attempt: { invoiceId: target.invoiceId }, settlement: { amountAtomic: target.snapshot.amountAtomic } });
 });
 
-it("retries transient receipt failures with exact backoff and fences terminal failure", async () => {
+it("retries transient receipt failures with bounded jitter and fences terminal failure", async () => {
   const { db, receiptDocumentId: id } = await settledFixture();
   await db.rpc("payr_claim_receipt_v1", { p_id: id });
   const retry = await db.rpc("payr_fail_receipt_v1", { p_id: id, p_fence: "1", p_code: "DOCUMENT_UNAVAILABLE" });
   expect(retry.error).toBeNull(); expect(retry.data).toBe(true);
-  expect(sql(`select state::text||':'||round(extract(epoch from next_attempt_at-updated_at))::text from public.receipt_documents where id='${id}';`)).toBe("retry_wait:60");
+  expect(sql(`select state,extract(epoch from next_attempt_at-updated_at) between 30 and 60 from public.receipt_documents where id='${id}';`)).toBe("retry_wait|t");
   expect((await db.rpc("payr_claim_receipt_v1", { p_id: id })).data).toBeNull();
   sql(`update public.receipt_documents set next_attempt_at=clock_timestamp()-interval '1 second' where id='${id}';`);
   expect((await db.rpc("payr_claim_receipt_v1", { p_id: id })).data).toMatchObject({ fence: "2" });

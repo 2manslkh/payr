@@ -2,6 +2,25 @@ import { expect, it } from "vitest";
 import { settledFixture, sql } from "./settlement.test-support";
 import { createIdentityRepository } from "./identity";
 
+it("injects retry jitter samples at both bounds, caps the delay, and rejects invalid samples", () => {
+  for (const attempt of [0, 1, 5, 6, 2147483647]) {
+    const cap = Math.min(1800, 30 * 2 ** Math.min(attempt, 6));
+    for (const sample of [0, 0.5, 1]) {
+      expect(Number(sql(`select extract(epoch from public.payr_worker_retry_sample_v1('2030-01-01Z',${attempt},${sample})-'2030-01-01Z'::timestamptz);`)))
+        .toBe(cap * (0.5 + sample / 2));
+    }
+  }
+  for (const sample of ["null", "-0.1", "1.1", "'NaN'", "'Infinity'"]) {
+    expect(() => sql(`select public.payr_worker_retry_sample_v1('2030-01-01Z',1,${sample});`)).toThrow();
+  }
+  expect(sql(`select bool_and(delay between 30 and 60),count(distinct delay)>1 from
+    (select extract(epoch from public.payr_worker_retry_at_v1('2030-01-01Z',1)-'2030-01-01Z'::timestamptz) delay from generate_series(1,20)) samples;`))
+    .toBe("t|t");
+  expect(sql(`select has_function_privilege('anon','public.payr_worker_retry_sample_v1(timestamptz,integer,double precision)','execute'),
+    has_function_privilege('authenticated','public.payr_worker_retry_sample_v1(timestamptz,integer,double precision)','execute'),
+    has_function_privilege('service_role','public.payr_worker_retry_sample_v1(timestamptz,integer,double precision)','execute');`)).toBe("f|f|f");
+});
+
 async function fixture(ready = true) {
   const value = await settledFixture();
   const { db, receiptDocumentId, actor, target } = value;
@@ -72,7 +91,10 @@ it("stops a changed payload before another provider-request marker can be writte
   await db.rpc("payr_begin_delivery_v1", { p_id: id, p_fence: "1", p_payload_hash: "a".repeat(64) });
   const retry = await db.rpc("payr_finish_delivery_v1", { p_id: id, p_fence: "1", p_result: { kind: "retry", code: "PROVIDER_RATE_LIMITED" } });
   expect(retry.data.state).toBe("retry_wait");
-  expect(sql(`select round(extract(epoch from next_attempt_at-updated_at)) from public.email_deliveries where id='${id}';`)).toBe("60");
+  expect(sql(`select extract(epoch from next_attempt_at-updated_at) between 30 and 60 from public.email_deliveries where id='${id}';`)).toBe("t");
+  const scheduled = retry.data.nextAttemptAt;
+  expect((await db.rpc("payr_finish_delivery_v1", { p_id: id, p_fence: "1", p_result: { kind: "retry", code: "PROVIDER_RATE_LIMITED" } })).data).toBeNull();
+  expect(Date.parse(sql(`select next_attempt_at from public.email_deliveries where id='${id}';`))).toBe(Date.parse(scheduled));
   sql(`update public.email_deliveries set next_attempt_at=clock_timestamp()-interval '1 second' where id='${id}';`);
   await db.rpc("payr_claim_delivery_v1", { p_id: id });
   const stopped = await db.rpc("payr_begin_delivery_v1", { p_id: id, p_fence: "2", p_payload_hash: "b".repeat(64) });

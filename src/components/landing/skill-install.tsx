@@ -56,7 +56,7 @@ export function SkillInstall() {
           <code><span>{managers[selected].runner}</span>{" skills add "}<span className={styles.source}>2manslkh/payr</span>{" --skill payr-create-invoice"}</code>
         </div>
       </div>
-      <p className={styles.note}>Install the Payr skill in your coding agent. <Link href="/app/connections">Connect Payr tools separately.</Link></p>
+      <p className={styles.note}>Install Payr in any agent <Link href="/app/connections">Connect Payr tools separately.</Link></p>
       <span role="status" className={copyState === "error" ? styles.error : "sr-only"}>{copyState === "copied" ? "Installation command copied." : copyState === "error" ? "Couldn't copy. Select and copy the command above." : ""}</span>
     </section>
   );

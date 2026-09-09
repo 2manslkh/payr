@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { addressSchema, IdentityError, savedClientProvenanceSchema, type IdentityRepository, type IdentitySession } from "../identity/contracts";
+import { addressSchema, connectorScopesSchema, IdentityError, savedClientProvenanceSchema, type IdentityRepository, type IdentitySession } from "../identity/contracts";
 import type { RpcClient } from "./repositories";
 
 const uuid = z.string().uuid();
@@ -35,7 +35,7 @@ const clientProfile = z.object({
 }).strict();
 const connector = z.object({
   id: uuid, createdAt: timestamp, expiresAt: timestamp, revokedAt: timestamp.nullable(), lastUsedAt: timestamp.nullable(),
-  scopes: z.tuple([z.literal("invoice:draft"), z.literal("invoice:publish"), z.literal("invoice:status"), z.literal("invoice:void")]),
+  scopes: connectorScopesSchema,
 }).strict();
 const connectorRecord = connector.extend({ workspaceId: uuid, tokenHash: z.string().regex(/^[0-9a-f]{64}$/) });
 const admission = z.discriminatedUnion("outcome", [
@@ -49,7 +49,7 @@ const audit = z.object({
 }).strict();
 const errorStatuses: Readonly<Record<string, number>> = {
   NOT_FOUND: 404, NONCE_INVALID_OR_USED: 400, INVALID_INPUT: 400, REVISION_CONFLICT: 409,
-  CLIENT_ALIAS_CONFLICT: 409, CONNECTOR_CONFLICT: 409,
+  CLIENT_ALIAS_CONFLICT: 409, CONNECTOR_CONFLICT: 409, PROFILE_CONFLICT: 409, FORBIDDEN: 403,
 };
 
 export function createIdentityRepository(client: RpcClient): IdentityRepository {
@@ -84,11 +84,18 @@ export function createIdentityRepository(client: RpcClient): IdentityRepository 
     applyPayoutChange: (identity, id) => call("payr_apply_payout_change_v1", { ...scope(identity), p_nonce_id: id }, profile),
     getProfile: (identity) => call("payr_get_sender_profile_v1", scope(identity), profile),
     saveProfile: (identity, input) => call("payr_save_sender_profile_v1", { ...scope(identity), p_input: input }, profile),
+    getConnectorProfile: (actor) => call("payr_connector_get_sender_profile_v1", {
+      p_workspace_id: actor.workspaceId, p_connector_id: actor.connectorId,
+    }, profile),
+    saveConnectorProfile: (actor, input) => call("payr_connector_save_sender_profile_v1", {
+      p_workspace_id: actor.workspaceId, p_connector_id: actor.connectorId, p_input: input,
+    }, profile),
     listClients: (identity) => call("payr_list_clients_v1", scope(identity), z.array(clientProfile)),
     saveClient: (identity, input) => call("payr_save_client_v1", { ...scope(identity), p_input: input }, clientProfile),
     listConnectors: (identity) => call("payr_list_connectors_v1", scope(identity), z.array(connector)),
-    createConnector: (identity, input) => call("payr_create_connector_v1", {
+    createConnector: (identity, input) => call(input.scopes === undefined ? "payr_create_connector_v1" : "payr_create_connector_v2", {
       ...scope(identity), p_id: input.id, p_token_hash: input.tokenHash, p_expires_at: input.expiresAt,
+      ...(input.scopes === undefined ? {} : { p_scopes: input.scopes }),
     }, connector),
     revokeConnector: (identity, id) => call("payr_revoke_connector_v1", { ...scope(identity), p_id: id }, connector),
     findConnector: (id) => call("payr_find_connector_v1", { p_id: id }, connectorRecord.nullable()),

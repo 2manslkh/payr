@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const identity = await requireRequestSession(request, true);
     const input = await parseIdentityInput(request, createConnectorSchema);
     const { repository, config } = getIdentityRuntime();
-    return privateJson(await createConnectorService(repository, config).create(identity, input.expiresInDays));
+    return privateJson(await createConnectorService(repository, config).create(identity, input.expiresInDays, input.scopes));
   } catch (error) {
     return apiError(error);
   }

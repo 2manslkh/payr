@@ -38,7 +38,7 @@ async function fixture() {
   await repository.createConnector(owner, { id, tokenHash, expiresAt: new Date(Date.now() + 86_400_000).toISOString() });
   const ip = `2001:db8:${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}::1`;
   const ipHash = hash("connector-ip", normalizeIp(ip)!);
-  const services = { createDraft: vi.fn(), publish: vi.fn(), status: vi.fn(), void: vi.fn() };
+  const services = { createDraft: vi.fn(), publish: vi.fn(), status: vi.fn(), void: vi.fn(), getSenderProfile: vi.fn(), saveSenderProfile: vi.fn() };
   const runtime = { ...createConnectorAuthenticator(repository, config), services, appOrigin: config.appOrigin };
   const send = (body: unknown = { jsonrpc: "2.0", id: 1, method: "tools/list" }, address = ip) =>
     handleMcpRequest(new Request(`${config.appOrigin}/api/mcp/${token}`, { method: "POST",

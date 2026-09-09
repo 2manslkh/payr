@@ -53,7 +53,7 @@ export function createAuthRepository() {
       if (session.workspaceId !== identity.workspaceId || session.ownerWallet !== identity.ownerWallet) throw new IdentityError("NOT_FOUND", 404);
       return state.profile;
     },
-    saveProfile: unused, listClients: unused, saveClient: unused, listConnectors: unused,
+    saveProfile: unused, getConnectorProfile: unused, saveConnectorProfile: unused, listClients: unused, saveClient: unused, listConnectors: unused,
     createConnector: unused, revokeConnector: unused, findConnector: unused, admitConnector: unused, listActivity: unused,
   };
   return { state, repository };

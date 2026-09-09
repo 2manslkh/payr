@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { normalizeIp } from "../security/ip";
-import { CONNECTOR_SCOPES, IdentityError, type IdentityConfig, type IdentityRepository } from "../identity/contracts";
+import { SUPPORTED_CONNECTOR_SCOPES, IdentityError, type IdentityConfig, type IdentityRepository } from "../identity/contracts";
 import { createConnectorHasher } from "./crypto";
 
 export function createConnectorAuthenticator(repository: IdentityRepository, config: IdentityConfig): {
@@ -15,7 +15,7 @@ export function createConnectorAuthenticator(repository: IdentityRepository, con
           ? /^([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.([A-Za-z0-9_-]{43})$/.exec(token)
           : null;
         if (!parsed || Buffer.from(parsed[2], "base64url").toString("base64url") !== parsed[2]
-          || !CONNECTOR_SCOPES.some((scope) => scope === action)
+          || !SUPPORTED_CONNECTOR_SCOPES.some((scope) => scope === action)
           || normalizedIp === null) {
           throw new IdentityError("CONNECTOR_INVALID", 401);
         }

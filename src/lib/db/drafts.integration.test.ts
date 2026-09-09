@@ -635,28 +635,18 @@ describe("F3 draft transactions through Supabase RPC", () => {
     const token = connector();
     const input = write();
     const saved = await repository.saveDraft(actor, input);
-    const fixed = "array['invoice:draft','invoice:publish','invoice:status','invoice:void']::text[]";
-    // Restricted scopes cannot be issued by F2. This fixture exercises defense in depth for future tokens.
-    fixture("alter table public.connector_tokens drop constraint connector_tokens_fixed_scopes;");
-    try {
-      fixture(`update public.connector_tokens set scopes = array['invoice:status'] where id = '${token.connectorId}';`);
-      expect((await repository.listInvoices(token, { search: "", commercialState: null, limit: 50, offset: 0 })).items).toHaveLength(1);
-      expect(await repository.getInvoiceDetail(token, saved.draftId)).not.toBeNull();
-      expect((await repository.getOverview(token)).invoiceCount).toBe(1);
-      await expect(repository.findReplay(token, input.idempotencyKey, input.requestFingerprint)).rejects.toMatchObject({ code: "NOT_FOUND" });
-      await expect(repository.getContext(token, { draftId: null, clientId: null, clientAlias: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
-      await expect(repository.saveDraft(token, write())).rejects.toMatchObject({ code: "NOT_FOUND" });
-      fixture(`update public.connector_tokens set scopes = array['invoice:draft'] where id = '${token.connectorId}';`);
-      expect(await repository.findReplay(token, input.idempotencyKey, input.requestFingerprint)).toEqual(saved);
-      expect((await repository.getContext(token, { draftId: saved.draftId, clientId: null, clientAlias: null })).previous).toEqual(saved);
-      expect(await repository.saveDraft(token, write())).toMatchObject({ version: 1 });
-      await expect(repository.listInvoices(token, { search: "", commercialState: null, limit: 50, offset: 0 })).rejects.toMatchObject({ code: "NOT_FOUND" });
-      await expect(repository.getInvoiceDetail(token, saved.draftId)).rejects.toMatchObject({ code: "NOT_FOUND" });
-      await expect(repository.getOverview(token)).rejects.toMatchObject({ code: "NOT_FOUND" });
-    } finally {
-      fixture(`update public.connector_tokens set scopes = ${fixed};
-        alter table public.connector_tokens add constraint connector_tokens_fixed_scopes check (scopes = ${fixed});`);
-    }
+    fixture(`update public.connector_tokens set scopes = array['invoice:status'] where id = '${token.connectorId}';`);
+    expect((await repository.listInvoices(token, { search: "", commercialState: null, limit: 50, offset: 0 })).items).toHaveLength(1);
+    expect(await repository.getInvoiceDetail(token, saved.draftId)).not.toBeNull();
+    expect((await repository.getOverview(token)).invoiceCount).toBe(1);
+    await expect(repository.findReplay(token, input.idempotencyKey, input.requestFingerprint)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(repository.getContext(token, { draftId: null, clientId: null, clientAlias: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(repository.saveDraft(token, write())).rejects.toMatchObject({ code: "NOT_FOUND" });
+    fixture(`update public.connector_tokens set scopes = array['invoice:draft','invoice:status'] where id = '${token.connectorId}';`);
+    expect(await repository.findReplay(token, input.idempotencyKey, input.requestFingerprint)).toEqual(saved);
+    expect((await repository.getContext(token, { draftId: saved.draftId, clientId: null, clientAlias: null })).previous).toEqual(saved);
+    expect(await repository.saveDraft(token, write())).toMatchObject({ version: 1 });
+    expect(await repository.getInvoiceDetail(token, saved.draftId)).not.toBeNull();
   });
 
   it("bounds SQL list pages to fifty plus hasMore, uses literal search, and rejects invalid query enums", async () => {

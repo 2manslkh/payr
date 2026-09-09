@@ -8,6 +8,8 @@ import type { DraftRepository, DraftVersion } from "../invoices/contracts";
 import { PublicationError, type PublicationRepository, type PublicationStatusData } from "../invoices/publication-contracts";
 import { createKeyedTokenCodec } from "../security/keyed-token";
 import { handleMcpRequest } from "./transport";
+import { createConnectorSenderService } from "../profiles/connector";
+import { IdentityError } from "../identity/contracts";
 
 const id = "00000000-0000-4000-8000-000000000003";
 const workspaceId = "00000000-0000-4000-8000-000000000001", tokenId = "00000000-0000-4000-8000-000000000002";
@@ -40,10 +42,21 @@ function fixture() {
     }),
   };
   const authenticate = vi.fn().mockResolvedValue({ workspaceId, tokenId });
+  const profiles = {
+    getConnectorProfile: vi.fn(async () => snapshot.sender),
+    saveConnectorProfile: vi.fn(async (_actor, input) => {
+      if (input.expectedProfileId !== snapshot.sender.id) throw new IdentityError("PROFILE_CONFLICT", 409);
+      if (input.expectedRevision !== snapshot.sender.revision) throw new IdentityError("REVISION_CONFLICT", 409);
+      const { expectedProfileId: _id, expectedRevision: _revision, approval: _approval, ...fields } = input;
+      Object.assign(snapshot.sender, fields, { revision: snapshot.sender.revision + 1 });
+      return snapshot.sender;
+    }),
+  };
   async function call(name: string, args: unknown) {
     // Reconstruct every service and server, sharing only fake persisted repositories.
     const lifecycle = createInvoiceLifecycleService(publications as unknown as PublicationRepository, () => config);
     const runtime = { appOrigin: config.appOrigin, authenticate, services: {
+      ...createConnectorSenderService(profiles),
       ...createInvoiceDraftService(drafts as unknown as DraftRepository, () => new Date("2030-01-01T00:00:00Z")),
       ...createPublicationService(publications as unknown as PublicationRepository, { getLinkConfig: () => config,
         getDocuments: () => { throw new Error("No rendering on replay"); }, getReservationConfig: () => { throw new Error("No reservation on replay"); } }),
@@ -55,8 +68,82 @@ function fixture() {
     }), "test-secret", "127.0.0.1", runtime);
     return (await response.json()).result;
   }
-  return { call, drafts, publications, authenticate, data, snapshot };
+  return { call, drafts, profiles, publications, authenticate, data, snapshot };
 }
+
+it("repairs an incomplete sender in chat, then retries the original ETHGlobal invoice key", async () => {
+  const { call, snapshot, drafts, profiles, authenticate } = fixture();
+  const complete = { ...snapshot.sender };
+  Object.assign(snapshot.sender, { businessName: null, billingAddress: null, contactName: null, contactEmail: null, invoicePrefix: null });
+  const proposed = Object.fromEntries(Object.entries({ ...snapshot.client, businessName: "ETHGlobal (synthetic fixture)" })
+    .map(([key, value]) => [key, { value, confirmed: true, provenance: { kind: "user_provided" } }]));
+  const invoice = { idempotencyKey: "ethglobal-original", client: { alias: "ethglobal", proposed },
+    items: [{ description: "Hackathon workshop delivery", amount: "1500.00" }], issueDate: "2030-01-01", dueDate: "2030-01-31" };
+  const missing = (await call("create_invoice_draft", invoice)).structuredContent;
+  expect(missing).toMatchObject({ code: "MISSING_FIELDS", draftCreated: false });
+  expect(missing.missingFields).toHaveLength(5);
+  expect(drafts.saveDraft).not.toHaveBeenCalled();
+  expect(profiles.saveConnectorProfile).not.toHaveBeenCalled();
+  const read = (await call("get_sender_profile", {})).structuredContent;
+  expect(read).toMatchObject({ profile: { id: complete.id, revision: complete.revision }, missingFields: expect.any(Array) });
+  const { id: expectedProfileId, revision: expectedRevision, payoutWallet: _payout, ...fields } = complete;
+  const saved = await call("save_sender_profile", { ...fields, expectedProfileId, expectedRevision, approval: true });
+  expect(saved.structuredContent.profile.revision).toBe(expectedRevision + 1);
+  expect(snapshot.sender.payoutWallet).toBe(complete.payoutWallet);
+  expect(authenticate.mock.calls.at(-1)?.[0].action).toBe("sender:write");
+  expect(profiles.saveConnectorProfile.mock.calls[0][0]).toEqual({ workspaceId, connectorId: tokenId, ownerWallet: null });
+  expect((await call("create_invoice_draft", invoice)).structuredContent).toMatchObject({ code: "DRAFT_READY", version: 1 });
+  expect(drafts.saveDraft).toHaveBeenCalledTimes(1);
+});
+
+it("reads the sender when a no-input MCP call omits arguments", async () => {
+  const { call, snapshot } = fixture();
+  expect((await call("get_sender_profile", undefined)).structuredContent.profile.id).toBe(snapshot.sender.id);
+});
+
+it("never treats an owner or mixed actor as a connector sender authority", async () => {
+  const { profiles, snapshot } = fixture();
+  const service = createConnectorSenderService(profiles);
+  const { id: expectedProfileId, revision: expectedRevision, payoutWallet: _payout, ...fields } = snapshot.sender;
+  for (const actor of [{ workspaceId, connectorId: null, ownerWallet: snapshot.sender.payoutWallet },
+    { workspaceId, connectorId: tokenId, ownerWallet: snapshot.sender.payoutWallet }]) {
+    await expect(service.getSenderProfile(actor, {})).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(service.saveSenderProfile(actor, { ...fields, expectedProfileId, expectedRevision, approval: true })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  }
+  expect(profiles.getConnectorProfile).not.toHaveBeenCalled();
+  expect(profiles.saveConnectorProfile).not.toHaveBeenCalled();
+});
+
+it.each([
+  { approval: undefined }, { approval: false }, { approval: "true" }, { approval: null },
+  { expectedProfileId: undefined }, { expectedRevision: null }, { expectedRevision: 2147483648 },
+  { payoutWallet: `0x${"9".repeat(40)}` }, { ownerWallet: `0x${"9".repeat(40)}` }, { connectorId: tokenId },
+  { workspaceId }, { actor: { ownerWallet: "owner" } }, { sender: {} }, { extra: "secret" },
+  { billingAddress: { line1: "1 Road", city: "London", postalCode: "N1", countryCode: "GB", payoutWallet: "secret" } },
+])("rejects unapproved or injected sender saves with no repository write (%#)", async (change) => {
+  const { call, snapshot, profiles } = fixture();
+  const { id: expectedProfileId, revision: expectedRevision, payoutWallet: _payout, ...fields } = snapshot.sender;
+  const saved = await call("save_sender_profile", { ...fields, expectedProfileId, expectedRevision, approval: true, ...change });
+  expect(saved.structuredContent).toEqual({ code: "INVALID_INPUT" });
+  expect(profiles.saveConnectorProfile).not.toHaveBeenCalled();
+  expect((await call("get_sender_profile", { input: change })).structuredContent.code).toBe("INVALID_INPUT");
+  expect(profiles.getConnectorProfile).not.toHaveBeenCalled();
+});
+
+it("conflicts on stale profile IDs, revisions and repeated approved saves, then allows a newly approved update", async () => {
+  const { call, snapshot } = fixture();
+  const { id: expectedProfileId, revision: expectedRevision, payoutWallet: _payout, ...fields } = snapshot.sender;
+  const input = { ...fields, expectedProfileId, expectedRevision, approval: true };
+  expect((await call("save_sender_profile", { ...input, expectedProfileId: tokenId })).structuredContent.code).toBe("PROFILE_CONFLICT");
+  expect((await call("save_sender_profile", { ...input, expectedRevision: 99 })).structuredContent.code).toBe("REVISION_CONFLICT");
+  expect((await call("save_sender_profile", input)).isError).toBeUndefined();
+  const replay = (await call("save_sender_profile", input)).structuredContent;
+  expect(replay.code).toBe("REVISION_CONFLICT");
+  expect(replay.guidance).toContain("fresh approval");
+  const current = (await call("get_sender_profile", {})).structuredContent.profile;
+  const updated = await call("save_sender_profile", { ...input, expectedRevision: current.revision, businessName: "Approved new name" });
+  expect(updated.structuredContent.profile).toMatchObject({ revision: 3, businessName: "Approved new name" });
+});
 
 it("returns structured missing fields with zero draft writes", async () => {
   const { call, drafts, authenticate } = fixture();

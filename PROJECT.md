@@ -82,7 +82,7 @@ The diagram is user-owned and in progress alongside implementation. Record the f
 - Escrow, disputes, partial payments, reminders, accounting exports, and Payr-sent initial invoice emails.
 - Public invoice contents, invoice NFTs, or project tokens.
 - Dual-party EIP-712 invoice signatures.
-- Agent changes to sender identity or payout wallet.
+- Agent changes to the payout wallet, or sender changes without explicit approval and opt-in sender scopes. Direct Chat Setup for sender business/contact/address, prefix and default terms is approved by the 9 September 2026 decision.
 - Direct browser invoice authoring in the MVP.
 - Incoming Bills, batch payment, or autonomous accounts-payable workflows in the MVP.
 - Unsourced or automatically accepted web-search data.

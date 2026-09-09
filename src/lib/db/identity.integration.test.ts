@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { execFileSync, spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { CONNECTOR_SCOPES, type AuthNonce, type IdentitySession } from "../identity/contracts";
+import { CONNECTOR_SCOPES, type ConnectorScope, type AuthNonce, type IdentitySession } from "../identity/contracts";
 import { createIdentityRepository } from "./identity";
 
 const service = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -110,8 +110,8 @@ async function login(wallet = owner) {
   return repository.completeLogin(issued.id, wallet);
 }
 
-async function token(identity: IdentitySession) {
-  const input = { id: randomUUID(), tokenHash: randomBytes(32).toString("hex"), expiresAt: new Date(Date.now() + 86_400_000).toISOString() };
+async function token(identity: IdentitySession, scopes?: readonly ConnectorScope[]) {
+  const input = { id: randomUUID(), tokenHash: randomBytes(32).toString("hex"), expiresAt: new Date(Date.now() + 86_400_000).toISOString(), ...(scopes ? { scopes } : {}) };
   const metadata = await repository.createConnector(identity, input);
   return { ...input, metadata };
 }
@@ -123,6 +123,122 @@ async function avoidMinuteBoundary(minimumSeconds = 3) {
 
 describe("F2 identity transactions through Supabase", () => {
   beforeEach(() => fixture("truncate public.auth_nonce_rate_limits, public.connector_ip_rate_limits, public.workspaces cascade;"));
+
+  it("admits and audits both opted-in sender actions under the bounded audit constraint", async () => {
+    const identity = await login();
+    const created = await token(identity, [...CONNECTOR_SCOPES, "sender:read", "sender:write"]);
+    for (const action of ["sender:read", "sender:write"]) {
+      expect(await repository.admitConnector({ id: created.id, tokenHash: created.tokenHash, ipHash: "a".repeat(64), action }))
+        .toMatchObject({ outcome: "allowed", workspaceId: identity.workspaceId, tokenId: created.id });
+    }
+    const events = (await repository.listActivity(identity)).filter((event) => event.action.startsWith("sender:"));
+    expect(events).toHaveLength(2);
+    expect(events.every((event) => event.tokenId === created.id && event.outcome === "allowed")).toBe(true);
+  });
+
+  it("connector sender setup and later updates preserve payout and attribute audits to the token", async () => {
+    const identity = await login(), other = await login(otherOwner);
+    const created = await token(identity, [...CONNECTOR_SCOPES, "sender:read", "sender:write"]);
+    const actor = { workspaceId: identity.workspaceId, connectorId: created.id, ownerWallet: null } as const;
+    const profile = await repository.getConnectorProfile(actor);
+    expect(profile).toMatchObject({ revision: 1, businessName: null, payoutWallet: owner });
+    const input = { ...senderInput, expectedProfileId: profile.id, approval: true } as const;
+    expect(await repository.saveConnectorProfile(actor, input)).toMatchObject({ revision: 2, businessName: "Example Studio", payoutWallet: owner });
+    await expect(repository.saveConnectorProfile(actor, input)).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
+    await expect(repository.saveConnectorProfile(actor, { ...input, expectedRevision: 2, expectedProfileId: (await repository.getProfile(other)).id }))
+      .rejects.toMatchObject({ code: "PROFILE_CONFLICT" });
+    expect(await repository.saveConnectorProfile(actor, { ...input, expectedRevision: 2, businessName: "Approved update" }))
+      .toMatchObject({ revision: 3, businessName: "Approved update", payoutWallet: owner });
+    const events = (await repository.listActivity(identity)).filter((e) => e.action.startsWith("sender:"));
+    expect(events).toHaveLength(3);
+    expect(events.every((e) => e.tokenId === created.id && e.outcome === "succeeded")).toBe(true);
+    expect((await repository.getProfile(other)).businessName).toBeNull();
+    // Owner RPC behavior is unchanged and participates in the same revision sequence.
+    expect(await repository.saveProfile(identity, { ...senderInput, expectedRevision: 3 })).toMatchObject({ revision: 4, payoutWallet: owner });
+  });
+
+  it("connector sender RPCs deny invoice-only, read-only writes, foreign workspace, null token, revoked and expired tokens", async () => {
+    const identity = await login(), other = await login(otherOwner), profile = await repository.getProfile(identity);
+    const ordinary = await token(identity), readOnly = await token(identity, [...CONNECTOR_SCOPES, "sender:read"]);
+    expect(ordinary.metadata.scopes).toEqual(CONNECTOR_SCOPES);
+    const input = { ...senderInput, expectedProfileId: profile.id, approval: true } as const;
+    const actor = (id: string) => ({ workspaceId: identity.workspaceId, connectorId: id, ownerWallet: null });
+    await expect(repository.getConnectorProfile(actor(ordinary.id))).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(repository.saveConnectorProfile(actor(ordinary.id), input)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect((await repository.getConnectorProfile(actor(readOnly.id))).id).toBe(profile.id);
+    await expect(repository.saveConnectorProfile(actor(readOnly.id), input)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const scoped = await token(identity, [...CONNECTOR_SCOPES, "sender:read", "sender:write"]);
+    for (const params of [{ p_workspace_id: other.workspaceId, p_connector_id: scoped.id },
+      { p_workspace_id: identity.workspaceId, p_connector_id: null }]) {
+      expect((await service.rpc("payr_connector_get_sender_profile_v1", params)).error?.message).toBe("NOT_FOUND");
+      expect((await service.rpc("payr_connector_save_sender_profile_v1", { ...params, p_input: input })).error?.message).toBe("NOT_FOUND");
+    }
+    for (const kind of ["revoked", "expired"]) {
+      const t = await token(identity, [...CONNECTOR_SCOPES, "sender:read", "sender:write"]);
+      if (kind === "revoked") await repository.revokeConnector(identity, t.id);
+      else fixture(`update public.connector_tokens set created_at = clock_timestamp() - interval '2 days', expires_at = clock_timestamp() - interval '1 day' where id = '${t.id}';`);
+      await expect(repository.getConnectorProfile(actor(t.id))).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(repository.saveConnectorProfile(actor(t.id), input)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect((await repository.admitConnector({ id: t.id, tokenHash: t.tokenHash, ipHash: "a".repeat(64), action: "sender:write" })).outcome).toBe("denied");
+    }
+    expect(await repository.getProfile(identity)).toEqual(profile);
+    expect((await repository.listActivity(identity)).filter((e) => e.action === "sender:write" && e.outcome === "succeeded")).toHaveLength(0);
+  });
+
+  it("validates scoped mint and sender payloads at SQL, including nulls, duplicates and payout/actor injection", async () => {
+    const identity = await login(), profile = await repository.getProfile(identity);
+    const params = { p_workspace_id: identity.workspaceId, p_owner_wallet: owner, p_id: randomUUID(),
+      p_token_hash: randomBytes(32).toString("hex"), p_expires_at: new Date(Date.now() + 86_400_000).toISOString() };
+    for (const scopes of [null, [], [null], ["invoice:status", "sender:read", "sender:read"], ["invoice:status", "payout:write"], ["invoice:status", null], [["invoice:status"]], ["sender:read"], ["sender:write"], ["sender:read", "sender:write"], ["invoice:draft"]]) {
+      expect((await service.rpc("payr_create_connector_v2", { ...params, p_scopes: scopes })).error?.message).toBe("INVALID_INPUT");
+    }
+    expect(await repository.listConnectors(identity)).toEqual([]);
+    const t = await token(identity, [...CONNECTOR_SCOPES, "sender:read", "sender:write"]);
+    for (const scopes of ["array['invoice:status','payout:write']", "array['invoice:status','sender:read','sender:read']", "array['invoice:status',null]", "array[]::text[]", "array['sender:read']", "array['sender:write']", "array['sender:read','sender:write']", "array['invoice:draft']"]) {
+      expectFixtureFailure(`update public.connector_tokens set scopes = ${scopes} where id = '${t.id}';`, "connector_tokens_supported_scopes");
+    }
+    const input = { ...senderInput, expectedProfileId: profile.id, approval: true };
+    for (const change of [{ approval: null }, { approval: false }, { approval: "true" }, { expectedProfileId: null },
+      { expectedRevision: null }, { businessName: null }, { billingAddress: null }, { defaultPaymentTermsDays: null },
+      { payoutWallet: otherOwner }, { ownerWallet: owner }, { workspaceId: identity.workspaceId }, { connectorId: t.id },
+      { actor: { ownerWallet: owner } }, { billingAddress: { ...senderInput.billingAddress, payoutWallet: otherOwner } }]) {
+      expect((await service.rpc("payr_connector_save_sender_profile_v1", { p_workspace_id: identity.workspaceId,
+        p_connector_id: t.id, p_input: { ...input, ...change } })).error?.message).toBe("INVALID_INPUT");
+    }
+    const { approval: _approval, ...unapproved } = input;
+    expect((await service.rpc("payr_connector_save_sender_profile_v1", { p_workspace_id: identity.workspaceId,
+      p_connector_id: t.id, p_input: unapproved })).error?.message).toBe("INVALID_INPUT");
+    expect(await repository.getProfile(identity)).toEqual(profile);
+  });
+
+  it("serializes connector sender saves and rejects expiry or revocation committed while waiting for the token lock", async () => {
+    const identity = await login(), profile = await repository.getProfile(identity);
+    const t = await token(identity, [...CONNECTOR_SCOPES, "sender:read", "sender:write"]);
+    const actor = { workspaceId: identity.workspaceId, connectorId: t.id, ownerWallet: null } as const;
+    const input = { ...senderInput, expectedProfileId: profile.id, approval: true } as const;
+    const saves = await Promise.allSettled([repository.saveConnectorProfile(actor, input), repository.saveConnectorProfile(actor, input)]);
+    expect(saves.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(saves.find((r) => r.status === "rejected")).toMatchObject({ reason: { code: "REVISION_CONFLICT" } });
+    for (const kind of ["revoked", "expired"]) {
+      const change = kind === "revoked" ? "revoked_at = clock_timestamp()"
+        : "created_at = clock_timestamp() - interval '2 days', expires_at = clock_timestamp() - interval '1 day'";
+      await withFixtureLock(`update public.connector_tokens set ${change} where id = '${t.id}'`, async () => {
+        await expect(repository.saveConnectorProfile(actor, { ...input, expectedRevision: 2 })).rejects.toMatchObject({ code: "NOT_FOUND" });
+      });
+      fixture(`update public.connector_tokens set revoked_at = null where id = '${t.id}';`);
+    }
+    expect((await repository.getProfile(identity)).revision).toBe(2);
+  });
+
+  it("exposes new sender and scoped mint RPCs only to service_role", () => {
+    for (const signature of ["payr_connector_get_sender_profile_v1(uuid,uuid)", "payr_connector_save_sender_profile_v1(uuid,uuid,jsonb)",
+      "payr_create_connector_v2(uuid,text,uuid,text,timestamp with time zone,text[])"]) {
+      for (const role of ["anon", "authenticated"]) {
+        expect(fixture(`select has_function_privilege('${role}', 'public.${signature}', 'EXECUTE');`)).toBe("f");
+      }
+      expect(fixture(`select has_function_privilege('service_role', 'public.${signature}', 'EXECUTE');`)).toBe("t");
+    }
+  });
 
   it("admits only five nonce requests per wallet despite changing IP hashes", async () => {
     await avoidMinuteBoundary();
@@ -430,7 +546,7 @@ describe("F2 identity transactions through Supabase", () => {
   it("shares the 120/IP limit across different tokens and workspaces", async () => {
     await avoidMinuteBoundary();
     const identities = await Promise.all([login(), login(otherOwner), login(`0x${"3".repeat(40)}`)]);
-    const tokens = await Promise.all(identities.map(token));
+    const tokens = await Promise.all(identities.map((identity) => token(identity)));
     const ipHash = randomBytes(32).toString("hex");
     const results = await Promise.all(Array.from({ length: 150 }, (_, index) => {
       const created = tokens[index % 3];

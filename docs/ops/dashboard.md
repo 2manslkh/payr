@@ -16,11 +16,17 @@ Outstanding count and value use unpaid published or expired invoices across the 
 
 ## Wallet Balance
 
+The root-updates release adds forward migration `202609090010_root_dashboard_hardening.sql`. Apply it after the existing dashboard and sender migrations before deploying this candidate; never edit the historically applied dashboard SQL. It preserves the v2 overview response and single-statement snapshot while treating unset/default terms outside 0-365 as incomplete sender setup. The historical eleven-migration read-back above does not establish hosted application of this new migration.
+
 `GET /api/wallet/balance?address=<selected-address>` requires the existing owner session. The selected address may differ from the owner, but never changes the invoice workspace or grants ownership. The browser discovers authorized injected accounts with `eth_accounts` and requests permissions only on a Connect click. This matches the existing browser-wallet login scope; it does not add WalletConnect login.
 
 The reader requires only existing `ARC_RPC_URL` (HTTPS) and `ARC_CHAIN_ID=5042002` configuration, plus the existing session configuration. The RPC endpoint remains server-side. It validates the RPC chain and reads Arc's native USDC balance at **18 decimals**, with no signing or payment configuration. It does not use the six-decimal ERC-20 interface or combine the two representations. Failures return a safe 503, never an assumed zero.
 
 Balances refresh on selected-account/network changes, window focus, visibility restoration, and manual refresh. Old account requests are aborted and ignored. The response is private/no-store; the UI labels its last successful read. The selected wallet's current network does not force a chain switch: this surface always reads Arc Testnet.
+
+Before any provider call, a service-role-only admission RPC rechecks workspace ownership and atomically enforces fixed-minute quotas: 12 requests per owner, 60 per IP, 600 globally. Selected addresses never choose quota identity or authorization. Only Vercel's overwritten forwarding header is trusted; other runtimes share a conservative IP bucket. The IP key is purpose-separated HMAC using the existing connector pepper. Admission timeout or malformed/unavailable admission fails closed with 503; quota denial returns 429 and `Retry-After: 60`. Each allowed request performs at most two parallel upstream calls, no retries, with eight-second transport timeouts. Fixed-minute limits allow a boundary burst; this is bounded admission, not a strict concurrent-connection counter. The counter table denies direct access to all API roles and cleans stale subject keys during successful admission.
+
+Without JavaScript, server HTML explains that browser-wallet reads require JavaScript and no balance is assumed. No wallet permission or signature is requested during server rendering.
 
 ## Plugin Handoff
 

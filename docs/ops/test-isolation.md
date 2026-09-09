@@ -40,6 +40,12 @@ Keep the same exports for any retries. Do not run DB and browser fixtures
 concurrently against one project. `PAYR_TEST_PORT` controls only the Playwright
 server; it is independent of the three Supabase ports.
 
+For a busy local machine, set `PAYR_TEST_WORKERS=1` to run browser tests one at a
+time. The optional positive-integer setting also reaches browser checks launched
+by `release:prepare`, which does not forward Playwright CLI arguments. When unset,
+Playwright keeps its normal worker default. This changes concurrency only; test
+assertions, authentication, quotas, and timeouts remain unchanged.
+
 The launchers invoke the repository's exact installed Supabase CLI pin (currently
 `2.116.0`) and verify its version. Custom config is generated under ignored
 `.supabase/test-projects/<project>/supabase/config.toml`. Its migration symlink

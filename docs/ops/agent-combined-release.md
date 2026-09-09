@@ -106,6 +106,7 @@ export PAYR_TEST_API_PORT=60321
 export PAYR_TEST_DB_PORT=60322
 export PAYR_TEST_SHADOW_PORT=60320
 export PAYR_TEST_PORT=3198
+export PAYR_TEST_WORKERS=1
 pnpm db:start
 pnpm db:reset
 pnpm db:lint

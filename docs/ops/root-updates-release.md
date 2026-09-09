@@ -1,6 +1,8 @@
 # Root Updates Release Checkpoint
 
-9 September 2026. **Blocked; not released, pushed, or deployed.**
+Historical checkpoint, 9 September 2026. **The original ancestry was blocked; not released, pushed, or deployed by that attempt.**
+
+The user subsequently authorized a clean replay onto current main, preserving `integration/root-updates` unchanged. `integration/root-updates-v1.7.0` starts at `v1.6.0` / `aebcd15` and replays the integrated tree without the old package-version ancestry. The release dry run now passes without modifying the validator. See [current execution](root-release-manifest.md); findings and verification below describe the original attempt, not the final release gate.
 
 ## Integration
 

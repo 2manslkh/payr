@@ -4,7 +4,7 @@ Last updated: 2026-09-09
 
 ## Stage
 
-The repository baseline on `main` is `v1.4.1` at `923ef3f` ([PR #14](https://github.com/2manslkh/payr/pull/14) merged). Follow-up work on `integration/root-updates` is being integrated, not already released or deployed.
+The clean root-updates release candidate is based on `v1.6.0` at `aebcd15` ([PR #16](https://github.com/2manslkh/payr/pull/16)). It retains main's opt-in sender tools and public discovery. User-approved replay on `integration/root-updates-v1.7.0` preserves `integration/root-updates` without rewriting history. See `docs/ops/root-release-manifest.md` for current execution and gates; release/deployment are not implied by source integration.
 
 Separately, R09 was released as `v1.3.0` at `2dfa8db159c19f95a5af9e99cb4a5a428b2c2e2a` ([PR #12](https://github.com/2manslkh/payr/pull/12)), including released R08 receipts/durable delivery, client wallet payments, and four-tool Claude MCP. Its annotated remote tag and post-merge CI were verified. The recorded 9 September health read-back showed production serving the identical reviewed release-head tree at `328fcdc26e5a817ded1a648771f301472637a240`. This is R09 deployment evidence, not verification of deployed `v1.4.1` or follow-up source, and retains the live Claude/external-wallet limits. See `docs/ops/r09-release.md`.
 
@@ -22,7 +22,7 @@ Payr: one agent instruction creates a confirmed invoice, PDF, QR, and protected 
 
 ## Now
 
-- Root `integration/root-updates` retains unique discovery/roadmap commits and uncommitted dashboard/wallet-balance/install/docs work and demo/source assets. The user approved feature-group commits and one combined PR into `main`; integration and its final verification/PR outcome are still pending. The pre-cleanup root snapshot is retained in Git stash `d8b9351cb799c3e6a1f8b95fd2e7cfd763e02d3e`. `docs/ops/repository-cleanup.md` records historical inventory/recovery, not current branch state.
+- `integration/root-updates` is preserved at `72629a3`; its committed dashboard/wallet/install/roadmap/docs tree was replayed onto current main on `integration/root-updates-v1.7.0` with explicit user approval. The primary `integration/agent-readiness` worktree is separate and untouched. The pre-cleanup root snapshot remains in stash `d8b9351cb799c3e6a1f8b95fd2e7cfd763e02d3e`. `docs/ops/repository-cleanup.md` records historical inventory/recovery, not current branch state.
 - The earlier local dashboard migration-version collision is historical. `docs/ops/dashboard.md` records the later approved application/read-back of all eleven repository migrations with matching names locally and on hosted Payr, including `202609080003_dashboard_overview.sql`, with unchanged recorded counts and no application deployment. Cleanup itself made no database changes. Preserve the retained demo; do not run resets or fixture suites against it.
 - Preserve the completed R06 implementation and its [verified release read-back](https://github.com/2manslkh/payr/pull/7#issuecomment-5560122806); do not repeat released work.
 - R07 uses the existing service-only authorization RPC, pinned OpenZeppelin/Foundry contract, explicit testnet guards, and retained frozen-deployment allowlisting. Privy is not used.
@@ -75,8 +75,8 @@ Protected HTML has a remaining verification gap for denial-status uniformity if 
 ## Repository
 
 - Public repository: `https://github.com/2manslkh/payr`.
-- Current `main` repository baseline: `v1.4.1`, [PR #14](https://github.com/2manslkh/payr/pull/14), `923ef3f`. The separately recorded R09 release is `v1.3.0`, PR #12, `2dfa8db159c19f95a5af9e99cb4a5a428b2c2e2a`; its [post-merge CI](https://github.com/2manslkh/payr/actions/runs/34242942628) passed, not evidence for the current integration.
-- Root pending work is being integrated on `integration/root-updates` for approved feature-group commits and one combined PR into `main`; historical worktree and stash decisions are recorded in `docs/ops/repository-cleanup.md`.
+- Release-candidate base: `v1.6.0`, [PR #16](https://github.com/2manslkh/payr/pull/16), `aebcd15`. The separately recorded R09 release is `v1.3.0`, PR #12, `2dfa8db159c19f95a5af9e99cb4a5a428b2c2e2a`; its [post-merge CI](https://github.com/2manslkh/payr/actions/runs/34242942628) passed, not evidence for the current integration.
+- Root follow-up release work is on `integration/root-updates-v1.7.0`; `integration/root-updates` remains evidence. Current gates are in `docs/ops/root-release-manifest.md`; historical worktree and stash decisions are in `docs/ops/repository-cleanup.md`.
 - The R07 deployment snapshot and retained payment journal remain in `.worktrees/r07-finish`. Its implementation was subsequently released through PR #8. Vercel `dpl_Em186jttjVwZWFxLA4ukZKdPJrLo` was verified `Ready` before tagging; this does not claim deployment of any R08/R09 changes.
 - Recorded R09 production deployment `dpl_JwRPqsTnqRgCnHRkNzSgrcEXpHDR` served the R09 release-head tree at read-back. No fresh deployment check is claimed here. Preserve disabled Git-triggered deployments, the published origin, existing secrets, all three daily schedules, and `PAYR_RECEIPT_EMAIL_ENABLED=false`. Local cleanup/integration is not deployment approval.
 - Public shell: `https://payrlink.xyz`; health reports the deployed integration commit without configuration details.
@@ -86,7 +86,7 @@ Protected HTML has a remaining verification gap for denial-status uniformity if 
 
 - Product: GREEN - the user, pain, promise, onchain necessity, and non-goals are approved.
 - Design: GREEN - `Commit Ledger`, the responsive surface model, and brand treatment are approved; implemented fidelity remains unproven.
-- Engineering: YELLOW - `main` is at repository baseline `v1.4.1`; R09 has separately recorded deployment and green protected CI evidence. Local/hosted eleven-migration read-back is recorded in the dashboard runbook. Deployed Claude, external-wallet, human inbox/unattended-delivery proof, and final verification/integration/release/deployment of the retained follow-up remain outstanding.
+- Engineering: YELLOW - this candidate starts from `v1.6.0`; R09 has separately recorded deployment and green protected CI evidence. Historical local/hosted eleven-migration read-back is recorded in the dashboard runbook. It does not prove application of later sender or hardening migrations. Deployed Claude, external-wallet, human inbox/unattended-delivery proof, and candidate release/deployment gates remain separately tracked.
 - Demo: YELLOW - the causal three-minute sequence and honest fallback are defined, but unexercised by this tranche.
 - Submission: RED - repository and health shell exist; the user-owned architecture diagram is in progress. End-to-end product proof, final diagram verification, post-product video recording, and submitted dashboard confirmation remain outstanding.
 

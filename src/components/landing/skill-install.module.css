@@ -15,7 +15,7 @@
 .command code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; line-height: 1.9; color: #91d3ff; user-select: text; }
 .instruction { margin-top: 16px; color: #aaa; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
 .note { margin-top: 10px; color: var(--muted); font-size: 11px; line-height: 1.7; }
-.note a { text-underline-offset: 3px; }
+.note a { text-decoration: underline; text-underline-offset: 3px; }
 .error { display: block; margin-top: 8px; color: var(--muted); font-size: 12px; }
 @media (max-width: 400px) {
   .toolbar { padding-inline: 8px; }

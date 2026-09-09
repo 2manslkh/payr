@@ -83,7 +83,7 @@ export function SkillInstall() {
           <p className={styles.instruction}>{client.instruction}</p>
         </div>
       </div>
-      <p className={styles.note}>Connect your agent to Payr. Powered by <a href="https://bazantic.com">Bazantic</a>.</p>
+      <p className={styles.note}>Connect your agent to Payr.<br />Powered by <a href="https://bazantic.com">Bazantic</a>.</p>
       <span role="status" className={copyState === "error" ? styles.error : "sr-only"}>{copyState === "copied" ? "Setup snippet copied." : copyState === "error" ? "Couldn't copy. Select and copy the snippet above." : ""}</span>
     </section>
   );

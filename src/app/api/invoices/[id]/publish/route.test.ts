@@ -57,7 +57,7 @@ beforeEach(() => {
   vi.mocked(repository.reserve).mockRejectedValue(new PublicationError("PUBLICATION_IN_PROGRESS"));
   vi.mocked(repository.findReplay).mockResolvedValue(null);
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 
 function request(body: unknown = input) {
   return new Request(`https://payrlink.xyz/api/invoices/${invoiceId}/publish`, {
@@ -323,6 +323,35 @@ it.each(["16385", "-1", "bad"])("rejects invalid declared length %s before consu
   const response = await post(req);
   expect(response.status).toBe(413);
   expect(req.bodyUsed).toBe(false);
+  unopened();
+});
+
+it.each(["stalled", "trickling"])("bounds %s bearer approval streams by an absolute deadline even if cancellation stalls", async (kind) => {
+  vi.useFakeTimers();
+  const cancel = vi.fn(() => new Promise<void>(() => {}));
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const body = new ReadableStream<Uint8Array>({ start(value) { controller = value; }, cancel });
+  const req = new Request(`https://payrlink.xyz/api/invoices/${invoiceId}/publish`, {
+    method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${connectorToken}` },
+    body, duplex: "half",
+  } as RequestInit);
+  const response = post(req);
+  let resolved = false;
+  void response.then(() => { resolved = true; });
+  await vi.advanceTimersByTimeAsync(0);
+  controller.enqueue(new TextEncoder().encode("{"));
+  for (let i = 0; i < 4; i++) {
+    await vi.advanceTimersByTimeAsync(1000);
+    if (kind === "trickling") controller.enqueue(new TextEncoder().encode(" "));
+  }
+  expect(resolved).toBe(false);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(resolved).toBe(true);
+  const result = await response;
+  expect(result.status).toBe(408);
+  expect(await result.json()).toEqual({ code: "REQUEST_TIMEOUT" });
+  privateHeaders(result);
+  expect(cancel).toHaveBeenCalledOnce();
   unopened();
 });
 

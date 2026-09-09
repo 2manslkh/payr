@@ -255,8 +255,11 @@ pnpm typecheck
 pnpm lint
 ```
 
-Database fixtures are destructive. Only in a verified disposable private-daemon
-runner, after applying migrations, run:
+Database fixtures are destructive. Use a verified isolated project with the
+environment and sequential commands in
+[`agent-combined-release.md`](agent-combined-release.md). The fixtures use main's
+validated `fixtureDatabaseContainer()` handoff. The default project is allowed
+only on a fresh disposable CI/private runner with this additional opt-in:
 
 ```sh
 PAYR_TEST_DISPOSABLE_DB=agent-gateway pnpm test:db:local

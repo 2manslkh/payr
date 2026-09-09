@@ -63,12 +63,33 @@ imported file SHA-256 is
 SHA-256 of the hosted statement array joined with NUL is
 `c031d8374fe01febd4a2355dbb422efecf498e0c80af35a35c17d1fc2ad3adf1`.
 Raw SQL responses were compared in memory, never printed or written to logs.
+After the isolated reset, the local migration-history statement array also matched
+the hosted array exactly, including the same `c031d837…3adf1` digest.
 Migration `002` is immutable; any new database fix must follow `010`.
 
 ## Local evidence and limits
 
 Frozen installation and typecheck passed; the initial focused API/repository gate
 passed 515 tests. Full local gates and reviews are in progress.
+
+Three fresh, independent Codex CLI sessions reviewed `e419959...f030878` using
+actual `gpt-6-astra`, high reasoning, read-only sandbox, with separate standards,
+specification, and security prompts. Standards and specification found no
+actionable issues. Security found one medium issue: the legacy publication body
+reader lacked an absolute deadline. Stalled/trickling request regressions failed
+before the fix; the reader now bounds reads to five seconds and returns sanitized
+private 408 responses without awaiting cancellation. No SQL change is required.
+Correction review is pending. Reviewer logs and reports live under ignored
+`.supabase/review-*`, outside Playwright's cleared output directories.
+
+The first full database gate passed 499/512 tests; 13 existing auth/settlement
+fixture tests failed with nonce `INVALID_INPUT`. Isolated reruns passed the auth
+test and all 14 settlement/receipt tests. A 400-request local nonce probe passed
+with and without a 20 ms persistence delay. Clock skew was considered but not
+established; no authorization check or fixture timing has been weakened. A clean
+reset and complete rerun remain required. The expanded gateway SQL suite passed
+16 tests, including compatibility with main's overview, credential revocation,
+and denial of owner-only wallet admission.
 
 Gitleaks staged scan found one test-only candidate: a deterministic connector
 HMAC fixture at `src/app/api/mcp/route.test.ts:13`, paired with a public sequential

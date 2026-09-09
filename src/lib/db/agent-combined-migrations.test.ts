@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { expect, it } from "vitest";

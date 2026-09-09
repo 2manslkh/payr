@@ -6,6 +6,7 @@ import { ACCOUNT_SCOPES, operationNames, type RegistrationChallenge } from "../a
 import { createConnectorHasher } from "../connectors/crypto";
 import { createGatewayRepository } from "./agent-gateway";
 import { createIdentityRepository } from "./identity";
+import { createDraftRepository } from "./drafts";
 import { fixtureDatabaseContainer } from "../../../scripts/local-test-config.mjs";
 
 // Select the validated isolated project, or explicitly opt into the fresh CI runner.
@@ -83,6 +84,22 @@ async function avoidMinuteBoundary() {
 
 describe("gateway SQL transactions (disposable database only)", () => {
   beforeEach(() => fixture("truncate public.gateway_service_keys, public.agent_registration_challenges, public.gateway_rate_limits, public.auth_nonce_rate_limits, public.connector_ip_rate_limits, public.workspaces cascade;"));
+
+  it("keeps gateway accounts compatible with main's overview while denying owner-only wallet admission", async () => {
+    const { account, auth } = await register({ scopes: ["invoice:status"] });
+    const actor = { workspaceId: account.workspaceId, ownerWallet: null, connectorId: auth.id };
+    expect(await createDraftRepository(service).getOverview(actor)).toMatchObject({
+      invoiceCount: 0, outstandingInvoiceCount: 0, receivablesUnavailableCount: 0,
+      receivablesAtomic: "0", senderComplete: false, activeConnectorCount: 1,
+    });
+    const balance = await service.rpc("payr_admit_wallet_balance_v1", {
+      p_workspace_id: account.workspaceId, p_owner_wallet: null, p_ip_hash: hash(),
+    });
+    expect(balance.error?.message).toBe("INVALID_INPUT");
+    expect(fixture("select count(*) from public.wallet_balance_rate_limits;")).toBe("0");
+    await repository.revokeAccount(auth);
+    await expect(createDraftRepository(service).getOverview(actor)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
 
   it("round-trips signed facts, atomically consumes one challenge and mints one mapped account under concurrent replay", async () => {
     const c = await issue({ scopes: ["invoice:status", "sender:read"], expiresInDays: 1 });

@@ -79,6 +79,7 @@ export function WalletBalance({ ownerWallet }: { ownerWallet: string }) {
     <div className={styles.metricHeading}><h2 id="wallet-balance-heading">Connected wallet balance</h2><span>Arc Testnet</span></div>
     {connection.state === "checking" ? <div className={styles.walletPlaceholder} role="status">
       <span className="sr-only">Checking wallet connection...</span><Skeleton className={styles.balanceSkeleton} />
+      <noscript><p>Enable JavaScript to read your browser wallet balance. No balance has been assumed.</p></noscript>
     </div> : connection.address ? <WalletBalanceRead key={connection.address} address={connection.address} revision={networkRevision} /> : <div className={styles.walletPlaceholder}>
       <p className={styles.connectionTitle}>{connection.state === "missing" ? "No browser wallet found" : connection.state === "error" ? "Wallet connection unavailable" : "Connect to see your balance"}</p>
       <p className="muted">{connection.state === "missing" ? "Enable an Ethereum wallet extension or open Payr in your wallet's browser, then reload." : "Read-only access. No signature or transaction required."}</p>

@@ -182,6 +182,17 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
     ]);
   });
 
+  test.describe("without JavaScript", () => {
+    test.use({ javaScriptEnabled: false });
+    test("explains why wallet balance is unavailable without assuming a value", async ({ page }) => {
+      await page.goto("/app");
+      const wallet = page.getByRole("region", { name: "Connected wallet balance" });
+      await expect(wallet.getByText("Enable JavaScript to read your browser wallet balance. No balance has been assumed.")).toBeVisible();
+      await expect(wallet.getByTestId("wallet-balance")).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Outstanding receivables", exact: true })).toBeVisible();
+    });
+  });
+
   test("server guard rejects a missing session", async ({ page, context }) => {
     await context.clearCookies();
     await page.goto("/app/settings");

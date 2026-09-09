@@ -189,7 +189,7 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
       await page.getByRole("link", { name: "Open the non-streaming overview" }).click();
       await expect(page).toHaveURL(/\/app\?view=static$/);
       const wallet = page.getByRole("region", { name: "Connected wallet balance" });
-      await expect(wallet.getByText("Enable JavaScript to read your browser wallet balance. No balance has been assumed.")).toBeVisible();
+      await expect(wallet.getByText("Browser-wallet reads require JavaScript. No balance has been assumed.")).toBeVisible();
       await expect(wallet.getByTestId("wallet-balance")).toHaveCount(0);
       await expect(page.getByRole("heading", { name: "Outstanding receivables", exact: true })).toBeVisible();
     });

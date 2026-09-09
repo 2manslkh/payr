@@ -23,8 +23,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 it("explains browser-wallet requirements without JavaScript in server HTML", () => {
   const html = renderToStaticMarkup(<WalletBalance ownerWallet={owner} />);
-  expect(html).toContain("<noscript>");
-  expect(html).toContain("Enable JavaScript to read your browser wallet balance. No balance has been assumed.");
+  expect(html).toContain("<p>Browser-wallet reads require JavaScript. No balance has been assumed.</p>");
   expect(provider.request).not.toHaveBeenCalled();
   expect(consoleApi).not.toHaveBeenCalled();
 });

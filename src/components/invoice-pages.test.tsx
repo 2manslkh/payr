@@ -155,7 +155,7 @@ it("waits for delayed records in the non-streaming overview and returns readable
   expect(html).toContain("Needs attention");
   expect(html).not.toContain("Loading invoice records");
   expect(html).not.toContain("<div hidden");
-  expect(html).toContain("Enable JavaScript to read your browser wallet balance");
+  expect(html).toContain("Browser-wallet reads require JavaScript");
 });
 
 it("server renders a single GET toolbar, exact amounts, separate states and bounded pagination", async () => {

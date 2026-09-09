@@ -130,6 +130,24 @@ it("aborts both stalled provider reads within eight seconds without retrying", a
   for (const [, init] of fetcher.mock.calls) expect(init.signal!.aborted).toBe(true);
 });
 
+it("aborts provider bodies that stall after successful headers", async () => {
+  vi.useFakeTimers();
+  const actual = await vi.importActual<typeof import("viem")>("viem");
+  vi.mocked(createPublicClient).mockImplementation(actual.createPublicClient);
+  const fetcher = vi.fn(async (_input: string, init: RequestInit) => new Response(new ReadableStream({
+    start(controller) {
+      init.signal!.addEventListener("abort", () => controller.error(new DOMException("Aborted", "AbortError")), { once: true });
+    },
+  }), { headers: { "Content-Type": "application/json" } }));
+  vi.stubGlobal("fetch", fetcher);
+  const pending = GET(request());
+  await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  await vi.advanceTimersByTimeAsync(8_000);
+  expect((await pending).status).toBe(503);
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  for (const [, init] of fetcher.mock.calls) expect(init.signal!.aborted).toBe(true);
+});
+
 it("reads the selected address, not the session owner, and returns exact private native USDC", async () => {
   const response = await GET(request(`address=0x${"A".repeat(40)}`));
   expect(response.status).toBe(200);

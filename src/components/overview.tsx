@@ -11,8 +11,12 @@ import { getDraftRepository } from "../lib/invoices/runtime";
 import type { InvoiceOverview } from "../lib/invoices/contracts";
 import styles from "./overview.module.css";
 
-export default function OverviewPage() {
-  return <Suspense fallback={<OverviewLoading />}><OverviewContent /></Suspense>;
+export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ view?: string | string[] }> }) {
+  const staticView = (await searchParams).view === "static";
+  return <>
+    {!staticView && <noscript><p className="notice">Streaming records require JavaScript. <a className="text-link" href="/app?view=static">Open the non-streaming overview</a> to read your records without it.</p></noscript>}
+    {staticView ? await OverviewContent({ waitForRecords: true }) : <Suspense fallback={<OverviewLoading />}><OverviewContent /></Suspense>}
+  </>;
 }
 
 function OverviewLoading() {
@@ -28,13 +32,14 @@ function OverviewLoading() {
   </>;
 }
 
-export async function OverviewContent() {
+export async function OverviewContent({ waitForRecords = false }: { waitForRecords?: boolean } = {}) {
   const session = await getDashboardSession();
   if (!session) redirect("/login");
   let overview: Promise<InvoiceOverview | null>;
   try {
     overview = getDraftRepository().getOverview(ownerActor(session)).catch(() => null);
   } catch { overview = Promise.resolve(null); }
+  const records = waitForRecords ? await OverviewRecords({ overview }) : <OverviewRecords overview={overview} />;
   return (
     <div className={`${styles.surface} content-reveal`}>
       <PageHeading title="Overview" action={<OpenClaude />}>
@@ -42,9 +47,9 @@ export async function OverviewContent() {
       </PageHeading>
       <div className={styles.summary}>
         <WalletBalance ownerWallet={session.ownerWallet} />
-        <Suspense fallback={<div className={`${styles.receivables} ${styles.loadingSummary}`} role="status" aria-label="Loading invoice records..."><Skeleton /><Skeleton /></div>}>
-          <OverviewRecords overview={overview} />
-        </Suspense>
+        {waitForRecords ? records : <Suspense fallback={<div className={`${styles.receivables} ${styles.loadingSummary}`} role="status" aria-label="Loading invoice records..."><Skeleton /><Skeleton /></div>}>
+          {records}
+        </Suspense>}
       </div>
       <footer className={styles.installLink}><p>Connect Payr in <Link className="text-link" href="/app/connections">Connections</Link> to use its tools in Claude. Plugin installation is coming separately.</p><Link className="text-link" href="/install">Agent installation guide</Link></footer>
     </div>

@@ -186,6 +186,8 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
     test.use({ javaScriptEnabled: false });
     test("explains why wallet balance is unavailable without assuming a value", async ({ page }) => {
       await page.goto("/app");
+      await page.getByRole("link", { name: "Open the non-streaming overview" }).click();
+      await expect(page).toHaveURL(/\/app\?view=static$/);
       const wallet = page.getByRole("region", { name: "Connected wallet balance" });
       await expect(wallet.getByText("Enable JavaScript to read your browser wallet balance. No balance has been assumed.")).toBeVisible();
       await expect(wallet.getByTestId("wallet-balance")).toHaveCount(0);

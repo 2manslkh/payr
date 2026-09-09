@@ -39,10 +39,20 @@ export async function GET(request: Request) {
         return response;
       }
       // Each admitted request spends at most two provider calls, with no retries.
-      const client = createPublicClient({ chain: arcTestnet, transport: http(config.ARC_RPC_URL, { timeout: 8_000, retryCount: 0 }) });
-      const [chainId, balance] = await Promise.all([client.getChainId(), client.getBalance({ address })]);
-      if (chainId !== ARC_TESTNET_CHAIN_ID) throw new Error("Unexpected balance network");
-      return privateJson({ address, chainId, balanceAtomic: balance.toString(), updatedAt: new Date().toISOString() });
+      // Keep the deadline active through response-body consumption, not just headers.
+      const controller = new AbortController();
+      const deadline = setTimeout(() => controller.abort(), 8_000);
+      try {
+        const client = createPublicClient({ chain: arcTestnet, transport: http(config.ARC_RPC_URL, {
+          timeout: 8_000, retryCount: 0, fetchOptions: { signal: controller.signal },
+        }) });
+        const [chainId, balance] = await Promise.all([client.getChainId(), client.getBalance({ address })]);
+        if (chainId !== ARC_TESTNET_CHAIN_ID) throw new Error("Unexpected balance network");
+        return privateJson({ address, chainId, balanceAtomic: balance.toString(), updatedAt: new Date().toISOString() });
+      } finally {
+        clearTimeout(deadline);
+        controller.abort();
+      }
     } catch {
       return privateJson({ code: "BALANCE_UNAVAILABLE" }, 503);
     }

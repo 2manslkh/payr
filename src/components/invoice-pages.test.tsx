@@ -9,7 +9,7 @@ import { getDraftRepository } from "../lib/invoices/runtime";
 import { getPublicationRepository } from "../lib/invoices/publication-runtime";
 import { publicationView } from "../lib/invoices/lifecycle";
 import type { PublicationRepository, PublicationStatusData } from "../lib/invoices/publication-contracts";
-import { OverviewContent, OverviewRecords } from "./overview";
+import OverviewRoute, { OverviewContent, OverviewRecords } from "./overview";
 import InvoicesPage from "../app/(dashboard)/app/invoices/page";
 import InvoicePage, { metadata } from "../app/(dashboard)/app/invoices/[id]/page";
 import { InvoiceDocument } from "./invoice-document";
@@ -137,6 +137,25 @@ it("returns the wallet shell without waiting for a slow invoice database", async
   // The only awaited operation is session validation; invoice work stays behind Suspense.
   expect(result.props.children[1].props.children[0].props.ownerWallet).toBe(identity.ownerWallet);
   expect(result.props.children[1].props.children[1].props.fallback.props["aria-label"]).toBe("Loading invoice records...");
+});
+
+it("waits for delayed records in the non-streaming overview and returns readable HTML", async () => {
+  let resolve!: (value: InvoiceOverview) => void;
+  repository.getOverview.mockReturnValue(new Promise<InvoiceOverview>((done) => { resolve = done; }));
+  let settled = false;
+  const pending = OverviewRoute({ searchParams: Promise.resolve({ view: "static" }) }).then((result) => {
+    settled = true;
+    return result;
+  });
+  await vi.waitFor(() => expect(repository.getOverview).toHaveBeenCalled());
+  expect(settled).toBe(false);
+  resolve(structuredClone(overview));
+  const html = renderToStaticMarkup(await pending);
+  expect(html).toContain("Outstanding receivables");
+  expect(html).toContain("Needs attention");
+  expect(html).not.toContain("Loading invoice records");
+  expect(html).not.toContain("<div hidden");
+  expect(html).toContain("Enable JavaScript to read your browser wallet balance");
 });
 
 it("server renders a single GET toolbar, exact amounts, separate states and bounded pagination", async () => {

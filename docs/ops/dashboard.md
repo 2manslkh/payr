@@ -28,6 +28,8 @@ Before any provider call, a service-role-only admission RPC rechecks workspace o
 
 Without JavaScript, server HTML explains that browser-wallet reads require JavaScript and no balance is assumed. No wallet permission or signature is requested during server rendering.
 
+The default overview streams records independently of the wallet. A no-JavaScript link outside its streaming boundary opens `/app?view=static`, which waits for the same authorized overview read and renders records without Suspense reveal scripts. The non-streaming option changes rendering only, not workspace authority or query scope. Provider abort deadlines remain active through response-body consumption and cancel outstanding calls on completion or failure.
+
 ## Plugin Handoff
 
 `/install` is public and deliberately passes `installation={null}` to `InstallPrompt` until the separate plugin work is ready. To enable it, replace that value with reviewed public metadata containing the exact prompt, official source URL, and verified supported-agent list. Do not derive it from connector credentials or infer readiness from active tokens.

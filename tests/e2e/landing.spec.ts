@@ -6,7 +6,7 @@ test("landing explains the problem, released capabilities, and live verification
   await expect(page.getByRole("link", { name: "Sign in to Payr", exact: true })).toHaveAttribute("href", "/login");
   await expect(page.getByRole("heading", { name: "Shipping the work isn't the end of the work." })).toBeVisible();
   await expect(page.getByText("Receipt email is operator-controlled; automatic sending remains disabled.")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Still being verified" })).toBeVisible();
+  await expect(page.locator("#roadmap").getByText(/Full live Claude and external-wallet acceptance checks remain outstanding/)).toBeVisible();
   await expect(page.getByText(/coming next|are in development/i)).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(await page.locator("[data-invoice-paper]").evaluateAll((papers) => papers.every((paper) => paper.scrollHeight <= paper.clientHeight + 1))).toBe(true);

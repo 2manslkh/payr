@@ -92,6 +92,9 @@ jobs:
       - run: pnpm db:reset
       - run: pnpm db:lint
       - run: pnpm test:db:local
+        env:
+          # This job owns a fresh GitHub-hosted runner and a disposable Supabase stack.
+          PAYR_TEST_DISPOSABLE_DB: agent-gateway
       - if: always()
         run: pnpm exec supabase stop --no-backup
 

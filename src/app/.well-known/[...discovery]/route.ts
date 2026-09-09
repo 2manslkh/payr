@@ -38,7 +38,15 @@ export async function GET(_request: Request, context: { params: Promise<{ discov
       name: "xyz.payrlink/payr", version: mcpServerInfo.version,
       description: "Workspace-scoped Payr invoice tools on Arc Testnet. Human connector setup required.",
       websiteUrl: `${origin}/docs/api.md`,
+      remotes: [{ type: "streamable-http", url: `${origin}/api/mcp`, headers: [{
+        name: "Authorization", value: "Bearer {connector_token}",
+        variables: { connector_token: { description: "Credential created by the owner in Payr Connections. Not a wallet key or session cookie.", isRequired: true, isSecret: true } },
+      }] }],
     }, { headers });
+  }
+  // Older scanners implement the pre-SEP card shape rather than remotes[].
+  if (resource === "mcp.json") {
+    return Response.json({ serverInfo: mcpServerInfo, endpoint: `${origin}/api/mcp`, capabilities: { tools: {} } }, { headers });
   }
   if (resource === "ai-catalog.json" || resource === "ard.json") {
     if (resource === "ai-catalog.json") headers.set("Content-Type", "application/ai-catalog+json");

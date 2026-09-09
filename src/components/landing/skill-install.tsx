@@ -1,48 +1,74 @@
 "use client";
 
 import { useId, useState } from "react";
-import Link from "next/link";
 import styles from "./skill-install.module.css";
 
-const managers = [
-  { name: "npm", runner: "npx" },
-  { name: "pnpm", runner: "pnpm dlx" },
-  { name: "bun", runner: "bunx" },
+const gatewayUrl = "https://api.payrlink.xyz";
+const mcpUrl = `${gatewayUrl}/mcp`;
+const mcpConfig = JSON.stringify({ mcpServers: { payr: { url: mcpUrl } } }, null, 2);
+const clients = [
+  {
+    name: "Claude",
+    snippet: `claude mcp add --transport http payr ${mcpUrl}`,
+    instruction: "Run this command in your terminal with Claude Code installed.",
+  },
+  {
+    name: "Cursor",
+    snippet: mcpConfig,
+    instruction: "Add this server to .cursor/mcp.json, keeping any existing servers.",
+  },
+  {
+    name: "ChatGPT / Codex",
+    snippet: `codex mcp add payr --url ${mcpUrl}`,
+    instruction: `Run this command in Codex CLI. For ChatGPT, use ${mcpUrl} in its custom MCP connector settings, where supported.`,
+  },
+  {
+    name: "Custom MCP",
+    snippet: mcpConfig,
+    instruction: "Add this configuration to an MCP client that supports remote HTTP servers, keeping any existing servers.",
+  },
+  {
+    name: "CLI",
+    snippet: `baz curl ${gatewayUrl} --account wallet --json`,
+    instruction: "Run with the Bazantic CLI installed and an account named wallet configured.",
+  },
 ];
 
 export function SkillInstall() {
   const id = useId();
   const [selected, setSelected] = useState(0);
   const [copyState, setCopyState] = useState<"idle" | "copying" | "copied" | "error">("idle");
-  const command = `${managers[selected].runner} skills add 2manslkh/payr --skill payr-create-invoice`;
+  const client = clients[selected];
 
   return (
-    <section className={styles.install} aria-label="Install the Payr skill">
+    <section className={styles.install} aria-labelledby={`${id}-heading`}>
+      <h2 id={`${id}-heading`} className={styles.heading}>Customer Quick Start</h2>
       <div className={styles.terminal}>
+        <div role="tablist" aria-label="Agent or client" className={styles.tabs}>
+          {clients.map((client, index) => (
+            <button key={client.name} type="button" role="tab" id={`${id}-tab-${index}`} aria-controls={`${id}-panel`} aria-selected={selected === index} tabIndex={selected === index ? 0 : -1}
+              disabled={copyState === "copying"}
+              onClick={() => { setSelected(index); setCopyState("idle"); }}
+              onKeyDown={(event) => {
+                const next = event.key === "ArrowRight" ? (index + 1) % clients.length
+                  : event.key === "ArrowLeft" ? (index + clients.length - 1) % clients.length
+                  : event.key === "Home" ? 0 : event.key === "End" ? clients.length - 1 : null;
+                if (next === null) return;
+                event.preventDefault();
+                setSelected(next);
+                setCopyState("idle");
+                document.getElementById(`${id}-tab-${next}`)?.focus();
+              }}>
+              {client.name}
+            </button>
+          ))}
+        </div>
         <div className={styles.toolbar}>
-          <div role="tablist" aria-label="Package manager" className={styles.tabs}>
-            {managers.map((manager, index) => (
-              <button key={manager.name} type="button" role="tab" id={`${id}-tab-${index}`} aria-controls={`${id}-panel`} aria-selected={selected === index} tabIndex={selected === index ? 0 : -1}
-                disabled={copyState === "copying"}
-                onClick={() => { setSelected(index); setCopyState("idle"); }}
-                onKeyDown={(event) => {
-                  const next = event.key === "ArrowRight" ? (index + 1) % managers.length
-                    : event.key === "ArrowLeft" ? (index + managers.length - 1) % managers.length
-                    : event.key === "Home" ? 0 : event.key === "End" ? managers.length - 1 : null;
-                  if (next === null) return;
-                  event.preventDefault();
-                  setSelected(next);
-                  setCopyState("idle");
-                  document.getElementById(`${id}-tab-${next}`)?.focus();
-                }}>
-                {manager.name}
-              </button>
-            ))}
-          </div>
-          <button className={styles.copy} type="button" aria-label="Copy installation command" disabled={copyState === "copying"} onClick={async () => {
+          <span>Payr</span>
+          <button className={styles.copy} type="button" aria-label="Copy setup snippet" disabled={copyState === "copying"} onClick={async () => {
             setCopyState("copying");
             try {
-              await navigator.clipboard.writeText(command);
+              await navigator.clipboard.writeText(client.snippet);
               setCopyState("copied");
             } catch {
               setCopyState("error");
@@ -53,11 +79,12 @@ export function SkillInstall() {
           </button>
         </div>
         <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-tab-${selected}`} tabIndex={0} className={styles.command}>
-          <code><span>{managers[selected].runner}</span>{" skills add "}<span className={styles.source}>2manslkh/payr</span>{" --skill payr-create-invoice"}</code>
+          <pre><code>{client.snippet}</code></pre>
+          <p className={styles.instruction}>{client.instruction}</p>
         </div>
       </div>
-      <p className={styles.note}>Install Payr in any agent <Link href="/app/connections">Connect Payr tools separately.</Link></p>
-      <span role="status" className={copyState === "error" ? styles.error : "sr-only"}>{copyState === "copied" ? "Installation command copied." : copyState === "error" ? "Couldn't copy. Select and copy the command above." : ""}</span>
+      <p className={styles.note}>Connect your agent to Payr. Powered by <a href="https://bazantic.com">Bazantic</a>.</p>
+      <span role="status" className={copyState === "error" ? styles.error : "sr-only"}>{copyState === "copied" ? "Setup snippet copied." : copyState === "error" ? "Couldn't copy. Select and copy the snippet above." : ""}</span>
     </section>
   );
 }

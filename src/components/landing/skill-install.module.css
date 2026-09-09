@@ -1,18 +1,19 @@
 .install { margin-top: 28px; max-width: 100%; min-width: 0; }
+.heading { font-size: 16px; font-weight: 600; margin: 0 0 12px; }
 .terminal { background: #141414; border: 1px solid #303030; border-radius: 12px; overflow: hidden; color: #ededed; }
-.toolbar { display: flex; justify-content: space-between; align-items: center; padding-inline: 12px; background: #1b1b1b; border-bottom: 1px solid #303030; gap: 8px; }
-.tabs { display: flex; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; padding-inline: 20px 12px; border-bottom: 1px solid #303030; gap: 8px; color: #aaa; font-size: 12px; }
+.tabs { display: flex; flex-wrap: wrap; padding-inline: 4px; background: #1b1b1b; border-bottom: 1px solid #303030; }
 .tabs button, .copy { appearance: none; background: none; border: 0; color: #aaa; font: inherit; font-size: 13px; min-height: 46px; cursor: pointer; }
-.tabs button { padding: 0 16px; border-bottom: 1px solid transparent; margin-bottom: -1px; }
+.tabs button { padding: 0 12px; border-bottom: 1px solid transparent; margin-bottom: -1px; }
 .tabs button[aria-selected="true"] { color: #fff; border-bottom-color: #edc75a; }
 .tabs button:hover, .copy:hover { color: #fff; }
 .tabs button:focus-visible, .copy:focus-visible, .command:focus-visible { outline: 2px solid #edc75a; outline-offset: -4px; }
 .tabs button:disabled, .copy:disabled { cursor: wait; opacity: .6; }
 .copy { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 64px; }
-.command { padding: 24px; }
-.command code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
-.command code > span { color: #ffa55c; }
-.command code > .source { color: #91d3ff; }
+.command { padding: 20px; }
+.command pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.command code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; line-height: 1.9; color: #91d3ff; user-select: text; }
+.instruction { margin-top: 16px; color: #aaa; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
 .note { margin-top: 10px; color: var(--muted); font-size: 11px; line-height: 1.7; }
 .note a { text-underline-offset: 3px; }
 .error { display: block; margin-top: 8px; color: var(--muted); font-size: 12px; }

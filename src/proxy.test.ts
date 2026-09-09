@@ -58,9 +58,21 @@ it("fails closed on operational or configuration errors with a sanitized private
 });
 
 it("does not match authenticated app routes or assets", () => {
-  for (const url of ["/app/invoices", "/", "/_next/static/app.js"]) {
+  for (const url of ["/app/invoices", "/_next/static/app.js"]) {
     expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url })).toBe(false);
   }
+});
+
+it("advertises public discovery without entering document admission or varying HTML by Accept", async () => {
+  expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url: "/" })).toBe(true);
+  const browserHeaders: Record<string, string>[] = [{ Accept: "text/html" }, { Accept: "text/markdown" }, { Accept: "text/markdown;q=0" }, { Accept: "text/markdown", RSC: "1" }];
+  for (const headers of browserHeaders) {
+    const html = await proxy(new NextRequest("https://example.test/", { headers }));
+    expect(html.headers.get("x-middleware-next")).toBe("1");
+    expect(html.headers.get("link")).toContain('rel="api-catalog"');
+    expect(html.headers.get("link")).toContain('</index.md>; rel="alternate"; type="text/markdown"');
+  }
+  expect(runtime).not.toHaveBeenCalled();
 });
 
 it.each(["payable", "paid", "voided", "expired", "pdf", "status", "invalid"])("limits the approved wallet CSP exception to payable HTML (%s)", async (kind) => {

@@ -1,15 +1,15 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { createConnectorSchema, IdentityError, type ConnectorMetadata, type IdentityConfig, type IdentityRepository, type IdentitySession } from "../identity/contracts";
+import { createConnectorSchema, IdentityError, type ConnectorScope, type ConnectorMetadata, type IdentityConfig, type IdentityRepository, type IdentitySession } from "../identity/contracts";
 import { createConnectorHasher } from "./crypto";
 import { connectorMetadata } from "./metadata";
 
 export function createConnectorService(repository: IdentityRepository, config: IdentityConfig, now: () => Date = () => new Date()): {
-  create(identity: IdentitySession, expiresInDays: number): Promise<{ connector: ConnectorMetadata; token: string; endpointUrl: string }>;
+  create(identity: IdentitySession, expiresInDays: number, scopes?: readonly ConnectorScope[]): Promise<{ connector: ConnectorMetadata; token: string; endpointUrl: string }>;
 } {
   const hash = createConnectorHasher(config.connectorPepper);
   return {
-    async create(identity, expiresInDays) {
-      if (!createConnectorSchema.safeParse({ expiresInDays }).success) {
+    async create(identity, expiresInDays, scopes) {
+      if (!createConnectorSchema.safeParse({ expiresInDays, scopes }).success) {
         throw new IdentityError("INVALID_INPUT");
       }
       const id = randomUUID();
@@ -17,7 +17,7 @@ export function createConnectorService(repository: IdentityRepository, config: I
       const expiresAt = new Date(now().getTime() + expiresInDays * 86_400_000).toISOString();
       const endpointUrl = new URL(`/api/mcp/${token}`, config.appOrigin).href;
       const connector = await repository.createConnector(identity, {
-        id, tokenHash: hash("connector", token), expiresAt,
+        id, tokenHash: hash("connector", token), expiresAt, ...(scopes === undefined ? {} : { scopes }),
       });
       return {
         connector: connectorMetadata(connector),

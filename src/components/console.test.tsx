@@ -306,6 +306,7 @@ it("keeps connector secrets out of lists and storage, copies, acknowledges, and 
   const view = render(<Connections />);
   await screen.findByText("No connection credentials");
   fireEvent.change(screen.getByLabelText("Expires in (days)"), { target: { value: "30" } });
+  expect(screen.getByRole("checkbox", { name: "Direct Chat Setup" })).toHaveProperty("checked", false);
   fireEvent.click(screen.getByRole("button", { name: "Create credential" }));
   await screen.findByLabelText("Credential");
   expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ expiresInDays: 30 });
@@ -320,6 +321,19 @@ it("keeps connector secrets out of lists and storage, copies, acknowledges, and 
   await screen.findByText("Connection revoked. Copies of the credential no longer grant access.");
   expect(fetcher.mock.calls[2][0]).toBe(`/api/connectors/${connector.id}/revoke`);
   expect(screen.queryByRole("button", { name: "Revoke credential" })).toBeNull();
+});
+
+it("grants both sender scopes only when Direct Chat Setup is checked", async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce(json({ connectors: [] }))
+    .mockResolvedValueOnce(json({ connector, token: "private-value", endpointUrl: "https://example.test/private-value" }));
+  vi.stubGlobal("fetch", fetcher);
+  render(<Connections />);
+  await screen.findByText("No connection credentials");
+  fireEvent.click(screen.getByRole("checkbox", { name: "Direct Chat Setup" }));
+  fireEvent.click(screen.getByRole("button", { name: "Create credential" }));
+  await screen.findByLabelText("Credential");
+  expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ expiresInDays: 7,
+    scopes: ["invoice:draft", "invoice:publish", "invoice:status", "invoice:void", "sender:read", "sender:write"] });
 });
 
 it("forgets an unacknowledged secret on browser pagehide", async () => {

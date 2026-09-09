@@ -4,17 +4,20 @@ import { z } from "zod";
 import type { InvoiceActor } from "../invoices/contracts";
 import { DraftError } from "../invoices/errors";
 import { PublicationError } from "../invoices/publication-contracts";
-import { IdentityError } from "../identity/contracts";
+import { IdentityError, saveConnectorSenderSchema } from "../identity/contracts";
+import type { createConnectorSenderService } from "../profiles/connector";
 import type { createInvoiceDraftService } from "../invoices/service";
 import type { createPublicationService } from "../invoices/publication";
 import type { createInvoiceLifecycleService } from "../invoices/lifecycle";
 
 export type McpServices = Pick<ReturnType<typeof createInvoiceDraftService>, "createDraft">
   & Pick<ReturnType<typeof createPublicationService>, "publish">
-  & Pick<ReturnType<typeof createInvoiceLifecycleService>, "status" | "void">;
+  & Pick<ReturnType<typeof createInvoiceLifecycleService>, "status" | "void">
+  & ReturnType<typeof createConnectorSenderService>;
 export const toolActions = {
   create_invoice_draft: "invoice:draft", publish_invoice: "invoice:publish",
   get_invoice_status: "invoice:status", void_invoice: "invoice:void",
+  get_sender_profile: "sender:read", save_sender_profile: "sender:write",
 } as const;
 
 // Discovery documentation only. Canonical services own all validation and mutations.
@@ -28,6 +31,11 @@ const confirmed = (value: object) => object({ value, confirmed: { const: true },
 ] } }, ["value", "confirmed", "provenance"]);
 const common = " Payr does not search. Only confirmed user_provided or URL-bearing web_source proposals are accepted; saved_profile is server-owned. Publication approval is separate from Gmail sending approval. Paid requires reconciliation-derived persisted settlement, never a wallet callback.";
 const tools: Tool[] = [
+  { name: "get_sender_profile", description: "Direct Chat Setup: requires opt-in sender:read. Read sender fields, missing fields, profile id and revision before setup or updates. No payout authority. If unavailable, enable Direct Chat Setup on a new dashboard connection or complete the sender in the dashboard.",
+    inputSchema: object({}), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
+  { name: "save_sender_profile", description: "Direct Chat Setup: requires opt-in sender:write. Setup or update only after the user explicitly approves all business/contact/address fields, invoice prefix and default terms. Supply expectedProfileId and expectedRevision from get_sender_profile and approval:true. Repeated or stale saves conflict: read again and obtain fresh approval, never retry blindly. Payout is ALWAYS owner-signed dashboard only. Never include wallet, actor or workspace fields.",
+    inputSchema: z.toJSONSchema(saveConnectorSenderSchema, { io: "input" }) as Tool["inputSchema"],
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false } },
   { name: "create_invoice_draft", description: "Gather or revise a USDC invoice. Missing fields return MISSING_FIELDS with draftCreated:false and cause no mutation. Revision uses draftId plus expectedVersion on this same tool. Review the complete preview, applied defaults, and client-profile diff before explicit publication approval. No sender or payout authority." + common,
     inputSchema: object({ draftId: uuid, expectedVersion: version, idempotencyKey: text(128),
       client: object({ id: uuid, alias: text(100), proposed: object({ businessName: confirmed(text(200)), contactName: confirmed(text(200)),
@@ -49,7 +57,7 @@ const tools: Tool[] = [
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false } },
 ];
 const statusInput = z.object({ invoiceId: z.string().uuid() }).strict();
-const safeCodes = new Set(["INVALID_INPUT", "PROHIBITED_FIELD", "PAYLOAD_TOO_LARGE", "NOT_FOUND", "FORBIDDEN", "VERSION_CONFLICT", "PROFILE_CONFLICT",
+const safeCodes = new Set(["INVALID_INPUT", "PROHIBITED_FIELD", "PAYLOAD_TOO_LARGE", "NOT_FOUND", "FORBIDDEN", "VERSION_CONFLICT", "PROFILE_CONFLICT", "REVISION_CONFLICT",
   "IDEMPOTENCY_CONFLICT", "DRAFT_NOT_EDITABLE", "PUBLICATION_IN_PROGRESS", "PUBLICATION_FAILED", "PUBLICATION_RETRYABLE", "LEASE_LOST",
   "INVOICE_NOT_VOIDABLE", "LINK_UNAVAILABLE", "CONFIGURATION_ERROR", "DOCUMENTS_NOT_CONFIGURED"]);
 
@@ -60,6 +68,8 @@ export function createMcpServer(actor: InvoiceActor, services: McpServices) {
     try {
       let result;
       switch (params.name) {
+        case "get_sender_profile": result = await services.getSenderProfile(actor, params.arguments ?? {}); break;
+        case "save_sender_profile": result = await services.saveSenderProfile(actor, params.arguments); break;
         case "create_invoice_draft": result = await services.createDraft(actor, params.arguments); break;
         case "publish_invoice": result = await services.publish(actor, params.arguments); break;
         case "get_invoice_status": result = await services.status(actor, statusInput.parse(params.arguments).invoiceId); break;
@@ -71,10 +81,14 @@ export function createMcpServer(actor: InvoiceActor, services: McpServices) {
       let result: Record<string, unknown>;
       if (error instanceof DraftError && error.code === "MISSING_FIELDS") {
         result = { code: "MISSING_FIELDS", draftCreated: false, missingFields: error.details.missingFields };
+        result.guidance = "For missing sender fields, use get_sender_profile, review the full proposed sender with the user, then save_sender_profile with explicit approval. These require opt-in sender:read/sender:write on a new dashboard connection; otherwise complete the sender in the dashboard. Payout changes are owner-signed dashboard only. Never add sender or payout fields to create_invoice_draft. Retry the original invoice input with the same idempotencyKey after setup.";
       } else {
         const code = error instanceof z.ZodError ? "INVALID_INPUT"
           : (error instanceof DraftError || error instanceof PublicationError || error instanceof IdentityError) && safeCodes.has(error.code) ? error.code : "INTERNAL_ERROR";
         result = { code };
+        if (params.name === "save_sender_profile" && ["PROFILE_CONFLICT", "REVISION_CONFLICT"].includes(code)) {
+          result.guidance = "Read the current sender profile again and obtain fresh approval before saving with its id and revision.";
+        }
         if (error instanceof DraftError && code === "VERSION_CONFLICT") {
           result.draftId = error.details.draftId; result.currentVersion = error.details.currentVersion;
         }

@@ -37,7 +37,16 @@ const connector = { id, createdAt: time, expiresAt: "2026-10-01T00:00:00.000Z", 
 const tokenInput = { id, tokenHash: "a".repeat(64), expiresAt: connector.expiresAt };
 const admissionInput = { id, tokenHash: tokenInput.tokenHash, ipHash: "b".repeat(64), action: "invoice:draft" };
 const event = { id, tokenId: id, action: "connector.create", outcome: "succeeded", createdAt: time };
+const connectorActor = { workspaceId: id, connectorId: id, ownerWallet: null } as const;
+const connectorSenderInput = { ...saveSender, expectedProfileId: id, approval: true } as const;
 const cases: Array<{ name: string; args: Record<string, unknown>; data: unknown; invoke: (repository: IdentityRepository) => Promise<unknown> }> = [
+  { name: "payr_connector_get_sender_profile_v1", args: { p_workspace_id: id, p_connector_id: id }, data: profile,
+    invoke: (r) => r.getConnectorProfile(connectorActor) },
+  { name: "payr_connector_save_sender_profile_v1", args: { p_workspace_id: id, p_connector_id: id, p_input: connectorSenderInput }, data: profile,
+    invoke: (r) => r.saveConnectorProfile(connectorActor, connectorSenderInput) },
+  { name: "payr_create_connector_v2", args: { ...scope, p_id: id, p_token_hash: tokenInput.tokenHash, p_expires_at: connector.expiresAt, p_scopes: [...CONNECTOR_SCOPES, "sender:read", "sender:write"] },
+    data: { ...connector, scopes: [...CONNECTOR_SCOPES, "sender:read", "sender:write"] },
+    invoke: (r) => r.createConnector(identity, { ...tokenInput, scopes: [...CONNECTOR_SCOPES, "sender:read", "sender:write"] }) },
   { name: "payr_issue_auth_nonce_v1", args: { p_nonce: nonce }, data: nonce, invoke: (r) => r.issueNonce(nonce) },
   { name: "payr_find_auth_nonce_v1", args: { p_nonce_id: id }, data: nonce, invoke: (r) => r.findNonce(id) },
   { name: "payr_complete_login_v1", args: { p_nonce_id: id, p_verified_wallet: owner }, data: identity, invoke: (r) => r.completeLogin(id, owner) },
@@ -91,11 +100,16 @@ it("supports null lookups and every admission variant without accepting malforme
 
 it.each([
   ["NOT_FOUND", 404], ["REVISION_CONFLICT", 409], ["NONCE_INVALID_OR_USED", 400], ["INVALID_INPUT", 400],
-  ["CLIENT_ALIAS_CONFLICT", 409], ["CONNECTOR_CONFLICT", 409],
+  ["CLIENT_ALIAS_CONFLICT", 409], ["CONNECTOR_CONFLICT", 409], ["PROFILE_CONFLICT", 409], ["FORBIDDEN", 403],
 ])("maps sanitized %s errors and status", async (code, status) => {
   const repository = createIdentityRepository({ rpc: () => Promise.resolve({ data: null, error: { code: "P0001", message: String(code) } }) });
   await expect(repository.getProfile(identity)).rejects.toBeInstanceOf(IdentityError);
   await expect(repository.getProfile(identity)).rejects.toMatchObject({ code, status, message: code });
+});
+
+it.each([null, [], [null], ["sender:read", "sender:read"], ["payout:write"], ["sender:write", null]])("rejects invalid stored scopes %j", async (scopes) => {
+  const repository = createIdentityRepository({ rpc: () => Promise.resolve({ data: [{ ...connector, scopes }], error: null }) });
+  await expect(repository.listConnectors(identity)).rejects.toMatchObject({ code: "INVALID_DATABASE_RESPONSE" });
 });
 
 it("never propagates transport, constraint details or error-marker substrings", async () => {

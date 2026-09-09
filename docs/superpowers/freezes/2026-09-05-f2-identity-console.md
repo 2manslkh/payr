@@ -27,7 +27,7 @@ This is the R03 integration contract. `PROJECT.md`, `DESIGN.md`, and Task 3 rema
 | `/api/auth/session` | GET | `{session}` or authenticated failure |
 | `/api/profile` | GET; POST `saveSenderRequestSchema` | `{profile}` |
 | `/api/clients` | GET; POST `saveClientSchema` | `{clients}` / `{client}` |
-| `/api/connectors` | GET; POST `{expiresInDays: integer 1..30}` | `{connectors}` / `{connector, token, endpointUrl}` |
+| `/api/connectors` | GET; POST `{expiresInDays: integer 1..30, scopes?: ConnectorScope[]}` | `{connectors}` / `{connector, token, endpointUrl}` |
 | `/api/connectors/[id]/revoke` | POST, UUID route parameter | `{connector}` |
 | `/api/activity` | GET | `{events}` (at most 100, newest first) |
 
@@ -37,19 +37,19 @@ All ordinary mutation objects are strict, including nested addresses. Normal pro
 
 ## Connectors
 
-- Fixed scopes remain exactly `invoice:draft`, `invoice:publish`, `invoice:status`, `invoice:void`. These authorize only future invoice tools, never payout/profile/connector changes.
+- Default scopes remain exactly `invoice:draft`, `invoice:publish`, `invoice:status`, `invoice:void`. The 9 September 2026 Direct Chat Setup decision adds opt-in `sender:read` and `sender:write`, never payout or connector-management authority. Unknown, duplicate, null and empty explicit scope lists are invalid. Existing credentials do not change. See `docs/ops/mcp-sender-profile.md` for the additive RPC contracts.
 - Wire credential: canonical lowercase UUID + `.` + 32 random bytes in canonical unpadded base64url. The database stores only UUID and `HMAC-SHA256(pepper, "payr:connector:v1:" + token)` as lowercase hex. List/status never return the raw credential or endpoint URL.
 - IPs are validated and canonicalized, including equivalent IPv6/IPv4-mapped representations. Store only `HMAC-SHA256(pepper, "payr:connector-ip:v1:" + normalizedIp)`.
 - `authenticateConnector` verifies the stored hash in constant time before admission. The admission RPC rechecks hash, revocation, expiry, and scope under locks so a race cannot use revoked credentials.
 - Fixed database-time minute windows: 60 requests/token and 120/IP, with global IP buckets independent of token/workspace. Bounds are not caller parameters. A denied limit returns stable `RATE_LIMITED` and retry-after seconds; rejected counters cannot grow without bound. Token/IP lock ordering is consistent.
 - Audit rows contain only workspace/token IDs, bounded action/outcome codes, and timestamps. Profile/auth/connector mutations write audit rows in their owning transaction. No caller-supplied audit payload RPC is exposed.
-- The console shows credentials once in component memory, with copy/acknowledge and revoke. Warn explicitly about platform/CDN logs, browser/clipboard history, and Claude configuration retention. The MCP endpoint is not functional until Task 9 and the UI must say so.
+- The console shows credentials once in component memory, with copy/acknowledge and revoke. Warn explicitly about platform/CDN logs, browser/clipboard history, and Claude configuration retention. R09 implements the endpoint; creating a credential does not automatically connect Claude. Direct Chat Setup is unchecked and grants both sender scopes only on a new credential.
 
 ## Database Interface
 
 The new migration is `202609040002_auth_connector_functions.sql`. It may add nonce payout snapshot/revision fields, client provenance, and a separately keyed global IP-limit table. Do not rewrite the released core migration. Every new private table has RLS/default-deny grants. All RPCs are `SECURITY DEFINER`, fully qualified, empty search path, explicitly service-role-only execution; existing F1 privileges stay intact.
 
-RPCs return JSONB using the camelCase DTOs in the shared contract; missing records return JSON null. SQL bigint/time fields must not lose precision. All workspace methods take both workspace ID and owner wallet, validate their relationship, and fail indistinguishably on cross-tenant targets.
+RPCs return JSONB using the camelCase DTOs in the shared contract; missing lookup records return JSON null. SQL bigint/time fields must not lose precision. Owner methods take workspace ID and owner wallet. The additive R09 connector sender methods instead take workspace ID and connector ID, validate token scope/lifecycle under lock, and never accept an owner wallet. Both fail indistinguishably on unauthorized cross-tenant targets.
 
 | RPC | Exact named parameters |
 | --- | --- |

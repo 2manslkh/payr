@@ -37,8 +37,8 @@ export async function handleMcpRequest(request: Request, token: string, ip: stri
   const message = body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : null;
   const params = message?.params && typeof message.params === "object" ? message.params as Record<string, unknown> : null;
   const name = message?.method === "tools/call" && typeof params?.name === "string" ? params.name : "";
-  // Protocol admission deliberately uses existing read-only scope. It is not a
-  // fifth action, nor a tool invocation; calls consume their actual action once.
+  // Protocol admission uses the existing invoice read scope; calls consume their
+  // actual action once, including the separately opted-in sender actions.
   const action = Object.hasOwn(toolActions, name) ? toolActions[name as keyof typeof toolActions] : "invoice:status";
   let identity;
   try { identity = await runtime.authenticate({ token, ip, action }); }

@@ -6,6 +6,10 @@ Last revised: 2026-09-06
 Owner: Lim Keng Hin (product and engineering)
 Presentation and submission: Chanita Inthathong
 
+## 2026-09-09 Direct Chat Setup Amendment
+
+The user-approved dated entry in `DECISIONS.md` supersedes this baseline's dashboard-only sender policy and exactly-four-tools statements, including AC-01. Keep the four invoice tools unchanged; add `get_sender_profile` and `save_sender_profile` behind opt-in `sender:read` and `sender:write`. Existing/default credentials stay invoice-only. Connections grants both sender scopes through an unchecked Direct Chat Setup option. Sender setup and later updates require explicit approval of all fields and an atomic profile-ID/revision comparison; identity and audit attribution come from the authenticated connector, never an impersonated owner wallet. Payout changes remain ALWAYS owner-signed dashboard only, and draft input still prohibits all sender/payout fields. Exact contracts and verification gates are in `docs/ops/mcp-sender-profile.md`.
+
 ## Executive verdict
 
 Build Payr: an agent-native invoicing service for independent developers that turns a short instruction plus confirmed business and client profiles into a complete commercial invoice, protected payment link, and PDF, then reconciles verified Arc USDC settlement into a tamper-evident receipt and delivers it automatically.

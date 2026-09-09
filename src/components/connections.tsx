@@ -11,6 +11,7 @@ export function Connections() {
   const resource = useConsoleResource<{ connectors: ConnectorMetadata[] }>("/api/connectors");
   const [secret, setSecret] = useState<CreatedConnector | null>(null);
   const [days, setDays] = useState("7");
+  const [senderSetup, setSenderSetup] = useState(false);
   const [busy, setBusy] = useState(false);
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -32,7 +33,9 @@ export function Connections() {
     setError(null);
     setStatus("");
     try {
-      const created = await consoleApi<CreatedConnector>("/api/connectors", { expiresInDays: Number(days) });
+      const created = await consoleApi<CreatedConnector>("/api/connectors", { expiresInDays: Number(days),
+        ...(senderSetup ? { scopes: [...CONNECTOR_SCOPES, "sender:read", "sender:write"] } : {}),
+      });
       setSecret(created);
       resource.update({ connectors: [created.connector, ...(resource.data?.connectors ?? [])] });
       setStatus("Credential created. Copy it now, then acknowledge to hide it.");
@@ -76,13 +79,13 @@ export function Connections() {
   return (
     <>
       <PageHeading title="Connections">
-        Control which credentials can access future invoice tools.
+        Control which credentials can access invoice tools and optional sender setup.
       </PageHeading>
       <section className="notice">
-        <h2>Claude MCP is not available yet</h2>
+        <h2>Connect Claude to Payr</h2>
         <p>
-          You can manage credentials now, but the MCP endpoint is not functional in this release. Creating a
-          credential does not connect Claude or enable invoice publication.
+          Add the show-once endpoint URL as a custom connector in Claude. Creating a credential does not
+          connect Claude automatically. Invoice publication still requires your explicit approval.
         </p>
       </section>
       <section className="ledger-section">
@@ -92,8 +95,8 @@ export function Connections() {
         </div>
         <div className="section-body">
           <p>
-            Access is limited to these fixed invoice scopes. A connector cannot edit your profile, change your
-            payout wallet, or manage other connections.
+            New credentials include these invoice scopes by default. Sender setup is optional below.
+            No connector can change your payout wallet or manage other connections.
           </p>
           <ul className="scope-list">
             {CONNECTOR_SCOPES.map((scope) => (
@@ -114,24 +117,38 @@ export function Connections() {
               exposed. Do not share it in screenshots or support messages.
             </p>
           </div>
-          <form className="inline-form" onSubmit={create} aria-describedby="retention-warning">
-            <label className="field" htmlFor="connection-days">
-              <span>Expires in (days)</span>
-              <input
-                id="connection-days"
-                type="number"
-                min="1"
-                max="30"
-                step="1"
-                required
-                value={days}
-                onChange={(event) => setDays(event.target.value)}
-                disabled={busy || !!secret}
-              />
+          <form onSubmit={create} aria-describedby="retention-warning">
+            <label className="check-field" htmlFor="connection-sender-setup">
+              <input id="connection-sender-setup" type="checkbox" checked={senderSetup}
+                onChange={(event) => setSenderSetup(event.target.checked)} disabled={busy || !!secret}
+                aria-describedby="sender-setup-help" />
+              <span>Direct Chat Setup</span>
             </label>
-            <button className="button" disabled={busy || resource.loading || !!secret || !resource.data}>
-              {busy ? "Working..." : "Create credential"}
-            </button>
+            <p className="field-help" id="sender-setup-help">
+              Optional: grants sender:read and sender:write to read, set up, and later update your business,
+              contact, billing address, invoice prefix, and default terms after explicit approval in chat.
+              No payout authority: payout changes always require an owner-signed action in Settings.
+              Existing credentials are unchanged; create a new one to opt in.
+            </p>
+            <div className="inline-form">
+              <label className="field" htmlFor="connection-days">
+                <span>Expires in (days)</span>
+                <input
+                  id="connection-days"
+                  type="number"
+                  min="1"
+                  max="30"
+                  step="1"
+                  required
+                  value={days}
+                  onChange={(event) => setDays(event.target.value)}
+                  disabled={busy || !!secret}
+                />
+              </label>
+              <button className="button" disabled={busy || resource.loading || !!secret || !resource.data}>
+                {busy ? "Working..." : "Create credential"}
+              </button>
+            </div>
           </form>
           <p className="field-help">
             Shown once on this page, held only in memory. Leaving or reloading clears it. If a creation
@@ -160,7 +177,7 @@ export function Connections() {
               Copy credential
             </button>
             <label className="field" htmlFor="connector-endpoint">
-              <span>Endpoint URL (not functional yet)</span>
+              <span>Endpoint URL</span>
               <textarea
                 id="connector-endpoint"
                 className="technical"
@@ -225,6 +242,7 @@ export function Connections() {
                       <code>{connector.id}</code>
                       <span className={state === "Expired" ? "attention" : ""}>{state}</span>
                     </div>
+                    <p className="field-help">Granted scopes: {connector.scopes.join(", ")}</p>
                     <dl className="connection-dates">
                       <div>
                         <dt>Created</dt>

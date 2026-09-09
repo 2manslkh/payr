@@ -2,7 +2,7 @@
 import { expect, it, vi } from "vitest";
 import { handleMcpRequest } from "./transport";
 import { createConnectorAuthenticator } from "../connectors/auth";
-import { CONNECTOR_SCOPES, IdentityError, type IdentityRepository } from "../identity/contracts";
+import { CONNECTOR_SCOPES, IdentityError, type ConnectorScope, type IdentityRepository } from "../identity/contracts";
 
 const actor = { workspaceId: "00000000-0000-4000-8000-000000000001", tokenId: "00000000-0000-4000-8000-000000000002" };
 const request = (body: unknown) => new Request("https://example.test/api/mcp/test-secret", {
@@ -33,12 +33,12 @@ function authFixture() {
   const tokenId = "00000000-0000-4000-8000-00000000000a";
   const token = `${tokenId}.AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8`;
   const record = { id: tokenId, tokenHash: "6df944232b1d5fc3471f178f15b10dfe54f3dadeb43d3b1a0fbafa8025133259", workspaceId: actor.workspaceId,
-    createdAt: "2026-09-04T00:00:00Z", expiresAt: "2030-01-01T00:00:00Z", revokedAt: null as string | null, lastUsedAt: null, scopes: CONNECTOR_SCOPES };
+    createdAt: "2026-09-04T00:00:00Z", expiresAt: "2030-01-01T00:00:00Z", revokedAt: null as string | null, lastUsedAt: null, scopes: CONNECTOR_SCOPES as readonly ConnectorScope[] };
   const repository = { findConnector: vi.fn<IdentityRepository["findConnector"]>().mockResolvedValue(record),
     admitConnector: vi.fn<IdentityRepository["admitConnector"]>().mockResolvedValue({ outcome: "allowed", workspaceId: actor.workspaceId, tokenId }) };
   const auth = createConnectorAuthenticator(repository as unknown as IdentityRepository, { appOrigin: "https://example.test", chainId: 5042002,
     sessionKey: new Uint8Array(32).fill(7), connectorPepper: new Uint8Array(32).fill(8) });
-  const services = { createDraft: vi.fn(), publish: vi.fn(), status: vi.fn(), void: vi.fn() };
+  const services = { createDraft: vi.fn(), publish: vi.fn(), status: vi.fn(), void: vi.fn(), getSenderProfile: vi.fn(), saveSenderProfile: vi.fn() };
   const runtime = { ...auth, services, appOrigin: "https://example.test" };
   const send = (req = request({ jsonrpc: "2.0", id: 1, method: "tools/list" }), credential = token, ip = "192.0.2.128") => handleMcpRequest(req, credential, ip, runtime);
   return { record, repository, token, services, send };
@@ -116,9 +116,9 @@ it("redacts unexpected tool and authentication provider exceptions", async () =>
   repository.admitConnector.mockRejectedValue(new IdentityError(token));
   const failure = await send(); expect(failure.status).toBe(503); expect(await failure.text()).not.toContain(token);
 });
-it("initializes and discovers exactly four tools across independent authenticated requests with no session", async () => {
+it("discovers four invoice and two opt-in sender tools without granting their scopes", async () => {
   const authenticate = vi.fn().mockResolvedValue(actor);
-  const services = { createDraft: vi.fn(), publish: vi.fn(), status: vi.fn(), void: vi.fn() };
+  const services = { createDraft: vi.fn(), publish: vi.fn(), status: vi.fn(), void: vi.fn(), getSenderProfile: vi.fn(), saveSenderProfile: vi.fn() };
   const runtime = { authenticate, services, appOrigin: "https://example.test" };
   const first = await handleMcpRequest(request({ jsonrpc: "2.0", id: 1, method: "initialize", params: {
     protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "local-test", version: "1" },
@@ -128,9 +128,29 @@ it("initializes and discovers exactly four tools across independent authenticate
   expect((await first.json()).result.serverInfo.name).toBe("Payr");
   const second = await handleMcpRequest(request({ jsonrpc: "2.0", id: 2, method: "tools/list" }), "test-secret", "127.0.0.1", runtime);
   expect((await second.json()).result.tools.map((tool: { name: string }) => tool.name)).toEqual([
+    "get_sender_profile", "save_sender_profile",
     "create_invoice_draft", "publish_invoice", "get_invoice_status", "void_invoice",
   ]);
   expect(authenticate).toHaveBeenCalledTimes(2);
   expect(authenticate).toHaveBeenCalledWith({ token: "test-secret", ip: "127.0.0.1", action: "invoice:status" });
   expect(services.createDraft).not.toHaveBeenCalled();
+});
+
+it("denies invoice-only sender access, permits read-only reads but never writes, and derives the connector actor", async () => {
+  const { send, services, record, repository } = authFixture();
+  const call = (name: string) => send(request({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: {} } }));
+  expect((await call("get_sender_profile")).status).toBe(401);
+  expect((await call("save_sender_profile")).status).toBe(401);
+  expect(repository.admitConnector).not.toHaveBeenCalled();
+  record.scopes = [...CONNECTOR_SCOPES, "sender:read"];
+  services.getSenderProfile.mockResolvedValue({ profile: {}, missingFields: [] });
+  expect((await call("get_sender_profile")).status).toBe(200);
+  expect(services.getSenderProfile).toHaveBeenCalledExactlyOnceWith({ workspaceId: actor.workspaceId, connectorId: record.id, ownerWallet: null }, {});
+  expect(repository.admitConnector.mock.calls.at(-1)?.[0].action).toBe("sender:read");
+  expect((await call("save_sender_profile")).status).toBe(401);
+  expect(services.saveSenderProfile).not.toHaveBeenCalled();
+  record.scopes = [...record.scopes, "sender:write"];
+  services.saveSenderProfile.mockResolvedValue({ profile: {}, missingFields: [] });
+  expect((await call("save_sender_profile")).status).toBe(200);
+  expect(repository.admitConnector.mock.calls.at(-1)?.[0].action).toBe("sender:write");
 });

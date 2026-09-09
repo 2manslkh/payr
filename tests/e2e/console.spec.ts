@@ -47,7 +47,8 @@ async function noOverflow(page: Page) {
     .locator(".public-page, .workspace")
     .locator("button:visible, input:visible, textarea:visible, summary:visible, a:visible")
     .all()) {
-    const box = await control.boundingBox();
+    const target = await control.getAttribute("type") === "checkbox" ? control.locator("..") : control;
+    const box = await target.boundingBox();
     expect(box?.height).toBeGreaterThanOrEqual(44);
   }
 }
@@ -442,7 +443,8 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
       }),
     );
     await page.goto("/app/connections");
-    await expect(page.getByRole("heading", { name: "Claude MCP is not available yet" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connect Claude to Payr" })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: "Direct Chat Setup" })).not.toBeChecked();
     await expect(page.getByText(/Platform access logs, CDN logs/)).toBeVisible();
     await page.getByLabel("Expires in (days)", { exact: true }).fill("1");
     await page.getByRole("button", { name: "Create credential" }).click();

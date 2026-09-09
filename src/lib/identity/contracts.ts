@@ -2,6 +2,12 @@ import { z } from "zod";
 import { isCountryCode } from "../domain/country";
 
 export const CONNECTOR_SCOPES = ["invoice:draft", "invoice:publish", "invoice:status", "invoice:void"] as const;
+// Shipped/default credentials remain invoice-only. Never use supported scopes as defaults.
+export const SUPPORTED_CONNECTOR_SCOPES = [...CONNECTOR_SCOPES, "sender:read", "sender:write"] as const;
+export type ConnectorScope = typeof SUPPORTED_CONNECTOR_SCOPES[number];
+export const connectorScopesSchema = z.array(z.enum(SUPPORTED_CONNECTOR_SCOPES)).min(1).max(6)
+  .refine((scopes) => new Set(scopes).size === scopes.length)
+  .refine((scopes) => scopes.includes("invoice:status"), "Scopes must include invoice:status for MCP initialization and tool discovery");
 export const SESSION_COOKIE = "__Host-payr-session";
 export const NONCE_LIFETIME_SECONDS = 300;
 export const SESSION_LIFETIME_SECONDS = 8 * 60 * 60;
@@ -29,6 +35,11 @@ export const saveSenderSchema = z.object({
 }).strict();
 export type SaveSenderInput = z.infer<typeof saveSenderSchema>;
 export const saveSenderRequestSchema = saveSenderSchema.extend({ expectedProfileId: z.string().uuid() });
+export const saveConnectorSenderSchema = saveSenderRequestSchema.extend({
+  expectedRevision: z.number().int().positive().max(2147483647), approval: z.literal(true),
+});
+export type SaveConnectorSenderInput = z.infer<typeof saveConnectorSenderSchema>;
+export type ConnectorActor = Readonly<{ workspaceId: string; connectorId: string; ownerWallet: null }>;
 
 export const saveClientSchema = z.object({
   id: z.string().uuid().nullable(),
@@ -69,7 +80,7 @@ export const verifyRequestSchema = z.object({
   signature: z.string().regex(/^0x[0-9a-fA-F]{130}$/),
 }).strict();
 export type VerifyRequest = z.infer<typeof verifyRequestSchema>;
-export const createConnectorSchema = z.object({ expiresInDays: z.number().int().min(1).max(30) }).strict();
+export const createConnectorSchema = z.object({ expiresInDays: z.number().int().min(1).max(30), scopes: connectorScopesSchema.optional() }).strict();
 
 export type IdentitySession = Readonly<{ workspaceId: string; ownerWallet: string }>;
 export type IdentityConfig = Readonly<{
@@ -117,7 +128,7 @@ export type ConnectorMetadata = Readonly<{
   expiresAt: string;
   revokedAt: string | null;
   lastUsedAt: string | null;
-  scopes: typeof CONNECTOR_SCOPES;
+  scopes: readonly ConnectorScope[];
 }>;
 export type ConnectorRecord = ConnectorMetadata & Readonly<{ workspaceId: string; tokenHash: string }>;
 export type AuditEvent = Readonly<{
@@ -140,10 +151,12 @@ export type IdentityRepository = Readonly<{
   applyPayoutChange(identity: IdentitySession, nonceId: string): Promise<SenderProfile>;
   getProfile(identity: IdentitySession): Promise<SenderProfile>;
   saveProfile(identity: IdentitySession, input: SaveSenderInput): Promise<SenderProfile>;
+  getConnectorProfile(actor: ConnectorActor): Promise<SenderProfile>;
+  saveConnectorProfile(actor: ConnectorActor, input: SaveConnectorSenderInput): Promise<SenderProfile>;
   listClients(identity: IdentitySession): Promise<ClientProfile[]>;
   saveClient(identity: IdentitySession, input: SaveClientInput): Promise<ClientProfile>;
   listConnectors(identity: IdentitySession): Promise<ConnectorMetadata[]>;
-  createConnector(identity: IdentitySession, input: { id: string; tokenHash: string; expiresAt: string }): Promise<ConnectorMetadata>;
+  createConnector(identity: IdentitySession, input: { id: string; tokenHash: string; expiresAt: string; scopes?: readonly ConnectorScope[] }): Promise<ConnectorMetadata>;
   revokeConnector(identity: IdentitySession, id: string): Promise<ConnectorMetadata>;
   findConnector(id: string): Promise<ConnectorRecord | null>;
   admitConnector(input: { id: string; tokenHash: string; ipHash: string; action: string }): Promise<ConnectorAdmission>;

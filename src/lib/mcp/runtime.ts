@@ -6,11 +6,13 @@ import { createInvoiceLifecycleService } from "../invoices/lifecycle";
 import { getDraftRepository } from "../invoices/runtime";
 import { getPublicationRepository, getPublicationConfig, getPublicationDocumentPort, getPublicationLinkConfig } from "../invoices/publication-runtime";
 import type { McpRuntime } from "./transport";
+import { createConnectorSenderService } from "../profiles/connector";
 
 export function createMcpRuntime(): McpRuntime {
   const { config, repository } = getIdentityRuntime();
   return { appOrigin: config.appOrigin, authenticate: createConnectorAuthenticator(repository, config).authenticate,
     services: {
+      ...createConnectorSenderService(repository),
       createDraft: (actor, input) => createInvoiceDraftService(getDraftRepository()).createDraft(actor, input),
       publish: (actor, input) => createPublicationService(getPublicationRepository(), {
         getReservationConfig: getPublicationConfig, getLinkConfig: getPublicationLinkConfig, getDocuments: getPublicationDocumentPort,

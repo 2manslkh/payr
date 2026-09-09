@@ -66,7 +66,7 @@ beforeEach(() => {
   repository.listClients.mockResolvedValue([client]);
   repository.saveClient.mockResolvedValue(client);
   repository.listConnectors.mockResolvedValue([connector]);
-  repository.createConnector.mockImplementation(async (_identity, input) => ({ ...connector, id: input.id, expiresAt: input.expiresAt }));
+  repository.createConnector.mockImplementation(async (_identity, input) => ({ ...connector, id: input.id, expiresAt: input.expiresAt, scopes: input.scopes ?? CONNECTOR_SCOPES }));
   repository.revokeConnector.mockResolvedValue({ ...connector, revokedAt: "2026-09-05T12:00:00.000Z" });
   repository.listActivity.mockResolvedValue([]);
 });
@@ -82,6 +82,21 @@ function expectFailure(response: Response, code: string, status: number) {
   expect(response).toBe(vi.mocked(apiError).mock.results[0].value);
   expect(privateJson).not.toHaveBeenCalled();
 }
+
+it("forwards explicit sender opt-in scopes only after authorizing the owner session", async () => {
+  const scopes = [...CONNECTOR_SCOPES, "sender:read", "sender:write"];
+  const request = post({ expiresInDays: 7, scopes }, "/api/connectors");
+  const response = await createConnector(request);
+  expect(requireRequestSession).toHaveBeenCalledExactlyOnceWith(request, true);
+  expect(repository.createConnector).toHaveBeenCalledExactlyOnceWith(identity, expect.objectContaining({ scopes }));
+  expect((await response.json()).connector.scopes).toEqual(scopes);
+});
+
+it.each([null, [], [null], ["sender:read", "sender:read"], ["payout:write"]])("rejects malformed HTTP mint scopes %j without minting", async (scopes) => {
+  const response = await createConnector(post({ expiresInDays: 7, scopes }, "/api/connectors"));
+  expectFailure(response, "INVALID_INPUT", 400);
+  expect(repository.createConnector).not.toHaveBeenCalled();
+});
 
 it("reads the sender profile using only the independently authorized session", async () => {
   const request = new Request(`${config.appOrigin}/api/profile?workspaceId=${foreignId}`);

@@ -21,6 +21,8 @@ const actions: Record<string, string> = {
   "invoice:publish": "Invoice publication request",
   "invoice:status": "Invoice status request",
   "invoice:void": "Invoice void request",
+  "sender:read": "Sender profile read",
+  "sender:write": "Sender profile save",
   "settlement.recorded": "Payment settlement recorded",
   "receipt.generate": "Receipt generation",
   "receipt.deliver": "Receipt email request",

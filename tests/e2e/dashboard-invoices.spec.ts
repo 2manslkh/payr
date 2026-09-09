@@ -1,3 +1,4 @@
+import { fixtureDatabaseContainer } from "../../scripts/local-test-config.mjs";
 import { randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { expect, test as base, type Page } from "@playwright/test";
@@ -12,10 +13,11 @@ const amountAtomic = "9007199254740993000000000000000001";
 const hostileText = '<script>alert("invoice")</script>';
 
 function workspaceFixture() {
+  fixtureDatabaseContainer();
   const identity = { workspaceId: randomUUID(), ownerWallet: `0x${randomBytes(20).toString("hex")}` };
   // Both SQL seeding and service-role RPCs are restricted to the coordinator's isolated local stack.
   const api = new URL(process.env.SUPABASE_URL ?? "http://invalid");
-  if (api.origin !== "http://127.0.0.1:57321" || api.username || api.password || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error("Invoice browser fixtures require the isolated local Supabase API");
   }
   seedBrowserWorkspace(identity);

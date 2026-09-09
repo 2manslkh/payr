@@ -1,5 +1,6 @@
 import nextEnv from "@next/env";
 import { defineConfig } from "vitest/config";
+import { fixtureDatabaseContainer } from "./scripts/local-test-config.mjs";
 
 const { loadEnvConfig } = nextEnv;
 
@@ -12,18 +13,7 @@ if (missingEnvironment.length > 0) {
   throw new Error(`Database tests require local Supabase environment: missing ${missingEnvironment.join(", ")}`);
 }
 
-const isLocalSupabase = (() => {
-  try {
-    const url = new URL(process.env.SUPABASE_URL!);
-    return url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) && url.port !== "";
-  } catch {
-    return false;
-  }
-})();
-
-if (!isLocalSupabase) {
-  throw new Error("Database tests refuse non-local SUPABASE_URL values");
-}
+fixtureDatabaseContainer();
 
 export default defineConfig({
   test: {

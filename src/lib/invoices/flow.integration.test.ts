@@ -1,3 +1,4 @@
+import { fixtureDatabaseContainer } from "../../../scripts/local-test-config.mjs";
 import { randomBytes, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -79,7 +80,7 @@ it.each(["sender", "client"] as const)("reads a legacy %s country over HTTP and 
   const table = kind === "sender" ? "sender_profiles" : "clients";
   const countryCode = kind === "sender" ? "UK" : "ZZ";
   // beforeEach validates the local-only database; bypass triggers only in this admin transaction to simulate a pre-R04 row.
-  execFileSync("docker", ["exec", "-i", "supabase_db_payr", "psql", "-U", "postgres", "-d", "postgres",
+  execFileSync("docker", ["exec", "-i", fixtureDatabaseContainer(), "psql", "-U", "postgres", "-d", "postgres",
     "--no-psqlrc", "--quiet", "--set=ON_ERROR_STOP=1"], {
     stdio: ["pipe", "pipe", "pipe"],
     input: `begin; set local session_replication_role = replica;

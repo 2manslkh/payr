@@ -1,3 +1,4 @@
+import { fixtureDatabaseContainer } from "../../../scripts/local-test-config.mjs";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -23,17 +24,9 @@ const COMMITMENT = `0x${"c".repeat(64)}` as const;
 const AMOUNT = "1000000000000000001";
 
 function resetFixtures(): void {
-  const api = new URL(process.env.SUPABASE_URL!);
-  const database = new URL(process.env.SUPABASE_DB_URL!);
-  if (api.protocol !== "http:" || api.hostname !== "127.0.0.1" || api.port !== "57321"
-    || database.protocol !== "postgresql:" || database.hostname !== "127.0.0.1"
-    || database.port !== "58322" || database.username !== "postgres" || database.pathname !== "/postgres") {
-    throw new Error("Repository fixtures require the local Payr Supabase runtime (API 57321, Postgres 58322)");
-  }
-
   // Only fixture setup uses postgres. Every mutation under test goes through the service-role adapter.
   execFileSync("docker", [
-    "exec", "-i", "supabase_db_payr", "psql", "-U", "postgres", "-d", "postgres",
+    "exec", "-i", fixtureDatabaseContainer(), "psql", "-U", "postgres", "-d", "postgres",
     "--no-psqlrc", "--quiet", "--set=ON_ERROR_STOP=1",
   ], {
     encoding: "utf8",

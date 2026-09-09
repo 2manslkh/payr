@@ -1,14 +1,13 @@
 import { execFileSync } from "node:child_process";
+import { fixtureDatabaseContainer } from "../../scripts/local-test-config.mjs";
 
 export function seedBrowserWorkspace(identity: { workspaceId: string; ownerWallet: string }): void {
-  const database = new URL(process.env.SUPABASE_DB_URL ?? "http://invalid");
-  if (database.protocol !== "postgresql:" || database.hostname !== "127.0.0.1" || database.port !== "58322"
-    || database.username !== "postgres" || database.pathname !== "/postgres"
-    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(identity.workspaceId)
+  const container = fixtureDatabaseContainer();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(identity.workspaceId)
     || !/^0x[0-9a-f]{40}$/.test(identity.ownerWallet)) {
     throw new Error("Browser fixtures require the isolated local Payr database and valid fixture identities");
   }
-  execFileSync("docker", ["exec", "-i", "supabase_db_payr", "psql", "-U", "postgres", "-d", "postgres", "--no-psqlrc", "--quiet", "--set=ON_ERROR_STOP=1"], {
+  execFileSync("docker", ["exec", "-i", container, "psql", "-U", "postgres", "-d", "postgres", "--no-psqlrc", "--quiet", "--set=ON_ERROR_STOP=1"], {
     stdio: ["pipe", "pipe", "pipe"],
     input: `begin;
       insert into public.workspaces (id, owner_wallet) values ('${identity.workspaceId}', '${identity.ownerWallet}') on conflict (id) do nothing;
@@ -19,7 +18,7 @@ export function seedBrowserWorkspace(identity: { workspaceId: string; ownerWalle
 
 export function seedBrowserReceivables(identity: { workspaceId: string; ownerWallet: string }): void {
   seedBrowserWorkspace(identity);
-  execFileSync("docker", ["exec", "-i", "supabase_db_payr", "psql", "-U", "postgres", "-d", "postgres", "--no-psqlrc", "--quiet", "--set=ON_ERROR_STOP=1"], {
+  execFileSync("docker", ["exec", "-i", fixtureDatabaseContainer(), "psql", "-U", "postgres", "-d", "postgres", "--no-psqlrc", "--quiet", "--set=ON_ERROR_STOP=1"], {
     stdio: ["pipe", "pipe", "pipe"],
     input: `with invoices as (
       insert into public.invoices (id,workspace_id,client_id,commercial_state,invoice_number,published_at,payable_until,expired_at)

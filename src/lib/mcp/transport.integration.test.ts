@@ -1,3 +1,4 @@
+import { fixtureDatabaseContainer } from "../../../scripts/local-test-config.mjs";
 import { execFileSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
@@ -18,13 +19,7 @@ const hash = createConnectorHasher(config.connectorPepper);
 
 // Local SQL only arranges fixture rows; every admission traverses HTTP handling and the real repository.
 function sql(input: string) {
-  const database = new URL(process.env.SUPABASE_DB_URL!);
-  if (process.env.SUPABASE_URL !== "http://127.0.0.1:57321" || database.protocol !== "postgresql:"
-    || database.hostname !== "127.0.0.1" || database.port !== "58322"
-    || database.username !== "postgres" || database.pathname !== "/postgres") {
-    throw new Error("MCP fixtures require local Payr (API 57321, Postgres 58322)");
-  }
-  return execFileSync("docker", ["exec", "-i", "supabase_db_payr", "psql", "-U", "postgres", "-d", "postgres",
+  return execFileSync("docker", ["exec", "-i", fixtureDatabaseContainer(), "psql", "-U", "postgres", "-d", "postgres",
     "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1"], {
     input, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
   }).trim();

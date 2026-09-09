@@ -12,7 +12,7 @@ const stages = [
   { id: "publish-invoice", label: "Publish", caption: "One approved, protected invoice." },
   { id: "approve-payment", label: "Pay", caption: "Client-controlled wallet approval." },
   { id: "verify-settlement", label: "Verify", caption: "Settlement matched to the invoice." },
-  { id: "close-loop", label: "Receipt", caption: "Linked receipts. Coming next." },
+  { id: "close-loop", label: "Receipt", caption: "" },
 ];
 
 function subscribeMotion(change: () => void) {
@@ -74,7 +74,7 @@ export function WorkflowStory({ children }: { children: ReactNode }) {
           <div className={styles.staticScene}><InvoiceIllustration /></div>
           {animate && <SceneBoundary onFailure={setFailed}><WorkflowScene track={chapters} onReady={setReady} onFailure={setFailed} /></SceneBoundary>}
         </div>
-        <div className={styles.sceneCaption}><span>{webgl ? stages[active].caption : "One invoice. A connected record."}</span><small>Illustrative workflow</small></div>
+        <div className={styles.sceneCaption}><span>{webgl ? stages[active].caption : "One invoice. A connected record."}</span></div>
         <nav className={styles.stageNav} aria-label="Workflow stages">
           {stages.map((stage, index) => <a key={stage.id} href={`#${stage.id}`} aria-current={active === index ? "step" : undefined}>{stage.label}</a>)}
         </nav>

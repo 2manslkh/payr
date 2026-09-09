@@ -26,23 +26,21 @@ export default function HomePage() {
         <section className={styles.hero} aria-labelledby="hero-title">
           <div className={styles.heroCopy}>
             <h1 id="hero-title">From finished work to <span>verified payment.</span></h1>
-            <p>USDC invoicing for independent developers. Connect confirmed billing details, protected payment links, and invoice-linked settlement proof.</p>
+            <p>AI-powered invoicing.</p>
             <SkillInstall />
             <div className={styles.heroActions}>
               <Link className={`button ${styles.primaryAction}`} href="/login">Sign in to Payr <Arrow /></Link>
               <a className={styles.textAction} href="#workflow">See the workflow <Arrow down /></a>
             </div>
-            <p className={styles.heroNote}>Built on Arc Testnet. Client wallet payments, automatic reconciliation, Claude integration, and receipts are coming next.</p>
           </div>
           <figure className={styles.heroArtwork}>
             <InvoiceIllustration />
-            <figcaption><span className={styles.captionLine} /> One invoice. A connected record.<small>Illustrative workflow</small></figcaption>
+            <figcaption><span className={styles.captionLine} /> One invoice. A connected record.</figcaption>
           </figure>
         </section>
 
         <div className={styles.promiseLine} aria-label="Payr workflow">
-          <span>Invoice.</span><Arrow /><span>Settle.</span><Arrow /><span>Reconcile.</span>
-          <p>Less disconnected admin. More connected proof.</p>
+          <span>Build.</span><Arrow /><span>Invoice.</span><Arrow /><span>Get Paid.</span>
         </div>
 
         <section className={styles.problem} aria-labelledby="problem-title">
@@ -58,7 +56,6 @@ export default function HomePage() {
         <section id="workflow" className={styles.workflowSection} aria-labelledby="workflow-title">
           <div className={styles.sectionHeading}>
             <h2 id="workflow-title">One record.<br />From start to settled.</h2>
-            <p>Follow an invoice through Payr.<br />Scroll to move the story forward.</p>
           </div>
           <WorkflowStory>
             <article id="confirm-work" data-workflow-step="0" className={styles.chapter}>
@@ -96,7 +93,7 @@ export default function HomePage() {
         </section>
 
         <section className={styles.capabilities} aria-labelledby="capabilities-title">
-          <div className={styles.capabilityIntro}><h2 id="capabilities-title">Built for the details<br />that matter.</h2><p>Useful documents offchain.<br />Verifiable settlement onchain.</p></div>
+          <div className={styles.capabilityIntro}><h2 id="capabilities-title">Built for the details<br />that matter.</h2></div>
           <dl className={styles.capabilityList}>
             <div><dt>Confirmed, then published</dt><dd>Saved profiles and explicit approval keep the invoice grounded in the details you agreed to.</dd></div>
             <div><dt>Private by design</dt><dd>Invoice contents stay offchain. Protected links give clients access; anyone with a live link can open it.</dd></div>
@@ -118,7 +115,7 @@ export default function HomePage() {
           <Image src="/brand/payr-mascot.webp" alt="" width={180} height={166} className={styles.mascot} />
         </section>
       </main>
-      <footer className={styles.footer}><span>Payr</span><p>Invoice. Settle. Reconcile.</p><a href="#hero-title">Back to top <Arrow up /></a></footer>
+      <footer className={styles.footer}><span>Payr</span><p>Build. Invoice. Get Paid.</p><a href="#hero-title">Back to top <Arrow up /></a></footer>
     </div>
   );
 }

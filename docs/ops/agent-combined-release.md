@@ -1,6 +1,6 @@
 # Agent and main integration
 
-This branch prepares the combined implementation for coordinator review. It has
+This branch contains the reviewed combined implementation with green local gates. It has
 not prepared a release, changed the package version, pushed, merged, applied
 hosted migrations, or deployed. Package version remains 1.7.0.
 
@@ -11,7 +11,7 @@ hosted migrations, or deployed. Package version remains 1.7.0.
 | Ticket | Agent/main combined release integration |
 | Branch | `integration/agent-combined-v1.8.0` |
 | Worktree | repository-root `.worktrees/agent-combined-v1.8.0` |
-| Base | `e419959` (v1.7.0 main) |
+| Base | `e419959c69e483b547a2d5a84f796ca5bc483940` (v1.7.0 main) |
 | Scope | Verified deployed agent source, compatibility fixes, provenance, independent reviews, local gates |
 | Ownership | This worktree only; no other worktree/index changes |
 | Contracts | Eleven-operation Bazantic API and legacy publication runbooks; main dashboard/wallet/install/roadmap and optional sender behavior |
@@ -66,11 +66,29 @@ Raw SQL responses were compared in memory, never printed or written to logs.
 After the isolated reset, the local migration-history statement array also matched
 the hosted array exactly, including the same `c031d837…3adf1` digest.
 Migration `002` is immutable; any new database fix must follow `010`.
+No `020` migration was needed. The combined local chain has 14 migrations; the
+coordinator's hosted migration work still includes main's unapplied `010`.
 
 ## Local evidence and limits
 
-Frozen installation and typecheck passed; the initial focused API/repository gate
-passed 515 tests. Full local gates and reviews are in progress.
+| Gate | Result |
+| --- | --- |
+| Frozen dependency install | Passed; package and lockfile unchanged |
+| Isolated start, reset, SQL lint | Passed; complete 14-migration chain |
+| Complete database suite | **513 passed**, 15 files |
+| Lint and typecheck | Passed, including final worker setting |
+| Complete unit suite | **2,420 passed**, 117 files; 13 existing PDF skips |
+| Release and fixture-harness tests | **22 passed** |
+| Production build and native dependency tracing | Passed |
+| Compiled-document gate | **35 passed**, covering the isolated PDF skips |
+| Complete desktop/mobile browser suite | **94 passed**, normal build/start configuration with `PAYR_TEST_WORKERS=1` |
+| Release preparation dry-run | Passed: **1.7.0 → 1.8.0**, including remote tag ancestry/uniqueness checks |
+
+The initial focused API/repository gate passed 515 tests; the publication-deadline
+and migration regressions passed 68 tests. Application verification ran from clean
+commit `ed14a0a`; the later concurrency-only commit `a7ccefb` passed lint/typecheck
+and the complete normal browser command from a clean tracked tree. Database and
+browser fixtures were never run concurrently.
 
 Three fresh, independent Codex CLI sessions reviewed `e419959...f030878` using
 actual `gpt-6-astra`, high reasoning, read-only sandbox, with separate standards,
@@ -79,22 +97,49 @@ actionable issues. Security found one medium issue: the legacy publication body
 reader lacked an absolute deadline. Stalled/trickling request regressions failed
 before the fix; the reader now bounds reads to five seconds and returns sanitized
 private 408 responses without awaiting cancellation. No SQL change is required.
-Correction review is pending. Reviewer logs and reports live under ignored
-`.supabase/review-*`, outside Playwright's cleared output directories.
+Three fresh correction reviewers checked `e419959...ed14a0a` and reported no
+remaining high, medium, or low findings. Separate fresh standards/spec/security
+reviews also cover the final concurrency setting in `ed14a0a..a7ccefb`. Reviewer
+findings at the final implementation head are zero across all three axes. Reviewer
+logs and reports live under ignored `.supabase/review-*`,
+`.supabase/review-correction-*`, and `.supabase/review-final-*`, outside
+Playwright's cleared output directories. All reviewer sessions used actual
+`gpt-6-astra` high with read-only sandboxes; no Terra execution is claimed.
 
 The first full database gate passed 499/512 tests; 13 existing auth/settlement
 fixture tests failed with nonce `INVALID_INPUT`. Isolated reruns passed the auth
 test and all 14 settlement/receipt tests. A 400-request local nonce probe passed
 with and without a 20 ms persistence delay. Clock skew was considered but not
 established; no authorization check or fixture timing has been weakened. A clean
-reset and complete rerun remain required. The expanded gateway SQL suite passed
+reset and complete rerun passed all 513 tests. The expanded gateway SQL suite passed
 16 tests, including compatibility with main's overview, credential revocation,
 and denial of owner-only wallet admission.
+
+The first browser run used eight workers and passed 84/94 tests. Failures included
+protected-document 404s, share controls and payment connection assertions, and
+mobile screenshot/receipt timeouts. Other applications were consuming substantial
+host CPU; they were left untouched. A focused build also exceeded Playwright's
+existing 60-second startup deadline. After a fresh build, both protected-invoice
+tests passed in isolation, and the complete 94-test suite passed with one worker.
+The new optional `PAYR_TEST_WORKERS` setting then enabled a second complete
+94-test pass through the normal `pnpm test:e2e` command, including its normal
+build/start step. Use the environment below for coordinator release preparation.
+No test assertions, production quotas, authentication checks, or timeouts were
+relaxed. The evidence establishes the one-worker gate; it does not claim the
+initial parallel failures were all conclusively diagnosed.
 
 Gitleaks staged scan found one test-only candidate: a deterministic connector
 HMAC fixture at `src/app/api/mcp/route.test.ts:13`, paired with a public sequential
 byte fixture and a fixed test pepper. Manual review confirmed it is not a live
-credential. Scanner output is fully redacted and held under ignored `.supabase`.
+credential. A scan of all integration commits found only that same fixture;
+subsequent staged correction scans were clean. Scanner output is fully redacted
+and held under ignored `.supabase`.
+
+Implementation commits:
+
+- `f0308785e18d3b0dc157e734b925ce239433219e`: verified deployed source integration and provenance.
+- `ed14a0ad71891055f248ed9e10c44fc7f13320c7`: body deadline and combined migration/authorization regressions.
+- `a7ccefbe54ad353a1c03da24d51678b3060d7339`: optional browser concurrency for reproducible release gates.
 
 Before starting the isolated stack, read-only container/volume and listening-port
 checks confirmed no existing owner of the project or requested ports. Local gate
@@ -121,3 +166,9 @@ account, invoice, payment, email, or worker writes are performed. Payment/send a
 legacy cutover flags are preserved. Existing production evidence belongs to the
 primary runbooks; local verification does not establish new live gateway, MCP,
 payment, email, or prize-qualification evidence.
+
+The isolated stack is left running for the coordinator's release gates. Release
+preparation without dry-run, version changes, push, PR, merge, annotated release
+tagging, hosted migrations, and Vercel production operations remain with the sole
+coordinator. Forward fixes must preserve migration `002` and use a new migration
+after `010` if a database change becomes necessary.

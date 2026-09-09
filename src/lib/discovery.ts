@@ -39,18 +39,18 @@ The complete live Claude and external-wallet journey, human inbox receipt checks
 [Sign in to Payr](/login) | [API documentation](/docs/api.md) | [Authentication and connector setup](/auth.md)
 `;
 
-export const authMarkdown = `# Payr Authentication
+export const authMarkdown = `# Payr auth.md
 
-Payr does not operate an OAuth/OIDC authorization server and does not support autonomous agent registration.
+For agents and MCP clients connecting to a human-authorized Payr workspace. The supported provisioning method is owner-assisted registration with a wallet signature. Payr does not operate an OAuth/OIDC authorization server and does not support autonomous agent registration.
 
 ## Human setup
 
 1. Open /login on the Payr origin and sign the short-lived wallet challenge. The browser receives an origin-bound, HttpOnly session cookie. Never give an agent your wallet key or session cookie.
 2. Configure your sender profile and payout details in /app/settings.
-3. Open /app/connections and explicitly create a workspace-scoped connector credential. Copy the private MCP URL when shown; it is shown only once.
-4. Configure your MCP client with that exact URL using Streamable HTTP. Creating the credential does not connect a client automatically.
+3. Open /app/connections and explicitly create a workspace-scoped connector credential. The first-party console provisions it through POST /api/connectors with expiresInDays and optional scopes, using the owner's session and same-origin protections. Agents must ask the owner to do this, not extract browser cookies or silently create credentials. Copy the credential when shown; it is shown only once.
+4. For clients supporting custom headers, use the stable Streamable HTTP endpoint /api/mcp on this origin, with Authorization: Bearer <connector credential>. The credential is the value from Copy credential, not the full private endpoint URL. Clients that cannot set headers may continue using their existing private /api/mcp/<credential> URL. Creating a credential does not connect a client automatically.
 
-The credential is embedded in the URL path, not an OAuth access token. Treat the entire URL as a secret. Never put it in chat, public manifests, screenshots, logs, or DNS. Credentials expire within 30 days. Revoke a credential in Connections; to rotate, create a replacement, update the client, then revoke the old credential.
+The connector credential is not an OAuth access token. Keep credentials, Authorization headers, and legacy private endpoint URLs out of chat, public manifests, screenshots, logs, and DNS. Use HTTPS. Credentials expire within 30 days. The owner can revoke a credential in Connections (the console uses POST /api/connectors/<id>/revoke); to rotate, create a replacement, update the client, then revoke the old credential. Expired or revoked credentials return 401; ask the owner to renew rather than retrying indefinitely.
 
 ## Authorization boundaries
 
@@ -73,11 +73,13 @@ GET /api/health returns application/json with status ("ok") and commit (deployme
 
 ## Private MCP integration
 
-Complete the human wallet and connector setup in /auth.md. Each workspace receives its own secret endpoint URL. The server uses stateless Streamable HTTP with POST JSON responses, no SSE stream, session resume, or request batching. Tool discovery requires a valid connector credential; there is no public credential-free MCP endpoint.
+Complete the human wallet and connector setup in /auth.md. Use POST /api/mcp with Authorization: Bearer <connector credential>. The URL is public; all protocol operations, including initialize and tools/list, require an authorized credential. Missing, expired, or revoked credentials return 401 with a Bearer challenge. This is connector-token authentication, not OAuth. Existing /api/mcp/<credential> URLs remain supported for clients without custom header support.
+
+The server uses stateless Streamable HTTP with POST JSON responses, no SSE stream, session resume, or request batching. Authenticated non-POST methods return 405. Admission limits and origin checks apply to both transport URLs. Never pass credentials through query parameters or session cookies.
 
 Invoice tools: create_invoice_draft, publish_invoice, get_invoice_status, void_invoice. Direct Chat Setup also offers get_sender_profile and save_sender_profile, requiring separately opted-in sender:read and sender:write scopes. Default and existing connections remain invoice-only; discover live schemas through the authenticated connector, but do not treat discovery as permission. Sender saves require explicit approval and optimistic concurrency checks. Publication and void require explicit approval of the exact version. No payment, email-sending, search, payout, or connector-management authority is granted.
 
-The portable workflow skill is published at /.well-known/agent-skills/payr-create-invoice/SKILL.md. The experimental MCP card at /.well-known/mcp/server-card.json advertises identity and setup documentation only; it deliberately omits private connection endpoints.
+The portable workflow skill is published at /.well-known/agent-skills/payr-create-invoice/SKILL.md. The experimental MCP card at /.well-known/mcp/server-card.json describes the stable endpoint and required secret header input. /.well-known/mcp.json is a legacy card for older discovery clients. Neither contains a real credential. Tool capabilities are discovered at runtime after authentication.
 
 Workspace HTTP APIs are first-party browser interfaces, not a supported third-party OAuth API. Do not extract session cookies or crawl private invoice, receipt, or connector URLs.
 `;

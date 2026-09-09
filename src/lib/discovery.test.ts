@@ -12,6 +12,9 @@ import { GET as markdown } from "../app/index.md/route";
 afterEach(() => vi.unstubAllEnvs());
 
 it("documents opt-in sender authority separately from invoice-only connections", () => {
+  expect(authMarkdown).toMatch(/^# .*auth\.md$/m);
+  expect(authMarkdown).toContain("POST /api/connectors");
+  expect(authMarkdown).toContain("Authorization: Bearer");
   for (const text of [apiMarkdown, authMarkdown]) {
     expect(text).toContain("get_sender_profile");
     expect(text).toContain("save_sender_profile");
@@ -87,7 +90,14 @@ it("catalogs only the real public health API and links its description and docs"
 it("publishes current discovery formats without private endpoints or fake OAuth", async () => {
   const card = await (await get("mcp/server-card.json")).json();
   expect(card.version).toBe(mcpServerInfo.version);
-  expect(card.remotes).toBeUndefined();
+  expect(card.remotes[0].url).toBe(`${discoveryOrigin()}/api/mcp`);
+  expect(card.remotes[0].type).toBe("streamable-http");
+  expect(card.remotes[0].headers[0].variables.connector_token).toMatchObject({ isRequired: true, isSecret: true });
+  expect(card.remotes[0].headers[0].variables.connector_token.default).toBeUndefined();
+  const legacy = await (await get("mcp.json")).json();
+  expect(legacy.serverInfo).toEqual(mcpServerInfo);
+  expect(legacy.endpoint).toBe(card.remotes[0].url);
+  expect(legacy.capabilities).toEqual({ tools: {} });
   expect(card.websiteUrl).toContain("/docs/api.md");
   for (const resource of ["ai-catalog.json", "ard.json"]) {
     const response = await get(resource);

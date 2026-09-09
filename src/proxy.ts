@@ -2,11 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { createPrivateHeaders, privateDocumentError } from "./lib/documents/private-response";
 import { createDocumentRuntime } from "./lib/documents/runtime";
 import { createReceiptRuntime } from "./lib/receipts/runtime";
-import { discoveryLinks } from "./lib/discovery";
+import { discoveryLinks, homepageMarkdown } from "./lib/discovery";
+import { prefersMarkdown } from "./lib/markdown-negotiation";
 
 export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname === "/") {
-    return NextResponse.next({ headers: { Link: discoveryLinks } });
+    const headers = { Link: discoveryLinks, "Content-Signal": "search=yes, ai-train=no, ai-input=no" };
+    // Vercel's response transform preserves Accept after Next overwrites Vary.
+    // Elsewhere keep the explicit /index.md alternate until an equivalent layer exists.
+    if (process.env.VERCEL === "1" && ["GET", "HEAD"].includes(request.method)
+      && !request.headers.has("rsc") && !request.headers.has("next-router-prefetch")
+      && request.headers.get("purpose") !== "prefetch" && prefersMarkdown(request.headers.get("accept"))) {
+      return new NextResponse(request.method === "HEAD" ? null : homepageMarkdown, { headers: {
+        ...headers, "Content-Type": "text/markdown; charset=utf-8", Vary: "Accept",
+        "Cache-Control": "no-store",
+      } });
+    }
+    return NextResponse.next({ headers });
   }
   let headers = createPrivateHeaders();
   const kind = request.nextUrl.pathname.startsWith("/receipt/") ? "Receipt" : "Invoice";
@@ -39,5 +51,14 @@ export async function proxy(request: NextRequest) {
   } catch { return privateDocumentError(503, headers, kind); }
 }
 
-// No prefetch/RSC exclusions: every protected representation crosses admission.
-export const config = { matcher: ["/", "/invoice/:path*", "/receipt/:path*"] };
+export const config = { matcher: [
+  // Match before Next strips Flight headers from the handler's NextRequest.
+  { source: "/", missing: [
+    { type: "header", key: "rsc" },
+    { type: "header", key: "next-router-prefetch" },
+    { type: "header", key: "next-router-segment-prefetch" },
+    { type: "header", key: "purpose", value: "prefetch" },
+  ] },
+  // Every protected representation, including RSC/prefetch, crosses admission.
+  "/invoice/:path*", "/receipt/:path*",
+] };

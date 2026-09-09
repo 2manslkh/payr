@@ -4,7 +4,7 @@ import { parsePublicEnv } from "../config/env";
 import "./globals.css";
 
 const title = "Payr | Invoice. Settle. Reconcile.";
-const description = "USDC invoices and protected payment links for independent developers on Arc testnet. Client wallet payments, automatic reconciliation, Claude integration and receipts are coming next.";
+const description = "USDC invoices, client wallet payments and linked receipts for independent developers on Arc testnet. Connect Claude to Payr's invoice tools; publication requires explicit approval.";
 
 export function generateMetadata(): Metadata {
   const { NEXT_PUBLIC_APP_URL } = parsePublicEnv({ NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "https://payrlink.xyz" });

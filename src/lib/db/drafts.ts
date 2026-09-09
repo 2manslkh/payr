@@ -168,8 +168,9 @@ export function createDraftRepository(client: RpcClient): DraftRepository {
     async getInvoiceDetail(actor, id) { return call("payr_get_invoice_detail_v1", { ...scope(actor), p_invoice_id: input(uuid, id) },
       z.object({ invoice: summary, version: version.nullable(), history }).strict().refine((value) => value.version === null
         || (value.invoice.id === value.version.draftId && value.invoice.version === value.version.version)).nullable()); },
-    async getOverview(actor) { return call("payr_get_invoice_overview_v1", scope(actor), z.object({
+    async getOverview(actor) { return call("payr_get_invoice_overview_v2", scope(actor), z.object({
       senderComplete: z.boolean(), clientCount: count, activeConnectorCount: count, invoiceCount: count, draftCount: count,
+      outstandingInvoiceCount: count, receivablesUnavailableCount: count,
       receivablesAtomic: z.string().regex(/^(0|[1-9][0-9]*)$/), attention: z.array(summary).max(50),
       latestSettlement: z.object({ invoiceId: uuid, invoiceNumber: text(100), transactionHash: z.string().regex(/^0x[0-9a-f]{64}$/),
         blockTime: timestamp, amountDecimal: decimal }).strict().nullable(),

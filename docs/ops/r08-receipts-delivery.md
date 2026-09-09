@@ -1,5 +1,7 @@
 # R08 Receipts And Delivery
 
+Release checkpoint reconciled 9 September 2026: R08 merged through [PR #11](https://github.com/2manslkh/payr/pull/11) as `v1.2.0` at `8a87a76898badfc03dd9dc506ea3c3637e74a9dc`; [post-merge CI](https://github.com/2manslkh/payr/actions/runs/34210611763) passed. The pending-release language below retains its original observation date. Current deployed source and live acceptance limits are in [R09 release](r09-release.md).
+
 Updated 8 September 2026. R08 implements reconciliation, immutable receipts, durable delivery, and protected proof UI. Its original base is `v0.6.0` / `0d122231b0252f587a59868022b65dea83f6d525`. The user approved integrating the subsequently released `v1.1.0` baseline and targeting `v1.2.0`; integrated release gates and tagging are still pending at this checkpoint.
 
 ## Scope And Isolation

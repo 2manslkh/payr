@@ -1,3 +1,4 @@
+import { fixtureDatabaseContainer } from "../../../scripts/local-test-config.mjs";
 import { createClient } from "@supabase/supabase-js";
 import { execFileSync, spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -26,12 +27,7 @@ const hash = () => `0x${randomBytes(32).toString("hex")}` as const;
 const fence = (a: PublicationAttempt) => ({ attemptId: a.id, leaseOwner: a.leaseOwner!, fence: a.fence });
 
 function fixture(sql: string) {
-  const db = new URL(process.env.SUPABASE_DB_URL!);
-  if (process.env.SUPABASE_URL !== "http://127.0.0.1:57321" || db.protocol !== "postgresql:"
-    || db.hostname !== "127.0.0.1" || db.port !== "58322" || db.username !== "postgres" || db.pathname !== "/postgres") {
-    throw new Error("Local Payr fixtures only");
-  }
-  return execFileSync("docker", ["exec", "-i", "supabase_db_payr", "psql", "-U", "postgres", "-d", "postgres",
+  return execFileSync("docker", ["exec", "-i", fixtureDatabaseContainer(), "psql", "-U", "postgres", "-d", "postgres",
     "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1"], {
     input: sql, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
   }).trim();
@@ -249,7 +245,7 @@ it("rechecks credential expiry after waiting for the invoice lock", async () => 
     update public.access_links set expires_at = clock_timestamp() + interval '2 seconds' where token_id = '${a.link.tokenId}';
     update public.publication_attempts set invoice_link_expires_at = (select expires_at from public.access_links where token_id = '${a.link.tokenId}') where id = '${a.id}'; commit;`);
   expect(await documents.readTarget(a.link.tokenId)).not.toBeNull();
-  const child = spawn("docker", ["exec", "-i", "supabase_db_payr", "psql", "-U", "postgres", "-d", "postgres",
+  const child = spawn("docker", ["exec", "-i", fixtureDatabaseContainer(), "psql", "-U", "postgres", "-d", "postgres",
     "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1"], { stdio: ["pipe", "pipe", "pipe"] });
   const ready = new Promise<void>((resolve) => child.stdout.on("data", (data) => { if (String(data).includes("locked")) resolve(); }));
   const finished = new Promise<void>((resolve, reject) => {

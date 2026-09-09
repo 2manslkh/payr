@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { randomBytes, randomUUID } from "node:crypto";
 import { stringToHex } from "viem";
 import { createSessionCodec } from "../../src/lib/auth/session";
 import { seedBrowserWorkspace } from "./workspace-fixture";
@@ -10,8 +11,8 @@ import {
 } from "../../src/lib/identity/contracts";
 
 const identity = {
-  workspaceId: "11111111-1111-4111-8111-111111111111",
-  ownerWallet: "0x1111111111111111111111111111111111111111",
+  workspaceId: randomUUID(),
+  ownerWallet: `0x${randomBytes(20).toString("hex")}`,
 };
 const address = {
   line1: "11 Ledger Street",
@@ -181,6 +182,19 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
     ]);
   });
 
+  test.describe("without JavaScript", () => {
+    test.use({ javaScriptEnabled: false });
+    test("explains why wallet balance is unavailable without assuming a value", async ({ page }) => {
+      await page.goto("/app");
+      await page.getByRole("link", { name: "Open the non-streaming overview" }).click();
+      await expect(page).toHaveURL(/\/app\?view=static$/);
+      const wallet = page.getByRole("region", { name: "Connected wallet balance" });
+      await expect(wallet.getByText("Browser-wallet reads require JavaScript. No balance has been assumed.")).toBeVisible();
+      await expect(wallet.getByTestId("wallet-balance")).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Outstanding receivables", exact: true })).toBeVisible();
+    });
+  });
+
   test("server guard rejects a missing session", async ({ page, context }) => {
     await context.clearCookies();
     await page.goto("/app/settings");
@@ -238,7 +252,7 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
       "href",
       "https://claude.ai/new",
     );
-    await expect(page.getByRole("heading", { name: "Receivables", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Outstanding receivables", exact: true })).toBeVisible();
     await expect(page.getByTestId("receivables")).toHaveText("0 USDC");
     await expect(page.getByRole("heading", { name: "Prepare your workspace" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Latest settlement" })).toHaveCount(0);
@@ -443,7 +457,7 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
       }),
     );
     await page.goto("/app/connections");
-    await expect(page.getByRole("heading", { name: "Connect Claude to Payr" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connect Payr to Claude" })).toBeVisible();
     await expect(page.getByRole("checkbox", { name: "Direct Chat Setup" })).not.toBeChecked();
     await expect(page.getByText(/Platform access logs, CDN logs/)).toBeVisible();
     await page.getByLabel("Expires in (days)", { exact: true }).fill("1");

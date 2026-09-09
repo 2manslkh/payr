@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { execFileSync } from "node:child_process";
+import { fixtureDatabaseContainer } from "../../../scripts/local-test-config.mjs";
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -27,6 +28,7 @@ const INVOICE_KEY_B = `0x${"b".repeat(64)}`;
 const COMMITMENT_A = `0x${"c".repeat(64)}`;
 
 function executeSql(sql: string): string {
+  fixtureDatabaseContainer();
   const databaseUrl = process.env.SUPABASE_DB_URL;
   if (!databaseUrl || !databaseUrl.startsWith("postgresql://postgres:postgres@127.0.0.1:")) {
     throw new Error("Database fixtures require the local Supabase postgres URL");
@@ -36,7 +38,9 @@ function executeSql(sql: string): string {
   return execFileSync("psql", ["--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1"], {
     encoding: "utf8",
     env: {
-      ...process.env,
+      // libpq hostaddr/service overrides must not redirect this local fixture connection.
+      ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("PG"))),
+      NODE_ENV: process.env.NODE_ENV,
       PGDATABASE: connection.pathname.slice(1),
       PGHOST: connection.hostname,
       PGPASSWORD: decodeURIComponent(connection.password),

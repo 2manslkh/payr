@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ConsoleError, errorMessage } from "./console-api";
+import { Skeleton } from "./console-motion";
 
 export function PageHeading({
   title,
@@ -46,9 +47,9 @@ export function Loading({ label }: { label: string }) {
   return (
     <div className="loading" role="status" aria-live="polite">
       <p>{label}</p>
-      <div />
-      <div />
-      <div />
+      <Skeleton />
+      <Skeleton />
+      <Skeleton />
     </div>
   );
 }

@@ -77,7 +77,9 @@ Self-host a pinned font file only with its redistribution license recorded in th
 
 The public landing page lives at `/`; authenticated application surfaces live under `/app`. Desktop application surfaces use a compact dark workspace rail and a flexible ledger canvas. The rail has no nested accordion hierarchy; destinations remain shallow and predictable: Overview, Invoices, Clients, Activity, Connections, and Settings. Primary content uses open ruled regions rather than a mosaic of floating cards.
 
-Overview surfaces combine one receivables band, one ordered attention list, and one dark settlement-proof focal region. Invoice lists use a single toolbar and full-width ledger. Invoice details pair an immutable document view with a persistent proof rail. Protected payment and receipt surfaces remove dashboard chrome and prioritize the document, exact amount, payee, network, and next safe action.
+Overview surfaces lead with a continuous light financial band: selected browser wallet balance on Arc Testnet, then the workspace's outstanding invoice count and value. Wallet identity remains distinct from workspace ownership. An ordered attention list and conditional dark settlement-proof region follow; incomplete setup stays below operational information. Invoice lists use a single toolbar and full-width ledger. Invoice details pair an immutable document view with a persistent proof rail. Protected payment and receipt surfaces remove dashboard chrome and prioritize the document, exact amount, payee, network, and next safe action.
+
+The public `/install` page is a focused plugin-setup guide, linked from the workspace rail, mobile account menu, Connections, and overview. Plugin installation instructions remain unavailable until an official source and supported agent list are verified. Credentials never appear in the public prompt. Released custom-connector MCP setup remains available separately in Connections.
 
 At tablet widths the workspace rail collapses. On mobile, authenticated surfaces use a concise top bar and bottom navigation for Overview, Invoices, Clients, and Activity; Connections and Settings remain in the account menu. Ledger tables become stacked rows without losing labels, and the protected payment action remains reachable without obscuring invoice facts. Desktop and mobile are designed and verified together.
 
@@ -86,6 +88,12 @@ At tablet widths the workspace rail collapses. On mobile, authenticated surfaces
 The system is flat by default. Hierarchy comes from tonal fields, rules, spacing, and type rather than ambient card shadows. Temporary menus and dialogs may use one restrained structural shadow; proof panels gain prominence through contrast, not glow.
 
 **The Flat Ledger Rule.** Resting surfaces do not float. Shadow indicates temporary layering or interaction state only.
+
+## Motion
+
+Dashboard totals count up briefly on first load and interpolate from their previous value on updates. Use exact integer arithmetic for financial animation; final figures remain accessible and reserve their layout space throughout. Never animate amounts in invoice documents, payment reviews, or settlement evidence.
+
+Routine content reveals and control feedback take roughly 150-250ms; dashboard count-up takes 720ms with deceleration. Skeletons pulse gently only while visible and loading. Reduced-motion preferences stop CSS and JavaScript animation immediately. Content remains readable without motion or JavaScript, and no section waits for a scroll reveal.
 
 ## Shapes
 
@@ -115,7 +123,7 @@ The arrow-R geometry may inform directional indicators and progress lines, but i
 
 The public root page extends Commit Ledger with a user-approved **Living Document** composition: a large left-aligned product promise, one illustrative invoice, a problem explanation, and a scroll-driven document-to-settlement story. Page chrome, capability rows, and controls remain flat. Perspective, structural shadows, paper deformation, and a verification check are limited to inert explanatory artwork, not resting application cards.
 
-The landing preserves the current rendered Helvetica Neue/system sans stack and live global tokens. Its artwork uses client-only Three.js and shaders with projected HTML lettering. Explanations and actions remain semantic HTML. A MetaMask payment preview uses a decorative, scroll-pressed Pay button and a checkmark that replaces its contents inside the same white popup. No wallet SDK or payment operation runs on the landing page. The receipt preview adds a full-size sheet and a user-requested red PAID stamp; upcoming labels distinguish the product vision from this release's implemented capabilities.
+The landing preserves the current rendered Helvetica Neue/system sans stack and live global tokens. Its artwork uses client-only Three.js and shaders with projected HTML lettering. Explanations and actions remain semantic HTML. A MetaMask payment preview uses a decorative, scroll-pressed Pay button and a checkmark that replaces its contents inside the same white popup. No wallet SDK or payment operation runs on the landing page. The receipt preview adds a full-size sheet and a user-requested red PAID stamp; availability copy distinguishes implemented capabilities from outstanding live acceptance and disabled automatic email sending.
 
 Mobile uses a compact scene; short screens and reduced-motion mode return to ordinary non-sticky reading. An explicit control disables animation. Missing JavaScript, WebGL, or graphics context does not remove the content or sign-in action. Each renderer effect owns its canvas so development Strict Mode cannot retire the replacement renderer's context.
 

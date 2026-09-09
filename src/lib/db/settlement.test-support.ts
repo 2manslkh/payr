@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { fixtureDatabaseContainer } from "../../../scripts/local-test-config.mjs";
 import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 import { createSupabaseAdminClient } from "./admin";
 import { createIdentityRepository } from "./identity";
@@ -13,16 +14,13 @@ import { receiptRecipients } from "../email/address";
 import type { IdentitySession } from "../identity/contracts";
 
 export function sql(query: string) {
-  const container = process.env.PAYR_TEST_DATABASE_CONTAINER ?? "supabase_db_payr";
-  const isolated = container === "supabase_db_payr-r08-first-slice";
-  const database = new URL(process.env.SUPABASE_DB_URL!);
-  if ((!isolated && container !== "supabase_db_payr") || process.env.SUPABASE_URL !== `http://127.0.0.1:${isolated ? 57421 : 57321}`
-    || database.hostname !== "127.0.0.1" || database.port !== (isolated ? "58422" : "58322") || database.pathname !== "/postgres") throw new Error("Local Payr only");
+  const container = fixtureDatabaseContainer();
   return execFileSync("docker", ["exec", "-i", container, "psql", "-U", "postgres", "-d", "postgres", "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1"],
     { encoding: "utf8", input: query, stdio: ["pipe", "pipe", "pipe"] }).trim();
 }
 
 export async function publishedFixture(sameRecipient = false, keys: ReadonlyMap<number, Uint8Array> = new Map([[1, randomBytes(32)]]), seededIdentity?: IdentitySession) {
+  fixtureDatabaseContainer();
   const db = createSupabaseAdminClient(); const identity = createIdentityRepository(db);
   let session = seededIdentity;
   if (!session) {

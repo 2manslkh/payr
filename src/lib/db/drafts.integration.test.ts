@@ -1,3 +1,4 @@
+import { fixtureDatabaseContainer } from "../../../scripts/local-test-config.mjs";
 import { createClient } from "@supabase/supabase-js";
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -18,11 +19,7 @@ const scope = { p_workspace_id: workspaceId, p_owner_wallet: owner, p_connector_
 const address = { line1: "1 Test Road", city: "London", postalCode: "N1 1AA", countryCode: "GB" };
 
 function fixture(sql: string): string {
-  const database = new URL(process.env.SUPABASE_DB_URL!);
-  if (process.env.SUPABASE_URL !== "http://127.0.0.1:57321" || database.protocol !== "postgresql:"
-    || database.hostname !== "127.0.0.1" || database.port !== "58322"
-    || database.username !== "postgres" || database.pathname !== "/postgres") throw new Error("Local Payr fixtures only");
-  return execFileSync("docker", ["exec", "-i", "supabase_db_payr", "psql", "-U", "postgres", "-d", "postgres",
+  return execFileSync("docker", ["exec", "-i", fixtureDatabaseContainer(), "psql", "-U", "postgres", "-d", "postgres",
     "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1"], {
     input: sql, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
   }).trim();
@@ -84,7 +81,7 @@ function expectFixtureFailure(sql: string, marker: string) {
 
 async function transaction<T>(sql: string, operation: (pid: number, commit: (sql?: string) => Promise<void>) => Promise<T>): Promise<T> {
   fixture("select 1;");
-  const child = spawn("docker", ["exec", "-i", "supabase_db_payr", "psql", "-U", "postgres", "-d", "postgres",
+  const child = spawn("docker", ["exec", "-i", fixtureDatabaseContainer(), "psql", "-U", "postgres", "-d", "postgres",
     "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1"], { stdio: ["pipe", "pipe", "pipe"] });
   let stderr = "";
   child.stderr.on("data", (data) => { stderr += String(data); });
@@ -196,7 +193,7 @@ describe("F3 draft transactions through Supabase RPC", () => {
     expect(await repository.getInvoiceDetail(actor, saved.draftId)).toEqual({ invoice: page.items[0], version: saved,
       history: [{ id: saved.id, version: 1, createdAt: saved.createdAt }] });
     expect(await repository.getOverview(actor)).toEqual({ senderComplete: true, clientCount: 1, activeConnectorCount: 0,
-      invoiceCount: 1, draftCount: 1, receivablesAtomic: "0", attention: page.items, latestSettlement: null });
+      invoiceCount: 1, draftCount: 1, receivablesAtomic: "0", outstandingInvoiceCount: 0, receivablesUnavailableCount: 0, attention: page.items, latestSettlement: null });
   });
 
   it.each([
@@ -578,7 +575,7 @@ describe("F3 draft transactions through Supabase RPC", () => {
       payr_get_draft_context_v1: { p_draft_id: saved.draftId, p_client_id: clientId, p_client_alias: null },
       payr_save_invoice_draft_v1: { p_input: write() },
       payr_list_invoices_v1: { p_search: "", p_commercial_state: null, p_limit: 50, p_offset: 0 },
-      payr_get_invoice_detail_v1: { p_invoice_id: saved.draftId }, payr_get_invoice_overview_v1: {},
+      payr_get_invoice_detail_v1: { p_invoice_id: saved.draftId }, payr_get_invoice_overview_v1: {}, payr_get_invoice_overview_v2: {},
     };
     fixture(`update public.connector_tokens set revoked_at = clock_timestamp() where id = '${token.connectorId}';`);
     for (const unauthorized of [
@@ -665,7 +662,28 @@ describe("F3 draft transactions through Supabase RPC", () => {
     expect((await repository.getInvoiceDetail(actor, first.items[0].id))?.version).toBeNull();
   });
 
-  it("derives effective commercial/payment/display states independently and exposes only real settlement proof", async () => {
+  it("counts all outstanding invoices beyond the attention cap and reports missing legacy amounts", async () => {
+    fixture(`with inserted as (
+      insert into public.invoices (id,workspace_id,client_id,commercial_state,invoice_number,published_at,payable_until)
+      select gen_random_uuid(),'${workspaceId}','${clientId}','published','PAYR-' || n,clock_timestamp(),clock_timestamp() + interval '30 days'
+        from generate_series(1,52) as n returning id
+    ) insert into public.invoice_versions (id,workspace_id,invoice_id,version_number,client_snapshot,issue_date,due_date,
+        payable_until,payable_until_second,amount_decimal,amount_atomic)
+      select gen_random_uuid(),'${workspaceId}',id,1,'{"businessName":"Client"}',current_date,current_date + 15,
+        date_trunc('second',now() + interval '30 days'),extract(epoch from date_trunc('second',now() + interval '30 days'))::bigint,
+        '1.000000000000000001',1000000000000000001 from inserted;`);
+    const overview = await repository.getOverview(actor);
+    expect(overview).toMatchObject({ outstandingInvoiceCount: 52, receivablesUnavailableCount: 0, receivablesAtomic: "52000000000000000052" });
+    expect(overview.attention).toHaveLength(50);
+    fixture(`insert into public.invoices (id,workspace_id,client_id,commercial_state,invoice_number,published_at,payable_until)
+      values (gen_random_uuid(),'${workspaceId}','${clientId}','published','PAYR-LEGACY',now(),now() + interval '30 days');`);
+    expect(await repository.getOverview(actor)).toMatchObject({ outstandingInvoiceCount: 53, receivablesUnavailableCount: 1, receivablesAtomic: "52000000000000000052" });
+    const legacy = await service.rpc("payr_get_invoice_overview_v1", scope);
+    expect(legacy.error).toBeNull();
+    expect(legacy.data).not.toHaveProperty("outstandingInvoiceCount");
+  });
+
+  it.each(["voided", "published"] as const)("derives independent states and removes only outstanding value after a %s settlement", async (paidState) => {
     const draft = await repository.saveDraft(actor, write());
     const invoiceIds: string[] = [];
     for (const [index, state] of ["published", "voided", "expired", "published"].entries()) {
@@ -686,14 +704,15 @@ describe("F3 draft transactions through Supabase RPC", () => {
     expect(expired.items).toHaveLength(2);
     expect((await repository.getInvoiceDetail(actor, invoiceIds[0]))?.version).toBeNull();
     const overview = await repository.getOverview(actor);
-    expect(overview).toMatchObject({ receivablesAtomic: "6000000000000000000", latestSettlement: null, draftCount: 1 });
+    expect(overview).toMatchObject({ receivablesAtomic: "6000000000000000000", outstandingInvoiceCount: 3, receivablesUnavailableCount: 0, latestSettlement: null, draftCount: 1 });
     expect(overview.attention.map((item) => item.commercialState)).toEqual(["expired", "expired", "published", "draft"]);
     expect(overview.attention.at(-1)?.id).toBe(draft.draftId);
 
     // Settlement is an actual immutable F1 row. No status is inferred from an attempt, link, or client claim.
-    const paidId = invoiceIds[1], attempt = randomUUID();
+    const paidIndex = paidState === "voided" ? 1 : 0;
+    const paidId = invoiceIds[paidIndex], attempt = randomUUID();
     const hash = `0x${"a".repeat(64)}`;
-    fixture(`insert into public.publication_attempts (id,workspace_id,invoice_id,invoice_version_id,state,request_fingerprint,
+    await transaction(`insert into public.publication_attempts (id,workspace_id,invoice_id,invoice_version_id,state,request_fingerprint,
       sequence_year,sequence_value,invoice_number,invoice_key,publication_salt,storage_key,invoice_token_id,invoice_key_version,
       invoice_verifier_hash,invoice_link_expires_at,invoice_data_hash,pdf_content_hash,document_commitment,pdf_filename,
       pdf_byte_length,pdf_content_type,stored_at,finalized_at)
@@ -703,10 +722,23 @@ describe("F3 draft transactions through Supabase RPC", () => {
       insert into public.settlements (id,workspace_id,invoice_id,invoice_version_id,publication_attempt_id,chain_id,contract_address,
         invoice_key,transaction_hash,log_index,block_number,block_time,document_commitment,payer,payee,amount_atomic)
       select gen_random_uuid(),'${workspaceId}','${paidId}',v.id,'${attempt}',5042002,'${owner}','${hash}','${hash}',0,
-        9007199254740993,now(),'${hash}','${owner}','${owner}',2000000000000000000 from public.invoice_versions v where v.invoice_id = '${paidId}';`);
-    expect((await repository.getInvoiceDetail(actor, paidId))?.invoice).toMatchObject({ commercialState: "voided", paymentStatus: "paid", displayStatus: "Paid" });
+        9007199254740993,now(),'${hash}','${owner}','${owner}',2000000000000000000 from public.invoice_versions v where v.invoice_id = '${paidId}';`, async (_pid, commit) => {
+      expect((await repository.getOverview(actor)).latestSettlement).toBeNull();
+      const concurrent = Array.from({ length: 8 }, () => repository.getOverview(actor));
+      await commit();
+      for (const response of await Promise.all(concurrent)) {
+        const removed = paidState === "published" && response.latestSettlement !== null;
+        expect(response.outstandingInvoiceCount).toBe(removed ? 2 : 3);
+        expect(response.receivablesAtomic).toBe(removed ? "4000000000000000000" : "6000000000000000000");
+        if (paidState === "published") expect(response.attention.some((invoice) => invoice.id === paidId)).toBe(!removed);
+      }
+    });
+    expect((await repository.getInvoiceDetail(actor, paidId))?.invoice).toMatchObject({ commercialState: paidState, paymentStatus: "paid", displayStatus: "Paid" });
     const settledOverview = await repository.getOverview(actor);
-    expect(settledOverview.latestSettlement).toMatchObject({ invoiceId: paidId, invoiceNumber: "PAYR-1", transactionHash: hash, amountDecimal: "2" });
+    expect(settledOverview.latestSettlement).toMatchObject({ invoiceId: paidId, invoiceNumber: `PAYR-${paidIndex}`, transactionHash: hash, amountDecimal: "2" });
+    expect(settledOverview).toMatchObject({ outstandingInvoiceCount: paidState === "voided" ? 3 : 2,
+      receivablesAtomic: paidState === "voided" ? "6000000000000000000" : "4000000000000000000" });
+    expect(settledOverview.attention.some((invoice) => invoice.id === paidId)).toBe(false);
     expect(JSON.stringify(settledOverview)).not.toMatch(/private-storage-key|private\.pdf|verifier|publicationSalt|tokenHash/);
   });
 
@@ -728,7 +760,7 @@ describe("F3 draft transactions through Supabase RPC", () => {
       "payr_draft_billing_v1", "payr_draft_provenance_v1", "payr_draft_money_v1",
       "payr_draft_snapshot_valid_v1", "payr_draft_protect_version_v1", "payr_draft_version_dto_v1", "payr_find_draft_replay_v1",
       "payr_get_draft_context_v1", "payr_save_invoice_draft_v1", "payr_invoice_summary_v1", "payr_invoice_summaries_v1",
-      "payr_list_invoices_v1", "payr_get_invoice_detail_v1", "payr_get_invoice_overview_v1"];
+      "payr_list_invoices_v1", "payr_get_invoice_detail_v1", "payr_get_invoice_overview_v1", "payr_get_invoice_overview_v2"];
     const functions: Array<{ name: string; args: Record<string, null>; secure: boolean; service: boolean }> = JSON.parse(fixture(`
       select jsonb_agg(jsonb_build_object('name',p.proname,'args',coalesce((select jsonb_object_agg(k,null)
         from unnest(p.proargnames[1:p.pronargs]) as k),'{}'::jsonb),'secure',p.prosecdef and p.proconfig = array['search_path=""']
@@ -739,7 +771,7 @@ describe("F3 draft transactions through Supabase RPC", () => {
     expect(functions.every((fn) => fn.secure)).toBe(true);
     expect(functions.filter((fn) => fn.service).map((fn) => fn.name).sort()).toEqual([
       "payr_find_draft_replay_v1", "payr_get_draft_context_v1", "payr_save_invoice_draft_v1", "payr_list_invoices_v1",
-      "payr_get_invoice_detail_v1", "payr_get_invoice_overview_v1",
+      "payr_get_invoice_detail_v1", "payr_get_invoice_overview_v1", "payr_get_invoice_overview_v2",
     ].sort());
     const anon = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
     const authenticated = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });

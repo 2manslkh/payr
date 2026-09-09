@@ -1,5 +1,7 @@
 # R09 Implementation
 
+Release checkpoint reconciled 9 September 2026: implementation is released as `v1.3.0` and deployed with recorded limits. See [R09 release](r09-release.md) for verified merge/tag/CI/health evidence. Pending checkpoint/release approvals below describe the earlier implementation checkpoint, not remaining implementation work.
+
 ## Execution Manifest
 
 - Ticket: R09-T01, client payment integration and canonical Claude MCP.

@@ -1,3 +1,4 @@
+import { fixtureDatabaseContainer } from "../../scripts/local-test-config.mjs";
 import { randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { expect, test } from "@playwright/test";
@@ -25,7 +26,8 @@ async function storedInvoice(baseURL: string) {
     throw new Error("Protected document fixtures require the compiled local app");
   }
   const api = new URL(process.env.SUPABASE_URL ?? "http://invalid");
-  if (api.origin !== "http://127.0.0.1:57321" || api.username || api.password || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  fixtureDatabaseContainer();
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error("Protected document fixtures require the isolated local Supabase API");
   }
   const identity = { workspaceId: randomUUID(), ownerWallet: `0x${randomBytes(20).toString("hex")}` };

@@ -1,3 +1,4 @@
+import { fixtureDatabaseContainer } from "../../scripts/local-test-config.mjs";
 import { randomBytes, randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
@@ -19,10 +20,10 @@ test.use({ trace: "off", video: "off", screenshot: "off" });
 test.setTimeout(120_000);
 
 async function fixture() {
-  if (process.env.SUPABASE_URL !== "http://127.0.0.1:57321") throw new Error("Local payment fixtures only");
+  fixtureDatabaseContainer();
   const owner = { workspaceId: randomUUID(), ownerWallet: `0x${randomBytes(20).toString("hex")}` };
   seedBrowserWorkspace(owner);
-  const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
+  const db = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
   const identity = createIdentityRepository(db), publication = createPublicationRepository(db);
   const snapshot = testPublicationSnapshot();
   await identity.saveProfile(owner, { expectedRevision: 1, businessName: "Payment test developer", billingAddress: snapshot.sender.billingAddress!,

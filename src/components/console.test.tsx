@@ -305,10 +305,14 @@ it("keeps connector secrets out of lists and storage, copies, acknowledges, and 
   const storage = vi.spyOn(Storage.prototype, "setItem");
   const view = render(<Connections />);
   await screen.findByText("No connection credentials");
+  expect(screen.getByRole("heading", { name: "Connect Payr to Claude" })).toBeTruthy();
+  expect(screen.getByText(/Customize > Connectors/)).toBeTruthy();
+  expect(screen.queryByText(/not available yet|not functional|future invoice tools/)).toBeNull();
   fireEvent.change(screen.getByLabelText("Expires in (days)"), { target: { value: "30" } });
   expect(screen.getByRole("checkbox", { name: "Direct Chat Setup" })).toHaveProperty("checked", false);
   fireEvent.click(screen.getByRole("button", { name: "Create credential" }));
   await screen.findByLabelText("Credential");
+  expect((screen.getByLabelText("Endpoint URL") as HTMLTextAreaElement).value).toBe(endpointUrl);
   expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ expiresInDays: 30 });
   fireEvent.click(screen.getByRole("button", { name: "Copy endpoint URL" }));
   await waitFor(() => expect(writeText).toHaveBeenCalledWith(endpointUrl));

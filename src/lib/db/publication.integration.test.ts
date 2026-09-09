@@ -1,3 +1,4 @@
+import { fixtureDatabaseContainer } from "../../../scripts/local-test-config.mjs";
 import { createClient } from "@supabase/supabase-js";
 import { execFileSync, spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -26,11 +27,7 @@ const artifact: PublicationArtifact = { pdfFilename: "INV-2026-000001.pdf", cont
 const fence = (a: PublicationAttempt) => ({ attemptId: a.id, leaseOwner: a.leaseOwner!, fence: a.fence });
 
 function fixture(sql: string): string {
-  const database = new URL(process.env.SUPABASE_DB_URL!);
-  if (process.env.SUPABASE_URL !== "http://127.0.0.1:57321" || database.protocol !== "postgresql:"
-    || database.hostname !== "127.0.0.1" || database.port !== "58322"
-    || database.username !== "postgres" || database.pathname !== "/postgres") throw new Error("Local Payr fixtures only");
-  return execFileSync("docker", ["exec", "-i", "supabase_db_payr", "psql", "-U", "postgres", "-d", "postgres",
+  return execFileSync("docker", ["exec", "-i", fixtureDatabaseContainer(), "psql", "-U", "postgres", "-d", "postgres",
     "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1"], {
     input: sql, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
   }).trim();
@@ -59,7 +56,7 @@ function expectFixtureFailure(sql: string, marker: string) {
 }
 async function transaction<T>(sql: string, operation: (pid: number, commit: (sql?: string) => Promise<void>) => Promise<T>): Promise<T> {
   fixture("select 1;");
-  const child = spawn("docker", ["exec", "-i", "supabase_db_payr", "psql", "-U", "postgres", "-d", "postgres",
+  const child = spawn("docker", ["exec", "-i", fixtureDatabaseContainer(), "psql", "-U", "postgres", "-d", "postgres",
     "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1"], { stdio: ["pipe", "pipe", "pipe"] });
   let stderr = "";
   child.stderr.on("data", (data) => { stderr += String(data); });

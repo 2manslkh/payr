@@ -100,6 +100,8 @@ export type InvoiceOverview = {
   activeConnectorCount: number;
   invoiceCount: number;
   draftCount: number;
+  outstandingInvoiceCount: number;
+  receivablesUnavailableCount: number;
   receivablesAtomic: string;
   attention: InvoiceSummary[];
   latestSettlement: null | { invoiceId: string; invoiceNumber: string; transactionHash: string; blockTime: string; amountDecimal: string };

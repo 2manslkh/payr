@@ -15,3 +15,11 @@ background with a 48px corner radius. The Apple touch output is 180px square;
 the ICO fallback contains a 32px image. These role-specific exports keep the
 navy mark visible in dark browser chrome. The original four references in
 `assets/brand/` remain unchanged.
+
+## Historical Concepts
+
+`mascot-sheet.png` and `payr-brand-banner.png` are preserved source concepts,
+not current product promises. The banner's "Instant liquidity" is not an
+available capability or payment guarantee. Reminder, analytics, and security
+imagery in the mascot sheet does not establish shipped features or guarantees.
+These originals are not substituted for the production brand exports.

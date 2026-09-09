@@ -12,13 +12,15 @@ Independent developers and freelancers billing international, crypto-native clie
 
 ## Product Purpose
 
-Connect confirmed work, protected invoices, and invoice-bound USDC settlement proof. The full vision adds agent-driven invoice creation and automatic linked receipt delivery.
+Connect agent-driven invoice creation, protected documents, invoice-bound USDC settlement proof, and linked receipt delivery. Live acceptance and operator-mode limits remain distinct from implemented capabilities.
 
 ## Capabilities and Constraints
 
-`PROJECT.md` remains the authoritative charter and source-precedence guide. Consult `docs/ops/r07-settlement.md`, `docs/ops/landing-release.md`, and `docs/ops/r08-receipts-delivery.md` for dated implementation evidence rather than treating the vision as shipped behavior.
+`PROJECT.md` remains the authoritative charter and source-precedence guide. Consult `STATUS.md`, `docs/ops/r09-release.md`, and the separately dated R07/R08 records for current capabilities and evidence limits.
 
-The integrated R08 candidate preserves the v1.1.0 landing page and reviewed v1.0.0 fixes. Protected publication/PDFs, settlement authorization/reconciliation, receipt rendering, and receipt-email workers are implemented. One scoped operator receipt email is verified; production-wide email remains disabled. Client wallet UI and Claude MCP remain separate R09 work. Authoring is currently API-first. Landing illustrations describe the broader workflow and are not live account evidence.
+The clean release candidate starts from `v1.6.0` at `aebcd15` (PR #16), not a new deployment-evidence claim. Protected publication/PDFs, client wallet payments, settlement authorization/reconciliation, receipt rendering, durable receipt-email workers, public discovery, and stateless Claude MCP are implemented. Four default invoice tools use canonical draft/publication/status/void services; two sender tools require explicit opt-in and approval, and payout authority remains owner-signed. There is no browser invoice editor. The separately recorded R09 `v1.3.0` release remains historical deployment evidence. One scoped operator receipt email is verified; production-wide email remains disabled. Deployed Claude and full external-wallet rehearsals, human inbox opening, and unattended delivery remain unproven. Landing illustrations are not live account evidence.
+
+Root dashboard balance/count improvements, the public `/install` guide, and roadmap/docs follow-up are replayed on `integration/root-updates-v1.7.0`, preserving `integration/root-updates` evidence under explicit user approval. Current gates are in `docs/ops/root-release-manifest.md`; source integration alone does not claim release or deployment. The guide's separate plugin prompt stays disabled until reviewed distribution metadata exists; that does not mean the released MCP endpoint is unavailable. `docs/ops/dashboard.md` records historical eleven-migration read-back, not application deployment or later migration application. `docs/ops/repository-cleanup.md` preserves the historical cleanup checkpoint.
 
 The user confirmed that protected receipts show exact settled amount, invoice reference, payer/payee, transaction/block evidence, hashes, QR, and PDF download. Contact addresses and delivery-recipient details stay private. Receipt and delivery completion require verified artifacts and provider evidence, not payment submission alone.
 

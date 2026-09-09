@@ -1,0 +1,71 @@
+.roadmap { max-width: 1280px; margin-inline: auto; padding: 80px 56px 40px; border-block: 1px solid var(--rule); }
+.heading { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: end; margin-bottom: 58px; }
+.heading h2 { margin: 0; font-size: clamp(36px, 4vw, 52px); line-height: 1.08; font-weight: 500; letter-spacing: -0.035em; }
+.heading h2 span { color: var(--muted); }
+.intro { max-width: 40ch; }
+.intro > p { font-size: 16px; color: var(--muted); margin: 0; }
+.controls { display: flex; gap: 20px; margin-top: 10px; min-height: 44px; }
+.controls button { padding: 0; min-height: 44px; border: 0; background: transparent; color: var(--navy); font: inherit; font-size: 12px; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.controls button:hover { text-decoration-thickness: 2px; }
+.controls button:focus-visible { outline: 2px solid var(--navy); outline-offset: 4px; }
+.timeline { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 0; margin: 0; list-style: none; }
+.milestone { position: relative; min-width: 0; padding-right: 28px; }
+.milestone::before { content: ""; position: absolute; top: 18px; left: 0; right: 0; border-top: 1px dashed var(--field-rule, #8994a3); }
+.milestone:last-child::before { right: calc(100% - 36px); }
+.station { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 15px; font-size: 11px; font-weight: 500; color: var(--navy); }
+.marker { width: 36px; height: 36px; border: 1px solid var(--field-rule, #8994a3); border-radius: 50%; display: grid; place-items: center; background: var(--canvas); font-size: 11px; font-variant-numeric: tabular-nums; }
+.milestone:first-child .marker { background: var(--navy); color: white; border-color: var(--navy); }
+.marker svg { width: 24px; height: 24px; }
+.figure { margin: 22px 0 26px; }
+.diagram { display: block; width: 100%; height: auto; color: var(--navy); overflow: visible; }
+.diagram text { fill: var(--navy); stroke: none; font-family: inherit; font-size: 10px; font-weight: 500; }
+.diagram .smallText { font-size: 9px; fill: var(--muted); }
+.paper { fill: var(--paper, white); stroke: var(--field-rule, #8994a3); stroke-width: 1; }
+.proof { fill: var(--navy); }
+.rule { stroke: var(--rule); stroke-width: 1.5; }
+.route { stroke: var(--navy); stroke-width: 1.2; stroke-dasharray: 3 4; }
+.packet, .history { fill: var(--navy); }
+.figure figcaption { margin-top: 8px; font-size: 10px; color: var(--muted); }
+.milestone h3 { font-size: clamp(20px, 2vw, 25px); font-weight: 500; line-height: 1.15; letter-spacing: -0.025em; margin: 0 0 16px; text-wrap: balance; }
+.milestone > p { margin: 0; font-size: 14px; line-height: 1.75; color: var(--ink); }
+.milestone > .detail { margin-top: 18px; font-size: 12px; color: var(--muted); }
+.notes { display: grid; grid-template-columns: 2fr 1fr; align-items: start; gap: 64px; border-top: 1px solid var(--rule); margin-top: 48px; padding-top: 24px; }
+.notes p { margin: 0; font-size: 11px; line-height: 1.8; color: var(--muted); }
+.notes strong { font-weight: 500; color: var(--ink); }
+.notes p:last-child { text-align: right; }
+.roadmap[data-started="true"] .route { animation: route 3.6s ease-out both; }
+.roadmap[data-started="true"] .arrive { animation: arrive 1.8s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.roadmap[data-started="true"] .packet { animation: packet 3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.milestone:nth-child(2) { --delay: 0.25s; }
+.milestone:nth-child(3) { --delay: 0.5s; }
+.milestone:nth-child(4) { --delay: 0.75s; }
+.roadmap[data-started="true"] .diagram * { animation-delay: var(--delay, 0s); }
+.roadmap[data-paused="true"] .diagram * { animation-play-state: paused; }
+@keyframes route { from { stroke-dashoffset: 70; } to { stroke-dashoffset: 0; } }
+@keyframes arrive { from { opacity: 0.5; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes packet { from { transform: translateX(-35px); } to { transform: translateX(32px); } }
+@media (max-width: 1000px) {
+  .roadmap { padding-inline: 32px; }
+  .heading { gap: 44px; }
+  .milestone { padding-right: 18px; }
+}
+@media (max-width: 760px) {
+  .roadmap { padding: 56px 24px 32px; }
+  .heading { grid-template-columns: 1fr; gap: 24px; margin-bottom: 38px; }
+  .timeline { grid-template-columns: 1fr; }
+  .milestone, .milestone:last-child { padding: 0 0 40px 54px; }
+  .milestone::before, .milestone:last-child::before { top: 0; bottom: 0; left: 17px; right: auto; border-top: 0; border-left: 1px dashed var(--field-rule, #8994a3); }
+  .milestone:last-child::before { bottom: auto; height: 18px; }
+  .station { min-height: 36px; justify-content: center; }
+  .marker { position: absolute; left: -54px; top: 0; }
+  .figure { max-width: 280px; margin: 14px 0 24px; }
+  .milestone h3 { font-size: 27px; }
+  .milestone > p { max-width: 48ch; }
+  .notes { grid-template-columns: 1fr; gap: 16px; margin-top: 0; }
+  .notes p:last-child { text-align: left; }
+  .notes br { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .roadmap[data-started="true"] .diagram * { animation: none; }
+  .controls { display: none; }
+}

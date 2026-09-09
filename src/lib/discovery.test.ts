@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { createHash } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
-import { discoveryOrigin } from "./discovery";
+import { apiMarkdown, authMarkdown, discoveryOrigin } from "./discovery";
 import { GET as robots } from "../app/robots.txt/route";
 import sitemap from "../app/sitemap";
 import { GET as discovery, OPTIONS as discoveryOptions } from "../app/.well-known/[...discovery]/route";
@@ -10,6 +10,16 @@ import { mcpServerInfo } from "./mcp/info";
 import { GET as markdown } from "../app/index.md/route";
 
 afterEach(() => vi.unstubAllEnvs());
+
+it("documents opt-in sender authority separately from invoice-only connections", () => {
+  for (const text of [apiMarkdown, authMarkdown]) {
+    expect(text).toContain("get_sender_profile");
+    expect(text).toContain("save_sender_profile");
+    expect(text).toContain("sender:read");
+    expect(text).toContain("sender:write");
+    expect(text).toContain("invoice-only");
+  }
+});
 
 it("allows public card browser preflights without credentials", () => {
   const response = discoveryOptions();

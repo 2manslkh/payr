@@ -54,7 +54,9 @@ The credential is embedded in the URL path, not an OAuth access token. Treat the
 
 ## Authorization boundaries
 
-The connector exposes create_invoice_draft, publish_invoice, get_invoice_status, and void_invoice only. Publishing and voiding require explicit approval of the exact version. Publishing is not permission to send email or pay. Payments remain under the client's wallet control.
+Default connections authorize create_invoice_draft, publish_invoice, get_invoice_status, and void_invoice. New connections can separately opt into Direct Chat Setup: get_sender_profile requires sender:read and save_sender_profile requires sender:write. Existing connections remain invoice-only. Tool discovery is not a permission grant. Sender saves require explicit approval of all fields and the current profile id/revision; after an uncertain result or conflict, read again rather than retrying blindly. Payout changes always require an owner signature in Payr Settings.
+
+Publishing and voiding require explicit approval of the exact version. Publishing is not permission to send email or pay. Payments remain under the client's wallet control.
 
 Invoice and receipt links are separate, purpose-specific bearer credentials, not API registration credentials. Browser sign-out clears the local session cookie; revoke connector credentials separately.
 
@@ -73,7 +75,7 @@ GET /api/health returns application/json with status ("ok") and commit (deployme
 
 Complete the human wallet and connector setup in /auth.md. Each workspace receives its own secret endpoint URL. The server uses stateless Streamable HTTP with POST JSON responses, no SSE stream, session resume, or request batching. Tool discovery requires a valid connector credential; there is no public credential-free MCP endpoint.
 
-Available tools: create_invoice_draft, publish_invoice, get_invoice_status, void_invoice. Discover the live schemas through the authenticated connector. Publication and void require explicit approval of the exact version. No payment, email-sending, search, profile, payout, or connector-management authority is granted.
+Invoice tools: create_invoice_draft, publish_invoice, get_invoice_status, void_invoice. Direct Chat Setup also offers get_sender_profile and save_sender_profile, requiring separately opted-in sender:read and sender:write scopes. Default and existing connections remain invoice-only; discover live schemas through the authenticated connector, but do not treat discovery as permission. Sender saves require explicit approval and optimistic concurrency checks. Publication and void require explicit approval of the exact version. No payment, email-sending, search, payout, or connector-management authority is granted.
 
 The portable workflow skill is published at /.well-known/agent-skills/payr-create-invoice/SKILL.md. The experimental MCP card at /.well-known/mcp/server-card.json advertises identity and setup documentation only; it deliberately omits private connection endpoints.
 

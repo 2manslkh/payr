@@ -28,7 +28,7 @@ export default function LoginPage() {
             Your first sign-in creates a workspace owned by this wallet. It also becomes your initial payout
             address. Changing that address later requires a new owner signature.
           </p>
-          <p>Invoice publication and the Claude MCP connection are not available yet.</p>
+          <p>After signing in, set up your sender profile and connect Claude from Connections. Publishing an invoice requires your explicit approval.</p>
         </section>
         <Link className="text-link" href="/">
           Back to Payr

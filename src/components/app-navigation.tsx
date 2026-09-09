@@ -92,6 +92,8 @@ export function AppNavigation() {
           {destinations.map(navLink)}
         </nav>
         <div className="rail-footer">
+          <Link className="text-link" href="/install">Install Payr</Link>
+          <br />
           <span>Arc testnet</span>
           <p>Workspace console</p>
         </div>
@@ -124,7 +126,7 @@ export function AppNavigation() {
             <div id="account-panel" className="account-panel">
               <p>Workspace owner</p>
               <code className="wallet-address">{session.ownerWallet}</code>
-              <nav aria-label="Account">{destinations.slice(4).map(navLink)}</nav>
+              <nav aria-label="Account">{destinations.slice(4).map(navLink)}<Link href="/install" onClick={() => setOpen(false)}>Install Payr</Link></nav>
               <button className="button secondary" disabled={busy} onClick={logout}>
                 {busy ? "Signing out..." : "Sign out"}
               </button>

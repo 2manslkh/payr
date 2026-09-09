@@ -4,6 +4,7 @@ import Image from "next/image";
 import { InvoiceIllustration } from "../components/landing/invoice-illustration";
 import { WorkflowStory } from "../components/landing/workflow-story";
 import { SkillInstall } from "../components/landing/skill-install";
+import { Roadmap } from "../components/landing/roadmap";
 import styles from "./page.module.css";
 
 export const metadata = { alternates: { canonical: "/" } };
@@ -63,7 +64,7 @@ export default function HomePage() {
               <h3>Start with the facts.<br />Not a blank invoice.</h3>
               <p>Save your sender profile, clients, payout wallet, and payment terms. Payr assembles a draft from confirmed details and checks what is missing before it can move forward.</p>
               <div className={styles.chapterFact}>Your details. Explicit approval. No guesswork.</div>
-              <p className={styles.comingNote}><span>Coming next</span> Create and revise invoices through Claude. Authoring is API-first today.</p>
+              <p className={styles.comingNote}>Connect Claude to Payr&apos;s invoice tools. Creating a credential does not connect Claude automatically.</p>
             </article>
             <article id="publish-invoice" data-workflow-step="1" className={styles.chapter}>
               <span className={styles.stepNumber}>02 / Publish</span>
@@ -72,22 +73,22 @@ export default function HomePage() {
               <div className={styles.chapterFact}>A fixed record, not an editable moving target.</div>
             </article>
             <article id="approve-payment" data-workflow-step="2" className={styles.chapter}>
-              <span className={styles.stepNumber}>03 / Pay <span className={styles.upcoming}>Coming next</span></span>
+              <span className={styles.stepNumber}>03 / Pay</span>
               <h3>Their wallet.<br />Their approval.</h3>
               <p>Your client opens the link, reviews the amount and payee, and approves the USDC payment in their own wallet. They don&apos;t need a Payr account.</p>
               <div className={styles.chapterFact}>Connecting a wallet is never permission to pay.</div>
             </article>
             <article id="verify-settlement" data-workflow-step="3" className={styles.chapter}>
-              <span className={styles.stepNumber}>04 / Verify <span className={styles.upcoming}>Coming next</span></span>
+              <span className={styles.stepNumber}>04 / Verify</span>
               <h3>Not just sent.<br />Verified and matched.</h3>
               <p>Payr checks the onchain settlement against the invoice&apos;s exact amount, payee, and commitment. Only matching, verified settlement becomes Paid.</p>
               <div className={styles.chapterFact}>A transaction hash alone is not payment proof.</div>
             </article>
             <article id="close-loop" data-workflow-step="4" className={styles.chapter}>
-              <span className={styles.stepNumber}>05 / Receipt <span className={styles.upcoming}>Coming next</span></span>
+              <span className={styles.stepNumber}>05 / Receipt</span>
               <h3>The final detail.<br />Already connected.</h3>
-              <p>The next step is a receipt linked to the verified payment, with a downloadable PDF and automatic delivery to both parties. One continuous record, from work to proof.</p>
-              <div className={styles.chapterFact}>Receipt generation and email delivery are in development.</div>
+              <p>Verified settlement creates a linked receipt with a downloadable PDF. Receipt delivery has its own progress, separate from payment confirmation.</p>
+              <div className={styles.chapterFact}>Receipt email is operator-controlled; automatic sending remains disabled.</div>
             </article>
           </WorkflowStory>
         </section>
@@ -102,13 +103,7 @@ export default function HomePage() {
           </dl>
         </section>
 
-        <section className={styles.availability} aria-labelledby="availability-title">
-          <h2 id="availability-title">A clear view of what&apos;s here.</h2>
-          <div className={styles.availabilityColumns}>
-            <div><h3><span className={styles.statusDot} /> On Arc Testnet</h3><p>Workspace and client setup. API-first invoices. Protected PDFs and payment links. Invoice-bound settlement authorization and a verified operator-payment flow.</p><small>Testnet software, not a mainnet financial service.</small></div>
-            <div><h3><span className={styles.nextDot} /> Coming next</h3><p>Client wallet payments and automatic reconciliation. Claude-based invoice creation and revision. Linked receipt pages, PDFs, and automatic receipt emails.</p><small>The full agent-to-receipt journey is still in development.</small></div>
-          </div>
-        </section>
+        <Roadmap />
 
         <section className={styles.closing} aria-labelledby="closing-title">
           <div><h2 id="closing-title">You did the work.<br />Give it a proper finish.</h2><p>Set up your profile and clients in Payr.</p><Link href="/login" className={`button ${styles.primaryAction}`}>Open your workspace <Arrow /></Link></div>

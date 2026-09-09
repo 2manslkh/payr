@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
 
-test("landing explains the problem, capabilities, and upcoming features", async ({ page }, testInfo) => {
+test("landing explains the problem, released capabilities, and live verification limits", async ({ page }, testInfo) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "From finished work to verified payment." })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in to Payr", exact: true })).toHaveAttribute("href", "/login");
   await expect(page.getByRole("heading", { name: "Shipping the work isn't the end of the work." })).toBeVisible();
-  await expect(page.getByText("Receipt generation and email delivery are in development.")).toBeVisible();
+  await expect(page.getByText("Receipt email is operator-controlled; automatic sending remains disabled.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Still being verified" })).toBeVisible();
+  await expect(page.getByText(/coming next|are in development/i)).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(await page.locator("[data-invoice-paper]").evaluateAll((papers) => papers.every((paper) => paper.scrollHeight <= paper.clientHeight + 1))).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("landing-hero.png") });

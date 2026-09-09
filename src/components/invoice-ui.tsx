@@ -18,8 +18,8 @@ export function InvoiceWorkflow() {
   return (
     <section className="ruled-section invoice-workflow" aria-labelledby="invoice-workflow-heading">
       <h2 id="invoice-workflow-heading">Draft in Claude. Review here.</h2>
-      <p>Review drafts, revisions, and published invoices here. Drafts do not create a payment request. Explicitly approved publication through the API creates an immutable invoice, protected page, PDF, and QR code. Share finalized documents from invoice detail; there is no browser publication form.</p>
-      <p>Claude MCP is not available yet. Open Claude starts a conversation; it does not connect Claude to Payr. There is no browser invoice editor.</p>
+      <p>Review drafts, revisions, and published invoices here. Drafts do not create a payment request. Explicitly approved publication through Payr creates an immutable invoice, protected page, PDF, and QR code. Share finalized documents from invoice detail; there is no browser publication form.</p>
+      <p>Connect Payr in <Link className="text-link" href="/app/connections">Connections</Link> before using its tools in Claude. Open Claude starts a conversation; it does not connect Payr automatically. There is no browser invoice editor.</p>
     </section>
   );
 }

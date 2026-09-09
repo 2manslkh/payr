@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { CONNECTOR_SCOPES, type ConnectorMetadata } from "../lib/identity/contracts";
 import { consoleApi, useConsoleResource } from "./console-api";
 import { DateValue, Loading, PageHeading, RequestError } from "./console-ui";
@@ -82,11 +83,17 @@ export function Connections() {
         Control which credentials can access invoice tools and optional sender setup.
       </PageHeading>
       <section className="notice">
-        <h2>Connect Claude to Payr</h2>
+        <h2>Connect Payr to Claude</h2>
+        <ol>
+          <li>Create a short-lived credential below and copy its endpoint URL.</li>
+          <li>In Claude, open Customize {">"} Connectors, choose Add custom connector, and paste the full endpoint URL. Leave optional OAuth fields blank.</li>
+          <li>Start a new chat and enable Payr in the Connectors menu.</li>
+        </ol>
         <p>
-          Add the show-once endpoint URL as a custom connector in Claude. Creating a credential does not
-          connect Claude automatically. Invoice publication still requires your explicit approval.
+          Creating a credential does not connect Claude automatically. Publication and voiding require
+          explicit approval; payment stays in the client&apos;s wallet. Keep the endpoint URL private.
         </p>
+        <Link className="text-link" href="/install">View the Payr installation guide</Link>
       </section>
       <section className="ledger-section">
         <div className="section-heading">

@@ -133,7 +133,7 @@ it("passes exact context/list/detail/overview RPC parameters with the real actor
   expect(rpc.mock.calls).toEqual([
     ["payr_get_draft_context_v1", { ...scope, p_draft_id: null, p_client_id: actor.workspaceId, p_client_alias: "CaseSensitive" }],
     ["payr_list_invoices_v1", { ...scope, p_search: "Client", p_commercial_state: "expired", p_limit: 10, p_offset: 20 }],
-    ["payr_get_invoice_detail_v1", { ...scope, p_invoice_id: actor.workspaceId }], ["payr_get_invoice_overview_v1", scope],
+    ["payr_get_invoice_detail_v1", { ...scope, p_invoice_id: actor.workspaceId }], ["payr_get_invoice_overview_v2", scope],
   ]);
 });
 

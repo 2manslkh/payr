@@ -1,7 +1,11 @@
 import { stringToHex } from "viem";
 import { ConsoleError } from "./console-api";
 
-type EthereumProvider = { request(input: { method: string; params?: unknown[] }): Promise<unknown> };
+export type EthereumProvider = {
+  request(input: { method: string; params?: unknown[] }): Promise<unknown>;
+  on?(event: string, listener: (value: unknown) => void): void;
+  removeListener?(event: string, listener: (value: unknown) => void): void;
+};
 
 export async function connectWallet(ownerWallet?: string) {
   const provider = (window as Window & { ethereum?: EthereumProvider }).ethereum;

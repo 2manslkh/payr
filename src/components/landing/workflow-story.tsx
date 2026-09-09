@@ -74,7 +74,7 @@ export function WorkflowStory({ children }: { children: ReactNode }) {
           <div className={styles.staticScene}><InvoiceIllustration /></div>
           {animate && <SceneBoundary onFailure={setFailed}><WorkflowScene track={chapters} onReady={setReady} onFailure={setFailed} /></SceneBoundary>}
         </div>
-        <div className={styles.sceneCaption}><span>{webgl ? stages[active].caption : "One invoice. A connected record."}</span></div>
+        {(!webgl || stages[active].caption) && <div className={styles.sceneCaption}><span>{webgl ? stages[active].caption : "One invoice. A connected record."}</span></div>}
         <nav className={styles.stageNav} aria-label="Workflow stages">
           {stages.map((stage, index) => <a key={stage.id} href={`#${stage.id}`} aria-current={active === index ? "step" : undefined}>{stage.label}</a>)}
         </nav>

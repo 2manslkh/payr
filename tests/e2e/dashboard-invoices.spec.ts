@@ -4,7 +4,7 @@ import { expect, test as base, type Page } from "@playwright/test";
 import { createSessionCodec } from "../../src/lib/auth/session";
 import { SESSION_COOKIE, type ClientProfile, type SenderProfile } from "../../src/lib/identity/contracts";
 import type { DraftSnapshot, DraftVersion, InvoiceDetail, InvoicePage } from "../../src/lib/invoices/contracts";
-import { seedBrowserWorkspace } from "./workspace-fixture";
+import { seedBrowserReceivables, seedBrowserWorkspace } from "./workspace-fixture";
 
 const address = { line1: "11 Ledger Street", line2: "", city: "London", region: "", postalCode: "N1 1AA", countryCode: "GB" };
 const amountDecimal = "9007199254740993.000000000000000001";
@@ -76,7 +76,7 @@ const test = base.extend<{ workspace: ReturnType<typeof workspaceFixture> }>({
 
 async function accessibleLayout(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  for (const control of await page.locator(".invoice-surface").locator("a:visible, button:visible, input:visible, select:visible").all()) {
+  for (const control of await page.getByRole("main").locator("a:visible, button:visible, input:visible, select:visible").all()) {
     expect((await control.boundingBox())?.height).toBeGreaterThanOrEqual(44);
   }
 }
@@ -90,7 +90,7 @@ test("real empty workspace SSR, incomplete setup and independent session guards"
   await expect(page.getByRole("heading", { name: "Latest settlement" })).toHaveCount(0);
   await page.goto("/app/invoices");
   await expect(page.getByRole("heading", { name: "No invoices yet" })).toBeVisible();
-  await expect(page.getByText(/Claude MCP is not available yet/)).toBeVisible();
+  await expect(page.getByText(/Connect Payr in/)).toBeVisible();
   await expect(page.locator("form")).toHaveCount(1);
   await accessibleLayout(page);
   await context.clearCookies();
@@ -103,6 +103,80 @@ test("real empty workspace SSR, incomplete setup and independent session guards"
     expect(denied.status()).toBe(401);
     expect(await denied.json()).toEqual({ error: { code: "AUTH_REQUIRED" } });
   }
+});
+
+test("dashboard balance follows the selected wallet with motion, independent errors and accessible layouts", async ({ page, workspace, isMobile }, testInfo) => {
+  await workspace.prepare();
+  seedBrowserReceivables(workspace.identity);
+  const owner = workspace.identity.ownerWallet;
+  const other = `0x${"9".repeat(40)}`;
+  await page.addInitScript((address) => {
+    let accounts = [address];
+    const listeners = new Map<string, (value: unknown) => void>();
+    const requests: string[] = [];
+    Object.defineProperty(window, "ethereum", { value: {
+      request: async ({ method }: { method: string }) => {
+        requests.push(method);
+        if (method === "eth_accounts" || method === "eth_requestAccounts") return accounts;
+        throw new Error("Unexpected wallet operation");
+      },
+      on: (event: string, listener: (value: unknown) => void) => listeners.set(event, listener),
+      removeListener: (event: string) => listeners.delete(event),
+    } });
+    Object.defineProperty(window, "__payrTestWallet", { value: {
+      requests,
+      select: (address: string | null) => { accounts = address ? [address] : []; listeners.get("accountsChanged")?.(accounts); },
+    } });
+  }, owner);
+  let failure = false;
+  let ownerBalance = "12480500000000000000000";
+  await page.route("**/api/wallet/balance?*", async (route) => {
+    const address = new URL(route.request().url()).searchParams.get("address");
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    await route.fulfill({ status: failure ? 503 : 200, json: failure ? { code: "BALANCE_UNAVAILABLE" } : {
+      address, chainId: 5042002, balanceAtomic: address === owner ? ownerBalance : "0", updatedAt: "2026-09-08T10:00:00Z",
+    } });
+  });
+  await page.goto("/app");
+  await expect(page.getByRole("heading", { name: "Outstanding receivables" })).toBeVisible();
+  await expect(page.getByTestId("receivables").locator("[data-number-value]")).toHaveText("1930");
+  await expect(page.getByText("invoices to receive", { exact: false })).toContainText("2");
+  await expect(page.getByTestId("wallet-balance").locator("[data-number-value]")).toHaveText("12480.5");
+  await expect(page.locator(".animated-number[data-animating]")).toHaveCount(0);
+  await accessibleLayout(page);
+  await testInfo.attach("dashboard", { body: await page.screenshot({ fullPage: true, animations: "disabled", path: testInfo.outputPath("dashboard.png") }), contentType: "image/png" });
+
+  ownerBalance = "0";
+  await page.getByRole("button", { name: "Refresh wallet balance" }).click();
+  const shrinkingNumber = page.getByTestId("wallet-balance").locator(".animated-number[data-animating]");
+  await expect(shrinkingNumber).toBeVisible();
+  expect(await shrinkingNumber.evaluate((element) => {
+    const preview = element.querySelector(".animated-number-preview")!;
+    return preview.scrollHeight <= element.clientHeight + 1 && preview.scrollWidth <= element.clientWidth + 1;
+  })).toBe(true);
+  await expect(page.getByTestId("wallet-balance")).toHaveText("0 USDC");
+
+  await page.evaluate((address) => (window as unknown as { __payrTestWallet: { select(address: string | null): void } }).__payrTestWallet.select(address), other);
+  await expect(page.getByTestId("wallet-balance")).toHaveText("0 USDC");
+  await expect(page.getByText(/differs from your workspace owner/)).toBeVisible();
+  await expect(page.getByTestId("receivables")).toHaveText("1930 USDC");
+  failure = true;
+  await page.getByRole("button", { name: "Refresh wallet balance" }).click();
+  await expect(page.getByText("Balance unavailable", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("receivables")).toHaveText("1930 USDC");
+  await page.evaluate(() => (window as unknown as { __payrTestWallet: { select(address: null): void } }).__payrTestWallet.select(null));
+  await expect(page.getByRole("button", { name: "Connect wallet" })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __payrTestWallet: { requests: string[] } }).__payrTestWallet.requests)).toEqual(["eth_accounts"]);
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  expect(await page.locator(".content-reveal").evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
+  if (isMobile) {
+    await page.getByRole("button", { name: "Account", exact: true }).click();
+    await page.getByRole("navigation", { name: "Account", exact: true }).getByRole("link", { name: "Install Payr" }).click();
+  } else {
+    await page.locator(".rail-footer").getByRole("link", { name: "Install Payr" }).click();
+  }
+  await expect(page).toHaveURL(/\/install$/);
 });
 
 test("immutable current version SSR shows defaults, provenance and pending diff without unsafe markup or actions", async ({ page, context, workspace }, testInfo) => {

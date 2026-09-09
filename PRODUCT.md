@@ -12,13 +12,15 @@ Independent developers and freelancers billing international, crypto-native clie
 
 ## Product Purpose
 
-Connect confirmed work, protected invoices, and invoice-bound USDC settlement proof. The full vision adds agent-driven invoice creation and automatic linked receipt delivery.
+Connect agent-driven invoice creation, protected documents, invoice-bound USDC settlement proof, and linked receipt delivery. Live acceptance and operator-mode limits remain distinct from implemented capabilities.
 
 ## Capabilities and Constraints
 
-`PROJECT.md` remains the authoritative charter and source-precedence guide. Consult `docs/ops/r07-settlement.md`, `docs/ops/landing-release.md`, and `docs/ops/r08-receipts-delivery.md` for dated implementation evidence rather than treating the vision as shipped behavior.
+`PROJECT.md` remains the authoritative charter and source-precedence guide. Consult `STATUS.md`, `docs/ops/r09-release.md`, and the separately dated R07/R08 records for current capabilities and evidence limits.
 
-The integrated R08 candidate preserves the v1.1.0 landing page and reviewed v1.0.0 fixes. Protected publication/PDFs, settlement authorization/reconciliation, receipt rendering, and receipt-email workers are implemented. One scoped operator receipt email is verified; production-wide email remains disabled. Client wallet UI and Claude MCP remain separate R09 work. Authoring is currently API-first. Landing illustrations describe the broader workflow and are not live account evidence.
+The repository baseline on `main` is `v1.4.1` at `923ef3f` (PR #14 merged), not a new deployment-evidence claim. The separately recorded R09 `v1.3.0` release includes protected publication/PDFs, client wallet payments, settlement authorization/reconciliation, receipt rendering, durable receipt-email workers, and the four-tool stateless Claude MCP endpoint. MCP uses canonical draft/publication/status/void services; there is no browser invoice editor. One scoped operator receipt email is verified; production-wide email remains disabled. Deployed Claude and full external-wallet rehearsals, human inbox opening, and unattended delivery remain unproven. Landing illustrations are not live account evidence.
+
+Root dashboard balance/count improvements, the public `/install` guide, and docs follow-up are being integrated on `integration/root-updates` alongside its unique discovery/roadmap commits, through approved feature-group commits and one combined PR into `main`. They are not already released or deployed; final integration tests and PR results are not yet claimed. The guide's separate plugin prompt stays disabled until reviewed distribution metadata exists; that does not mean the released MCP endpoint is unavailable. `docs/ops/dashboard.md` records all eleven migrations applied/read back locally and on hosted Payr, not application deployment. `docs/ops/repository-cleanup.md` preserves the historical cleanup checkpoint with a current integration note.
 
 The user confirmed that protected receipts show exact settled amount, invoice reference, payer/payee, transaction/block evidence, hashes, QR, and PDF download. Contact addresses and delivery-recipient details stay private. Receipt and delivery completion require verified artifacts and provider evidence, not payment submission alone.
 

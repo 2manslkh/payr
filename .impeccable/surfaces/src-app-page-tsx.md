@@ -2,7 +2,7 @@
 version: 1
 slug: "src-app-page-tsx"
 primary_target: "src/app/page.tsx"
-related_targets: ["src/app/page.module.css","src/components/landing/workflow-story.tsx","src/components/landing/workflow-scene.tsx","src/components/landing/workflow.module.css"]
+related_targets: ["src/app/page.module.css","src/components/landing/workflow-story.tsx","src/components/landing/workflow-scene.tsx","src/components/landing/workflow.module.css","src/components/landing/roadmap.tsx","src/components/landing/roadmap.module.css"]
 ---
 
 # Root Landing Page
@@ -19,16 +19,24 @@ The user approved the full vision with explicit status labels, scroll-driven Web
 
 ## Implementation Medium
 
-- Header, headline, problem, stage explanations, capability rows, availability and CTAs: semantic server-rendered HTML and scoped CSS.
+- Header, headline, problem, stage explanations, capability rows, roadmap and CTAs: semantic server-rendered HTML and scoped CSS.
 - Inert invoice illustration: countable document geometry and live decorative text, not an image-generation substitute represented as photography.
 - Workflow: client-only Three.js, procedural document shaders, projected HTML lettering, a geometric wallet, and a verification seal. No live payment calls.
 - Mascot: optimized derivative of the existing user-supplied reference; original generator is not recorded.
+
+## Roadmap
+
+The user-approved availability replacement is "Built today. Going further.": a connected four-stage timeline, horizontal on desktop and vertical below 760px. It preserves the existing typography, navy/light palette, and flat ruled layout. A filled check identifies built Arc Testnet capabilities; outlined markers and explicit Planned labels identify cross-chain CCTP/Relay collection, marketplace distribution and Answer Engine Optimization (AEO), and payment-history-informed invoice financing. Future routes, mainnet listings, and financing are intentions, not available services or committed dates.
+
+Four decorative SVG diagrams have a finite, staggered CSS sequence triggered once when the section enters view, with keyboard-operable pause/resume and replay. Reduced motion disables the animations immediately; text and static artwork survive without JavaScript. No graphics dependency or payment behavior was added. Known non-blocking limitation: on mobile, lower milestones can finish animating before the visitor scrolls to them.
+
+Roadmap verification: 13 focused homepage/roadmap unit tests, six desktop/mobile Chromium checks against a test-managed development server, TypeScript checking, targeted ESLint, and diff whitespace checks passed. Browser checks cover keyboard controls, finite animation completion, live reduced-motion changes, and 320px no-JavaScript readability without overflow. Desktop/mobile screenshots were inspected and independently reviewed with a pass and the mobile-motion caveat above. The mechanical design detector returned no findings. This is scoped development verification, not a new production build or full release gate.
 
 ## Boundaries and States
 
 Dogfood refinements approved 8 September 2026: the decorative document title is "Service delivered." Line-item fills animate inside their rows, with no detached bars covering the header. The wallet step uses a locally served MetaMask logo and a decorative Pay button. Scroll progress presses the button, fades the wallet contents out, and fades a verification checkmark in; it never initializes a wallet SDK or submits a payment. The receipt finale is a full-size document layered over the invoice, bearing a user-requested red PAID stamp. This is an explicitly labeled illustrative future receipt, not an actual generated receipt or a new global meaning for error red.
 
-This release is based on v1.0.0: authoring is API-first and settlement authorization/operator-payment proof exists. Client wallet payments, automatic reconciliation, Claude creation, and automatic receipts are upcoming in this release. Intended payments are client-controlled on Arc Testnet, with Paid caused only by matching settlement verification. Demonstration records are labeled illustrative and contain no live protected links or usable QR codes. See `docs/ops/landing-release.md` for release scope.
+The original landing release was based on v1.0.0. At the 9 September cleanup, released v1.3.0 includes client payments, reconciliation, four-tool MCP, and receipts. Copy separates these implemented capabilities from unproven live Claude/external-wallet rehearsal and disabled automatic email sending. Payments remain client-controlled on Arc Testnet, with Paid caused only by matching settlement verification. Demonstration records are illustrative and contain no live protected links or usable QR codes. See `docs/ops/r09-release.md` for current evidence; `docs/ops/landing-release.md` retains historical landing scope.
 
 The explanation survives no JavaScript, reduced motion, failed WebGL, chunk failure, or context loss. A manual motion-off control restores static art. The renderer loads near visibility, caps pixel density, renders on demand, pauses offscreen/hidden, and disposes resources. Mobile uses a compact sticky scene with native document scrolling; reduced-motion mode removes sticky positioning and tall chapters.
 

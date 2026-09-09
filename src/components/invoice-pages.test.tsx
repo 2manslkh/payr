@@ -1,6 +1,6 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Children, isValidElement, type ComponentProps, type ReactNode } from "react";
+import { Children, cloneElement, isValidElement, type ComponentProps, type ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { getDashboardSession } from "../lib/auth/runtime";
 import type { DraftRepository, DraftSnapshot, InvoiceDetail, InvoiceOverview, InvoiceSummary } from "../lib/invoices/contracts";
@@ -9,7 +9,7 @@ import { getDraftRepository } from "../lib/invoices/runtime";
 import { getPublicationRepository } from "../lib/invoices/publication-runtime";
 import { publicationView } from "../lib/invoices/lifecycle";
 import type { PublicationRepository, PublicationStatusData } from "../lib/invoices/publication-contracts";
-import OverviewPage from "../app/(dashboard)/app/page";
+import { OverviewContent, OverviewRecords } from "./overview";
 import InvoicesPage from "../app/(dashboard)/app/invoices/page";
 import InvoicePage, { metadata } from "../app/(dashboard)/app/invoices/[id]/page";
 import { InvoiceDocument } from "./invoice-document";
@@ -54,8 +54,16 @@ const detail: InvoiceDetail = {
 };
 const overview: InvoiceOverview = {
   senderComplete: false, clientCount: 0, activeConnectorCount: 0, invoiceCount: 1, draftCount: 1,
-  receivablesAtomic: "0", attention: [invoice], latestSettlement: null,
+  receivablesAtomic: "0", outstandingInvoiceCount: 0, receivablesUnavailableCount: 0, attention: [invoice], latestSettlement: null,
 };
+// Resolve the server-only async boundary while leaving real client components intact.
+async function overviewTree(node: ReactNode): Promise<ReactNode> {
+  if (!isValidElement<{ children?: ReactNode }>(node)) return node;
+  if (node.type === OverviewRecords) return OverviewRecords(node.props as ComponentProps<typeof OverviewRecords>);
+  if (!node.props.children) return node;
+  return cloneElement(node, undefined, ...await Promise.all(Children.toArray(node.props.children).map(overviewTree)));
+}
+async function OverviewPage() { return overviewTree(await OverviewContent()); }
 const repository = { listInvoices: vi.fn(), getInvoiceDetail: vi.fn(), getOverview: vi.fn() };
 const publicationRepository = { statusData: vi.fn() };
 const pages = [
@@ -90,7 +98,7 @@ it("renders actual setup and draft attention without counting draft value as rec
   expect(screen.getByTestId("receivables").textContent).toBe("0 USDC");
   expect(screen.getByRole("heading", { name: "Needs attention" })).toBeDefined();
   expect(screen.queryByRole("heading", { name: "Latest settlement" })).toBeNull();
-  expect(screen.getByText(/MCP is not available yet/)).toBeDefined();
+  expect(screen.getByText(/Connect Payr in/)).toBeDefined();
 });
 
 it("removes completed setup and displays only real settlement evidence and the repository's attention order", async () => {
@@ -104,6 +112,31 @@ it("removes completed setup and displays only real settlement evidence and the r
   expect(screen.getByRole("heading", { name: "Latest settlement" })).toBeDefined();
   expect(screen.getByText(`0x${"a".repeat(64)}`)).toBeDefined();
   expect(within(screen.getByRole("list", { name: "Invoice attention" })).getAllByRole("link")[0].textContent).toContain("INV-002");
+});
+
+it("uses the complete outstanding count, not workspace or attention counts, and flags incomplete totals", async () => {
+  repository.getOverview.mockResolvedValue({ ...overview, invoiceCount: 120, outstandingInvoiceCount: 75,
+    receivablesUnavailableCount: 2, receivablesAtomic: "1000000000000000001" });
+  render(await OverviewPage());
+  expect(screen.getByText("75")).toBeDefined();
+  expect(screen.getByText(/2 outstanding invoices have an unavailable amount/)).toBeDefined();
+  expect(screen.getByTestId("receivables").textContent).toBe("1.000000000000000001 USDC");
+});
+
+it("retains the independent wallet surface when invoice reads fail without showing a false zero", async () => {
+  repository.getOverview.mockRejectedValue(new Error("PRIVATE_PROVIDER"));
+  render(await OverviewPage());
+  expect(screen.getByRole("heading", { name: "Connected wallet balance" })).toBeDefined();
+  expect(screen.queryByTestId("receivables")).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Needs attention" })).toBeNull();
+});
+
+it("returns the wallet shell without waiting for a slow invoice database", async () => {
+  repository.getOverview.mockReturnValue(new Promise(() => {}));
+  const result = await OverviewContent();
+  // The only awaited operation is session validation; invoice work stays behind Suspense.
+  expect(result.props.children[1].props.children[0].props.ownerWallet).toBe(identity.ownerWallet);
+  expect(result.props.children[1].props.children[1].props.fallback.props["aria-label"]).toBe("Loading invoice records...");
 });
 
 it("server renders a single GET toolbar, exact amounts, separate states and bounded pagination", async () => {

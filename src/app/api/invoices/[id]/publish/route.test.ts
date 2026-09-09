@@ -1,7 +1,8 @@
 // @vitest-environment node
-import { beforeEach, expect, it, vi } from "vitest";
-import { requireRequestSession } from "../../../../../lib/auth/runtime";
-import { IdentityError } from "../../../../../lib/identity/contracts";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { getIdentityRuntime, requireRequestSession } from "../../../../../lib/auth/runtime";
+import { IdentityError, type ConnectorRecord, type IdentityRepository } from "../../../../../lib/identity/contracts";
+import { createConnectorHasher } from "../../../../../lib/connectors/crypto";
 import { PublicationError, type PublicationAttempt, type PublicationConfig, type PublicationRepository } from "../../../../../lib/invoices/publication-contracts";
 import { getPublicationConfig, getPublicationDocumentPort, getPublicationLinkConfig, getPublicationRepository } from "../../../../../lib/invoices/publication-runtime";
 import { testPublicationSnapshot } from "../../../../../lib/invoices/publication.test-support";
@@ -9,7 +10,7 @@ import { createKeyedTokenCodec } from "../../../../../lib/security/keyed-token";
 import { POST } from "./route";
 
 vi.mock("../../../../../lib/auth/runtime", async (original) => ({
-  ...await original<typeof import("../../../../../lib/auth/runtime")>(), requireRequestSession: vi.fn(),
+  ...await original<typeof import("../../../../../lib/auth/runtime")>(), requireRequestSession: vi.fn(), getIdentityRuntime: vi.fn(),
 }));
 vi.mock("../../../../../lib/invoices/publication-runtime", () => ({
   getPublicationConfig: vi.fn(), getPublicationDocumentPort: vi.fn(), getPublicationLinkConfig: vi.fn(), getPublicationRepository: vi.fn(),
@@ -29,9 +30,25 @@ const repository: PublicationRepository = {
   reserve: vi.fn(), claim: vi.fn(), store: vi.fn(), finalize: vi.fn(), fail: vi.fn(), statusData: vi.fn(), voidInvoice: vi.fn(), expire: vi.fn(),
 };
 const createOrRead = vi.fn();
+const connectorId = "00000000-0000-4000-8000-00000000000a";
+const connectorToken = `${connectorId}.AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8`;
+const connectorConfig = { appOrigin: config.appOrigin, chainId: config.chainId,
+  sessionKey: new Uint8Array(32).fill(7), connectorPepper: new Uint8Array(32).fill(8) };
+const connector: ConnectorRecord = { id: connectorId, workspaceId: identity.workspaceId,
+  tokenHash: createConnectorHasher(connectorConfig.connectorPepper)("connector", connectorToken),
+  createdAt: "2026-09-01T00:00:00.000Z", expiresAt: "2031-01-01T00:00:00.000Z", revokedAt: null, lastUsedAt: null,
+  scopes: ["invoice:publish", "invoice:status"] };
+const findConnector = vi.fn<IdentityRepository["findConnector"]>();
+const admitConnector = vi.fn<IdentityRepository["admitConnector"]>();
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubEnv("VERCEL", "0");
+  vi.stubEnv("PAYR_AGENT_GATEWAY_ONLY", "false");
+  findConnector.mockResolvedValue(connector);
+  admitConnector.mockResolvedValue({ outcome: "allowed", workspaceId: identity.workspaceId, tokenId: connectorId });
+  vi.mocked(getIdentityRuntime).mockReturnValue({ config: connectorConfig,
+    repository: { findConnector, admitConnector } as unknown as IdentityRepository });
   vi.mocked(requireRequestSession).mockResolvedValue(identity);
   vi.mocked(getPublicationConfig).mockReturnValue(config);
   vi.mocked(getPublicationLinkConfig).mockReturnValue(config);
@@ -40,6 +57,7 @@ beforeEach(() => {
   vi.mocked(repository.reserve).mockRejectedValue(new PublicationError("PUBLICATION_IN_PROGRESS"));
   vi.mocked(repository.findReplay).mockResolvedValue(null);
 });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 
 function request(body: unknown = input) {
   return new Request(`https://payrlink.xyz/api/invoices/${invoiceId}/publish`, {
@@ -47,6 +65,11 @@ function request(body: unknown = input) {
   });
 }
 function post(value: Request = request(), id = invoiceId) { return POST(value, { params: Promise.resolve({ id }) }); }
+function machineRequest(body: unknown = input) {
+  const req = request(body);
+  req.headers.set("authorization", `Bearer ${connectorToken}`);
+  return req;
+}
 function privateHeaders(response: Response) {
   expect(response.headers.get("cache-control")).toBe("private, no-store");
   expect(response.headers.get("referrer-policy")).toBe("no-referrer");
@@ -57,7 +80,16 @@ function unopened() {
   expect(repository.reserve).not.toHaveBeenCalled();
 }
 
-it("uses the URL invoice ID, only the F2 mutation session actor, and the canonical publication service", async () => {
+it("gateway cutover blocks direct bearer publication but preserves dashboard publication", async () => {
+  vi.stubEnv("PAYR_AGENT_GATEWAY_ONLY", "true");
+  expect((await post(machineRequest())).status).toBe(403);
+  expect(getIdentityRuntime).not.toHaveBeenCalled();
+  unopened();
+  expect((await post(request())).status).toBe(409);
+  expect(requireRequestSession).toHaveBeenCalledOnce();
+});
+
+it("preserves the dashboard mutation session actor and canonical publication service", async () => {
   const req = request();
   const response = await post(req);
   expect(requireRequestSession).toHaveBeenCalledExactlyOnceWith(req, true);
@@ -66,6 +98,109 @@ it("uses the URL invoice ID, only the F2 mutation session actor, and the canonic
   expect(await response.json()).toEqual({ code: "PUBLICATION_IN_PROGRESS" });
   expect(createOrRead).not.toHaveBeenCalled();
   privateHeaders(response);
+});
+
+it("admits bearer publication with its actual scope and connector actor, never an owner cookie", async () => {
+  const req = machineRequest();
+  req.headers.set("cookie", "__Host-payr-session=ignored-owner-session");
+  const response = await post(req);
+  expect(requireRequestSession).not.toHaveBeenCalled();
+  expect(admitConnector).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: connectorId, action: "invoice:publish" }));
+  expect(repository.reserve).toHaveBeenCalledExactlyOnceWith({ workspaceId: identity.workspaceId, ownerWallet: null, connectorId },
+    expect.objectContaining({ ...input, draftId: invoiceId }));
+  expect(response.status).toBe(409);
+  privateHeaders(response);
+});
+
+it.each(["", "Basic secret", "Bearer", "Bearer bad", `Bearer ${connectorToken}, Bearer other`])(
+  "rejects an invalid explicit credential without falling back to cookies (%#)", async (authorization) => {
+    const req = request();
+    req.headers.set("authorization", authorization);
+    req.headers.set("cookie", "__Host-payr-session=ignored-owner-session");
+    const response = await post(req);
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toBe('Bearer realm="Payr"');
+    expect(await response.json()).toEqual({ error: { code: "AUTH_REQUIRED" } });
+    expect(requireRequestSession).not.toHaveBeenCalled();
+    expect(req.bodyUsed).toBe(false);
+    unopened();
+    privateHeaders(response);
+  },
+);
+
+it("rejects a status-only connector before publication admission or body consumption", async () => {
+  findConnector.mockResolvedValue({ ...connector, scopes: ["invoice:status"] });
+  const req = machineRequest();
+  const response = await post(req);
+  expect(response.status).toBe(401);
+  expect(admitConnector).not.toHaveBeenCalled();
+  expect(req.bodyUsed).toBe(false);
+  unopened();
+});
+
+it.each(["revoked", "expired"])("honors atomic %s connector denial", async () => {
+  admitConnector.mockResolvedValue({ outcome: "denied" });
+  const response = await post(machineRequest());
+  expect(response.status).toBe(401);
+  expect(requireRequestSession).not.toHaveBeenCalled();
+  unopened();
+});
+
+it("returns connector rate limits with Retry-After and no publication work", async () => {
+  admitConnector.mockResolvedValue({ outcome: "rate_limited", retryAfterSeconds: 37 });
+  const response = await post(machineRequest());
+  expect(response.status).toBe(429);
+  expect(response.headers.get("retry-after")).toBe("37");
+  expect(await response.json()).toEqual({ error: { code: "RATE_LIMITED" } });
+  unopened();
+});
+
+it("sanitizes connector infrastructure failures and fails closed", async () => {
+  findConnector.mockRejectedValue(new Error(`SECRET ${connectorToken}`));
+  const response = await post(machineRequest());
+  expect(response.status).toBe(503);
+  expect(await response.text()).not.toContain(connectorToken);
+  expect(requireRequestSession).not.toHaveBeenCalled();
+  unopened();
+});
+
+it("rejects foreign Origin on bearer requests", async () => {
+  const req = machineRequest();
+  req.headers.set("origin", "https://foreign.test");
+  const response = await post(req);
+  expect(response.status).toBe(403);
+  expect(req.bodyUsed).toBe(false);
+  unopened();
+});
+
+it("uses only the trusted Vercel IP header for machine admission", async () => {
+  vi.stubEnv("VERCEL", "1");
+  const req = machineRequest();
+  req.headers.set("x-forwarded-for", "192.0.2.128");
+  expect((await post(req)).status).toBe(401);
+  expect(admitConnector).not.toHaveBeenCalled();
+  req.headers.set("x-vercel-forwarded-for", "192.0.2.129");
+  expect((await post(req)).status).toBe(409);
+  expect(admitConnector).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    ipHash: createConnectorHasher(connectorConfig.connectorPepper)("connector-ip", "192.0.2.129"),
+  }));
+});
+
+it.each([{ approval: false }, { expectedVersion: 0 }, { idempotencyKey: "" }, { workspaceId: identity.workspaceId }])(
+  "preserves strict approval validation for bearer calls (%#)", async (change) => {
+    expect((await post(machineRequest({ ...input, ...change }))).status).toBe(400);
+    unopened();
+  },
+);
+
+it("does not elevate a connector when the repository denies access to an invoice", async () => {
+  vi.mocked(repository.findReplay).mockRejectedValue(new IdentityError("FORBIDDEN", 403));
+  const response = await post(machineRequest());
+  expect(response.status).toBe(403);
+  expect(repository.findReplay).toHaveBeenCalledExactlyOnceWith({ workspaceId: identity.workspaceId, ownerWallet: null, connectorId },
+    input.idempotencyKey, expect.any(String));
+  expect(repository.reserve).not.toHaveBeenCalled();
+  expect(repository.claim).not.toHaveBeenCalled();
 });
 
 it.each([["AUTH_REQUIRED", 401], ["ORIGIN_NOT_ALLOWED", 403], ["FORBIDDEN", 403]] as const)(
@@ -191,7 +326,36 @@ it.each(["16385", "-1", "bad"])("rejects invalid declared length %s before consu
   unopened();
 });
 
-it("returns the finalized canonical result with private headers, without republishing or implicit send approval", async () => {
+it.each(["stalled", "trickling"])("bounds %s bearer approval streams by an absolute deadline even if cancellation stalls", async (kind) => {
+  vi.useFakeTimers();
+  const cancel = vi.fn(() => new Promise<void>(() => {}));
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const body = new ReadableStream<Uint8Array>({ start(value) { controller = value; }, cancel });
+  const req = new Request(`https://payrlink.xyz/api/invoices/${invoiceId}/publish`, {
+    method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${connectorToken}` },
+    body, duplex: "half",
+  } as RequestInit);
+  const response = post(req);
+  let resolved = false;
+  void response.then(() => { resolved = true; });
+  await vi.advanceTimersByTimeAsync(0);
+  controller.enqueue(new TextEncoder().encode("{"));
+  for (let i = 0; i < 4; i++) {
+    await vi.advanceTimersByTimeAsync(1000);
+    if (kind === "trickling") controller.enqueue(new TextEncoder().encode(" "));
+  }
+  expect(resolved).toBe(false);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(resolved).toBe(true);
+  const result = await response;
+  expect(result.status).toBe(408);
+  expect(await result.json()).toEqual({ code: "REQUEST_TIMEOUT" });
+  privateHeaders(result);
+  expect(cancel).toHaveBeenCalledOnce();
+  unopened();
+});
+
+it.each(["session", "bearer"])("returns the finalized canonical %s result without republishing or implicit send approval", async (auth) => {
   const token = createKeyedTokenCodec(config.keys).derive(invoiceId, "invoice-bearer", 1);
   const attempt: PublicationAttempt = {
     id: invoiceId, workspaceId: identity.workspaceId, invoiceId, invoiceVersionId: invoiceId, invoiceVersion: 1,
@@ -209,7 +373,7 @@ it("returns the finalized canonical result with private headers, without republi
   vi.mocked(repository.statusData).mockResolvedValue({ invoiceId, invoiceVersion: 1, invoiceNumber: attempt.invoiceNumber,
     commercialState: "expired", payableUntil: attempt.snapshot.payableUntil, voidedAt: null, snapshot: attempt.snapshot, attempt,
     settlement: null, receipt: null, deliveries: [] });
-  const response = await post();
+  const response = await post(auth === "bearer" ? machineRequest() : request());
   expect(response.status).toBe(200);
   const result = await response.json();
   expect(result).toEqual({ invoiceId, invoiceVersion: 1, invoiceNumber: attempt.invoiceNumber, commercialState: "expired",

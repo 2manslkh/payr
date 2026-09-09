@@ -44,7 +44,7 @@ const amount = z.string().max(79).transform((value, context) => {
     return z.NEVER;
   }
 });
-const schema = z.object({
+export const draftInputSchema = z.object({
   draftId: uuid.optional(),
   expectedVersion: z.number().int().positive().optional(),
   client: z.object({
@@ -98,7 +98,7 @@ export function parseDraftInput(input: unknown): CreateInvoiceDraftInput {
     if (error instanceof DraftError) throw error;
     throw invalid();
   }
-  const result = schema.safeParse(input);
+  const result = draftInputSchema.safeParse(input);
   if (!result.success) {
     throw new DraftError("INVALID_INPUT", 400, {
       // Zod messages/unknown-key lists can contain input. Only schema paths and fixed codes leave this boundary.

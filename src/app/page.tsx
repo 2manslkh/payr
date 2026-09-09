@@ -5,6 +5,8 @@ import { InvoiceIllustration } from "../components/landing/invoice-illustration"
 import { WorkflowStory } from "../components/landing/workflow-story";
 import { SkillInstall } from "../components/landing/skill-install";
 import { Roadmap } from "../components/landing/roadmap";
+import { PublicAgentTools } from "../components/landing/public-agent-tools";
+import { apiMarkdown, authMarkdown } from "../lib/discovery";
 import styles from "./page.module.css";
 
 export const metadata = { alternates: { canonical: "/" } };
@@ -12,6 +14,7 @@ export const metadata = { alternates: { canonical: "/" } };
 export default function HomePage() {
   return (
     <div className={styles.landing}>
+      <PublicAgentTools setupInstructions={authMarkdown} capabilities={apiMarkdown} />
       <a className="skip-link" href="#main-content">Skip to content</a>
       <header className={styles.header}>
         <Link href="/" aria-label="Payr home">

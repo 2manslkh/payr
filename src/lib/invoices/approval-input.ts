@@ -16,12 +16,19 @@ export async function readPublicationApproval(request: Request) {
   if (length !== null && (!/^[0-9]+$/.test(length) || Number(length) > limit)) throw new PublicationError("PAYLOAD_TOO_LARGE", 413);
   if (!request.body) throw new PublicationError("INVALID_INPUT", 400);
   const reader = request.body.getReader();
+  const deadlineMs = 5_000;
+  const expires = Date.now() + deadlineMs;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new PublicationError("REQUEST_TIMEOUT", 408)), deadlineMs);
+  });
   let size = 0;
   let text = "";
   try {
     const decoder = new TextDecoder("utf-8", { fatal: true });
     for (;;) {
-      const { done, value } = await reader.read();
+      const { done, value } = await Promise.race([reader.read(), deadline]);
+      if (Date.now() >= expires) throw new PublicationError("REQUEST_TIMEOUT", 408);
       if (done) break;
       size += value.byteLength;
       if (size > limit) throw new PublicationError("PAYLOAD_TOO_LARGE", 413);
@@ -44,5 +51,5 @@ export async function readPublicationApproval(request: Request) {
     void reader.cancel().catch(() => {});
     if (error instanceof PublicationError || error instanceof ZodError) throw error;
     throw new PublicationError("INVALID_INPUT", 400);
-  } finally { reader.releaseLock(); }
+  } finally { clearTimeout(timer); reader.releaseLock(); }
 }

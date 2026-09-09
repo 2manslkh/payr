@@ -63,6 +63,13 @@ it("does not match authenticated app routes or assets", () => {
   }
 });
 
+it.each<Record<string, string>>([{ rsc: "1" }, { "next-router-prefetch": "1" }, { "next-router-segment-prefetch": "/_tree" }, { purpose: "prefetch" }])("excludes homepage Flight requests before normalization but never private admission (%j)", (headers) => {
+  expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url: "/", headers })).toBe(false);
+  for (const url of ["/invoice/invalid", "/receipt/invalid"]) {
+    expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url, headers })).toBe(true);
+  }
+});
+
 it("advertises public discovery without entering document admission or varying HTML by Accept", async () => {
   expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url: "/" })).toBe(true);
   const browserHeaders: Record<string, string>[] = [{ Accept: "text/html" }, { Accept: "text/markdown" }, { Accept: "text/markdown;q=0" }, { Accept: "text/markdown", RSC: "1" }];
@@ -72,6 +79,29 @@ it("advertises public discovery without entering document admission or varying H
     expect(html.headers.get("link")).toContain('rel="api-catalog"');
     expect(html.headers.get("link")).toContain('</index.md>; rel="alternate"; type="text/markdown"');
   }
+  expect(runtime).not.toHaveBeenCalled();
+});
+
+it("negotiates public homepage GET and HEAD on Vercel without touching document admission", async () => {
+  vi.stubEnv("VERCEL", "1");
+  for (const method of ["GET", "HEAD"]) {
+    const response = await proxy(new NextRequest("https://example.test/", { method, headers: { Accept: "text/markdown" } }));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
+    expect(response.headers.get("vary")).toBe("Accept");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("content-signal")).toBe("search=yes, ai-train=no, ai-input=no");
+    expect(await response.text()).toEqual(method === "HEAD" ? "" : expect.stringContaining("# Payr"));
+  }
+  const browserHeaders: Record<string, string>[] = [
+    {}, { Accept: "text/html" }, { Accept: "text/markdown;q=0" },
+    { Accept: "text/html,text/markdown;q=0.5" }, { Accept: "text/markdown", RSC: "1" },
+    { Accept: "text/markdown", "next-router-prefetch": "1" }, { Accept: "text/markdown", purpose: "prefetch" },
+  ];
+  for (const headers of browserHeaders) {
+    expect((await proxy(new NextRequest("https://example.test/", { headers }))).headers.get("x-middleware-next")).toBe("1");
+  }
+  expect((await proxy(new NextRequest("https://example.test/", { method: "POST", headers: { Accept: "text/markdown" } }))).headers.get("x-middleware-next")).toBe("1");
   expect(runtime).not.toHaveBeenCalled();
 });
 

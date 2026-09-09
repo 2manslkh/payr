@@ -8,6 +8,11 @@ if (!/^[1-9]\d*$/.test(portValue) || !Number.isInteger(port) || port > 65535) {
 }
 
 const baseURL = `http://localhost:${port}`;
+const workersValue = process.env.PAYR_TEST_WORKERS;
+const workers = workersValue === undefined ? undefined : Number(workersValue);
+if (workersValue !== undefined && (!/^[1-9]\d*$/.test(workersValue) || !Number.isSafeInteger(workers))) {
+  throw new Error("PAYR_TEST_WORKERS must be a positive integer");
+}
 
 // Ephemeral keys per test run, inherited by workers and the local server only.
 process.env.PAYR_E2E_SESSION_KEY ??= randomBytes(32).toString("base64");
@@ -36,6 +41,7 @@ Object.assign(process.env, identityEnvironment);
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
+  workers,
   retries: process.env.CI ? 2 : 0,
   use: {
     baseURL,

@@ -12,10 +12,12 @@ import { createInvoiceDraftService } from "../../src/lib/invoices/service";
 import type { PublishedInvoiceResult, SharedInvoiceLinks } from "../../src/lib/invoices/publication-contracts";
 import { createTestDocumentPort, testPublicationSnapshot } from "../../src/lib/invoices/publication.test-support";
 import { seedBrowserWorkspace } from "./workspace-fixture";
+import { fixtureDatabaseContainer } from "../../scripts/local-test-config.mjs";
 
 function publicationFixture() {
+  fixtureDatabaseContainer();
   const api = new URL(process.env.SUPABASE_URL ?? "http://invalid");
-  if (api.origin !== "http://127.0.0.1:57321" || api.username || api.password || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error("Publication browser fixtures require the isolated local Supabase API");
   }
   const identity = { workspaceId: randomUUID(), ownerWallet: `0x${randomBytes(20).toString("hex")}` };

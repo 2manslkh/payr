@@ -1,6 +1,7 @@
 import { execFileSync, spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { expect, it } from "vitest";
+import { fixtureDatabaseContainer } from "../../../scripts/local-test-config.mjs";
 
 // Run only after the coordinator provisions the isolated database and applies migrations.
 // Every fixture rolls back, including limiter counters; no existing fixture suite is changed.
@@ -15,14 +16,7 @@ const seed = `insert into public.workspaces(id,owner_wallet) values ('${workspac
       '{"line1":"1 Test Road","city":"London","postalCode":"N1 1AA","countryCode":"GB"}','${owner}','INV');`;
 
 function fixture(sql: string): string[] {
-  const api = new URL(process.env.SUPABASE_URL!);
-  const database = new URL(process.env.SUPABASE_DB_URL!);
-  const container = process.env.PAYR_TEST_DB_CONTAINER ?? "supabase_db_payr";
-  if (api.protocol !== "http:" || !["localhost", "127.0.0.1", "[::1]"].includes(api.hostname)
-    || !["postgres:", "postgresql:"].includes(database.protocol)
-    || !["localhost", "127.0.0.1", "[::1]"].includes(database.hostname)
-    || database.username !== "postgres" || database.pathname !== "/postgres"
-    || !/^supabase_db_[a-zA-Z0-9_-]+$/.test(container)) throw new Error("Isolated local Payr fixtures only");
+  const container = fixtureDatabaseContainer();
   return execFileSync("docker", ["exec", "-i", container, "psql", "-U", "postgres", "-d", "postgres",
     "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1"], {
     input: `begin; set local statement_timeout = '10s'; ${seed} ${sql} rollback;`,
@@ -156,7 +150,7 @@ it("shares the 60-request IP budget across authenticated owners", () => {
 
 it("fails closed instead of waiting indefinitely for concurrent admission", async () => {
   fixture("select 1;"); // Validate the isolated target before starting the lock holder.
-  const holder = spawn("docker", ["exec", "-i", process.env.PAYR_TEST_DB_CONTAINER ?? "supabase_db_payr",
+  const holder = spawn("docker", ["exec", "-i", fixtureDatabaseContainer(),
     "psql", "-U", "postgres", "-d", "postgres", "--no-psqlrc", "--quiet", "--tuples-only", "--no-align",
     "--set=ON_ERROR_STOP=1"], { stdio: ["pipe", "pipe", "pipe"] });
   let stderr = "";

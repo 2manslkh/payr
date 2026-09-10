@@ -90,7 +90,7 @@ export function createGatewayRepository(client: RpcClient): GatewayRepository {
       account.refine((a) => a.credential.id === v.connectorId && a.ownerWallet === v.verifiedWallet && a.credential.revokedAt === null));
     },
     async admitAccount(value) {
-      const v = input(accountAuth.extend({ action: z.enum(ACCOUNT_SCOPES), ipHash: hash }), value);
+      const v = input(accountAuth.extend({ action: z.enum([...ACCOUNT_SCOPES, "wallet:read"]), ipHash: hash }), value);
       const result = await call("payr_admit_agent_account_v1", { p_service_id: v.serviceId, p_id: v.id, p_token_hash: v.tokenHash,
         p_action: v.action, p_ip_hash: v.ipHash },
       z.union([account.refine((a) => a.credential.id === v.id && a.credential.revokedAt === null && a.credential.scopes.includes(v.action)), admissionFailure]));

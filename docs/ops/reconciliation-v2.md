@@ -65,6 +65,21 @@ origin; no historical mail backfill; independently gated receipt delivery;
 explicit `wallet:read` and service operation scope for account context. Privy is
 not a payment signer. Freeze changes require coordinator review and consumer tests.
 
+Lane freeze: `e76807a952b291dca0747977338b7f33d3bdca5e`. Integrated lane commits:
+backend `628ebec`, UI `0daa60c`, documentation `8176ab0`, replayed without changes.
+Coordinator regression repair permits explicitly scoped `wallet:read` in gateway
+admission and retains that action alongside `invoice.deliver` in unreleased `011`.
+The original private source snapshot remains unchanged. Historical `003` and main's
+gateway/hardening SQL remain byte-identical. Unit and database tests first failed
+at these two seams, then passed with the combined repair.
+
+`scripts/test-privy-db.mjs` now rehearses the released v1.8.0 schema, then restores
+the historical hosted Privy overlay and applies the invoice-email upgrade. It
+checks retained workspace/payout/credential rows, a pre-existing wallet audit event
+and no automatic mail backfill before running the linking/scope/grant fixtures.
+CI runs this in a fresh network-isolated PostgreSQL container. The complete fresh
+Supabase migration replay remains a separate gate.
+
 ## Release And Cleanup Gates
 
 Run isolated DB reset/lint/integration, full unit/component, release tooling,

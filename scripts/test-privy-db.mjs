@@ -22,7 +22,8 @@ try {
   const migrations = readdirSync("supabase/migrations").filter((name) => name.endsWith(".sql")).sort();
   const privy = "202609090003_privy_identity.sql";
   const invoiceEmail = "202609090011_invoice_email.sql";
-  if (!migrations.includes(privy) || !migrations.includes(invoiceEmail)) throw new Error("Missing reconciliation migrations");
+  const auditRepair = "202609100001_wallet_discovery_audit.sql";
+  if (![privy, invoiceEmail, auditRepair].every((name) => migrations.includes(name))) throw new Error("Missing reconciliation migrations");
   // Reproduce released v1.8.0 first, then the recorded hosted Privy overlay and the forward upgrade.
   for (const name of migrations.filter((name) => name < invoiceEmail && name !== privy)) {
     sql(readFileSync(`supabase/migrations/${name}`, "utf8"));
@@ -38,15 +39,18 @@ try {
     'credential',(select to_jsonb(t) from public.connector_tokens t where id='${token}'));`;
   const before = sql(legacyRows);
   sql(readFileSync(`supabase/migrations/${privy}`, "utf8"));
+  sql(readFileSync(`supabase/migrations/${invoiceEmail}`, "utf8"));
   const audit = randomUUID();
   sql(`insert into public.audit_events(id,workspace_id,connector_token_id,action,outcome)
-    values('${audit}','${workspace}','${token}','wallet:read','allowed');`);
-  for (const name of migrations.filter((name) => name >= invoiceEmail)) sql(readFileSync(`supabase/migrations/${name}`, "utf8"));
+    values('${audit}','${workspace}','${token}','invoice.deliver','succeeded');`);
+  for (const name of migrations.filter((name) => name > invoiceEmail)) sql(readFileSync(`supabase/migrations/${name}`, "utf8"));
   if (sql(legacyRows) !== before) throw new Error("Upgrade changed legacy workspace, payout or credential rows");
-  if (sql(`select count(*) from public.audit_events where id='${audit}' and action='wallet:read';`) !== "1") throw new Error("Upgrade lost wallet audit history");
+  if (sql(`select count(*) from public.audit_events where id='${audit}' and action='invoice.deliver';`) !== "1") throw new Error("Upgrade lost invoice audit history");
+  sql(`insert into public.audit_events(id,workspace_id,connector_token_id,action,outcome)
+    values(gen_random_uuid(),'${workspace}','${token}','wallet:read','allowed');`);
   if (sql("select count(*) from public.email_deliveries;") !== "0") throw new Error("Upgrade backfilled email deliveries");
   sql(readFileSync("scripts/privy-db-fixtures.sql", "utf8"));
-  console.log("Privy SQL checks passed: v1.8.0/hosted-overlay upgrade, retained rows and wallet audit, no mail backfill, defaults, linking, replay, scopes, gateway issuance, revocation and grants.");
+  console.log("Privy SQL checks passed: v1.8.0/hosted-011 upgrade, retained rows and invoice audit, repaired wallet audit, no mail backfill, defaults, linking, replay, scopes, gateway issuance, revocation and grants.");
 } catch (error) {
   console.error(error.stderr?.toString() || error.message);
   process.exitCode = 1;

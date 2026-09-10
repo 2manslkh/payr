@@ -68,17 +68,126 @@ not a payment signer. Freeze changes require coordinator review and consumer tes
 Lane freeze: `e76807a952b291dca0747977338b7f33d3bdca5e`. Integrated lane commits:
 backend `628ebec`, UI `0daa60c`, documentation `8176ab0`, replayed without changes.
 Coordinator regression repair permits explicitly scoped `wallet:read` in gateway
-admission and retains that action alongside `invoice.deliver` in unreleased `011`.
+admission. It initially retained that action alongside `invoice.deliver` in what
+was then believed to be unreleased `011`; the later hosted read-back below
+supersedes that migration approach without losing the repository repair.
 The original private source snapshot remains unchanged. Historical `003` and main's
 gateway/hardening SQL remain byte-identical. Unit and database tests first failed
 at these two seams, then passed with the combined repair.
 
-`scripts/test-privy-db.mjs` now rehearses the released v1.8.0 schema, then restores
-the historical hosted Privy overlay and applies the invoice-email upgrade. It
-checks retained workspace/payout/credential rows, a pre-existing wallet audit event
-and no automatic mail backfill before running the linking/scope/grant fixtures.
+`scripts/test-privy-db.mjs` rehearses the released v1.8.0 schema, then restores
+the historical hosted Privy and invoice-email overlays before applying the new
+audit repair. It checks retained workspace/payout/credential rows, a pre-existing
+invoice-delivery audit event, new wallet admission and no automatic mail backfill
+before running the linking/scope/grant fixtures. It does not seed historical
+published invoices or receipt deliveries; populated-document preservation remains
+an additional upgrade-evidence gate, not a claim made by this fixture.
 CI runs this in a fresh network-isolated PostgreSQL container. The complete fresh
 Supabase migration replay remains a separate gate.
+
+## Review Repairs
+
+Fresh independent standards, specification and adversarial-security reviewers
+examined `cbcf7e2...6b8f9c75e94c5c23b60cf50e7b424b24072abff0` with gpt-6-astra.
+Standards found no code violation; spec found terminal dashboard publication
+recovery missing; security found uncached/unthrottled pre-verification Privy key
+fetches and multiline business names producing invalid invoice-email subjects.
+No reviewer claimed live acceptance or the unavailable Terra model.
+
+The following bounded repair lanes start at the exact reviewed SHA above. They
+inherit the same immutable invoice/identity/approval freeze and return commits,
+focused regression evidence and blockers. Other ownership remains unchanged.
+
+| Ticket | Branch / worktree | Writable scope | Gate |
+| --- | --- | --- | --- |
+| R10-RECON-RECOVERY | `agent/r10-reconcile-recovery`, `.worktrees/reconcile-recovery` | Publication action UI, invoice detail projection/types and colocated tests | Fresh explicit approval/new key after terminal failure; no consent reuse or in-flight attempt takeover |
+| R10-RECON-AUTH | `agent/r10-reconcile-auth`, `.worktrees/reconcile-auth` | Privy provider, auth route and tests | Cached app-scoped verifier, bounded trusted-IP admission before verification, retained verified-subject admission |
+| R10-RECON-EMAIL | `agent/r10-reconcile-email`, `.worktrees/reconcile-email` | Email preparation/template/adapter and tests | Single-line subject and valid prepared payload before provider marker, unchanged frozen facts and CR/LF rejection |
+
+Current combined checks at `6b8f9c7`: 2,588 unit/component tests passed, 13 existing
+packaged-PDF skips; 543 DB tests passed in 17 files on owned `payr-reconcile-v200`
+(API/DB/shadow `62321/62322/62320`). The first full DB invocation hit the terminal's
+120-second process limit; a non-competing 600-second invocation completed in 263
+seconds without changing assertions or suite timeouts. These results precede the
+review repairs and do not certify their final combined source.
+
+Repair commits: recovery `d832d7f`, authentication `4dc239d`, email `5a4a64d`,
+replayed on the coordinator as `a5137fc`, `ff4fcf4`, `253e89d`. The auth repair
+deliberately reuses the existing DB quota API: five verification attempts per
+trusted IP per minute, five per verified subject, and two global admissions per
+successful two-stage request. This conservative capacity is not the old 30/IP
+limit; increasing it requires a separately reviewed two-phase quota API.
+Independent specification and security re-review at `253e89d` closed all three
+findings without identifying new actionable defects; external acceptance gates
+remain separate. The later forward-migration correction retains the same tested
+constraint while preserving applied history.
+
+The first combined browser run passed 94 of 96 checks. Both failures were the same
+stale narrow-screen link label after the approved dashboard-login change; the
+assertion now checks the visible dashboard link and its `/app` target. No product
+behavior or accessibility assertion was removed to pass this gate.
+
+## Concurrent Work And Hosted History
+
+The user explicitly kept the agreed v2 scope when a final audit found newer Privy
+payment-wallet changes in the root and `.worktrees/invoice-privy-deploy-20260910`.
+They are preserved, not reverted or imported. A second owner-only recovery archive,
+`.worktrees/reconciliation-archive-20260910-supplement/`, contains 1,262 source
+snapshots from the now-28-worktree inventory, including 11 dirty worktrees. Its
+manifest SHA-256 is
+`af06c5907bb5bcd8a24e9b26108d4f45c2892778ebe4164f82a4b00b5a8e1a6a`.
+The first archive remains unchanged. Later donor changes require another snapshot;
+neither archive permits deleting active worktrees or private operator state.
+
+Read-only hosted inspection of project `grutkfsoekcpwdksgasm` on 10 September
+confirmed migration `202609090011_invoice_email` is applied. All 29 stored statements
+match the archived source byte-for-byte in order, with only statement delimiters,
+whitespace and comments between them. Source SHA-256:
+`4d19f667bd49212a1a6e29955ccedddeef8c8bc06dfe7727d880cbccf7859d67`.
+The newline-joined hosted statement SHA-256 is
+`8ce08e7f258051d57bc1dd236131dba0c96cc45024e830143e2d69b23902c6c5`.
+The installed audit constraint permits `invoice.deliver` but not `wallet:read`.
+One read timed out; its standalone retry completed. No history repair or migration
+application was performed during these checks.
+
+Accordingly, `011` is restored to its exact applied bytes. The constraint fix is
+now `202609100001_wallet_discovery_audit.sql`, after `011`, with bounded locks and
+no row, credential, permission or scope-array mutations. Fresh installation and
+already-applied-`011` upgrade are verified separately. A different target that has
+Privy wallet-audit rows but has not applied historical `011` needs a separately
+reviewed migration path: that historical constraint cannot accept those rows.
+Do not delete audit rows or edit/replay historical SQL to force such a target through.
+
+Vercel read-back now reports production deployment
+`dpl_7MBVDhVtipHj1DkzDRfWg955V6sD`, Git production branch `main`, and automatic custom
+domain assignment enabled. This is newer than the original deployment evidence.
+There is no verified production-promotion hold. Keep the v2 PR draft and do not
+merge or promote over the concurrently deployed payment-wallet work without an
+explicit operator cutover decision. Keeping new source outside v2 does not
+authorize removing its live behavior.
+
+## Source Disposition
+
+The independent final source audit found no missing feature in the original frozen
+archive: all 123 imported paths exist, and only five of 544 unique archived paths
+are intentionally absent. Three are optional plugin files/packaging, one is the
+zero-byte root architecture placeholder, and the dedicated dashboard-login browser
+test was adapted into `tests/e2e/console.spec.ts` and page-guard component coverage.
+The real user-owned diagram and brand assets remain unchanged.
+
+| Original branch group | Disposition |
+| --- | --- |
+| R07 settlement, R08 reconciliation, R09 connector copy, sender profile, AEO | Already released; older dirty overlays superseded, operational material retained |
+| Root hardening, test isolation, root v1.7, combined agent v1.8 | Already in main; preserve their released protections |
+| Local main, privy-history-v1.8.1 | Older/equal baseline, no missing feature |
+| root-updates, agent-readiness | Useful committed behavior replayed earlier; uncommitted source selectively reconciled, not whole-branch merged |
+| privy-reconcile-fresh | SQL/test/provenance replayed; pending v1.8.1 version commit excluded; PR #19 retained until replacement lands |
+| r10-publish-and-send and its deployment variants | Audited feature delta integrated and repaired; later live evidence retained separately |
+
+Actual remote extras remain `integration/agent-readiness`, `integration/root-updates`
+and `integration/privy-reconcile-fresh`. The v1.7/v1.8 remote-tracking refs are stale,
+not additional remote features. No branch, worktree, stash, database or volume has
+been deleted. New payment-wallet work and all private operator state remain held.
 
 ## Release And Cleanup Gates
 

@@ -82,6 +82,12 @@ Post-migration checks passed for migration history, row-level security, service-
 
 ## Existing Users
 
+The reconciled server bounds verification before any Privy key lookup: at most five
+verification attempts per trusted IP per minute and five provisioning requests per
+verified subject per minute. A successful two-stage request uses two shared global
+admissions. Signing-key caches are process-local; admission remains database-backed.
+After a rate-limit response, honor its retry delay rather than opening more tabs.
+
 1. Sign in through Privy. Wallet creation is idempotent through a deterministic, app/user-scoped external ID and Privy idempotency key; a timeout is recovered by external-ID lookup.
 2. Select **Link existing workspace** rather than creating a new workspace.
 3. Sign the fresh challenge using the original Ethereum owner wallet. The challenge binds the Privy user, workspace, original owner, origin, chain, nonce and expiry. Linking consumes it atomically.

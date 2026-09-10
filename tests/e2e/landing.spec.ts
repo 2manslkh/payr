@@ -37,7 +37,9 @@ test("narrow screens and keyboard navigation retain usable controls", async ({ p
   await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/#main-content$/);
-  await expect(page.getByRole("link", { name: "Sign in to Payr", exact: true })).toBeVisible();
+  const dashboard = page.getByRole("main").getByRole("link", { name: "Go To Dashboard", exact: true }).first();
+  await expect(dashboard).toBeVisible();
+  await expect(dashboard).toHaveAttribute("href", "/app");
 });
 
 test("short desktop keeps workflow navigation and motion controls in view", async ({ page }) => {

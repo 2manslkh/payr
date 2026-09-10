@@ -168,3 +168,35 @@ provisioning, Resend activation and the approved live inbox test. This worktree
 contained no production credentials and remained uncommitted. Current commit/gate
 ownership is in `reconciliation-v2.md`; those operator gates are not discharged
 by importing this record.
+
+## Later Operator Evidence: 10 September 2026
+
+The donor runbook was updated after the reconciliation snapshot with a separately
+authorized production deployment and one real same-address client/issuer email.
+This section preserves that dated report; it is not verification of the final v2
+candidate. Private journals, addresses, bearer links and credentials remain outside
+the repository and were not inspected during reconciliation.
+
+The report identifies combined Privy/Publish & Send deployment
+`dpl_uF4P3SFExxUoj9GzwhS5zi6xjGx1`, source manifest SHA-256
+`f4c46293b40133de79c40277484d5466a89ecfc297426d304c1c7b5cde4aa143`,
+and application of historical migration `202609090011`. Invoice email was enabled,
+receipt email remained disabled, and a dedicated invoice-worker secret was stored
+in Vault without rotating the shared cron credential. The recorded MCP exercise
+used both approvals, received one combined-role delivery, replayed without another
+provider attempt, checked the downloaded frozen PDF hash and revoked its test
+credential. Resend reported delivery; human inbox placement was not established.
+No payment was authorized or performed by that exercise.
+
+The same report leaves minute recovery pending because `pg_cron` and `pg_net` were
+not enabled and the installer was not run. Direct test credential use does not
+establish private credential injection through Claude's generated MCP integration.
+Do not translate this historical smoke into a claim that those gates passed.
+
+The reconciliation's later read-only check independently verified all 29 applied
+`011` statements against the archived source. Do not change or reapply that file.
+Apply `202609100001_wallet_discovery_audit.sql` only through a separately approved
+forward rollout to restore the wallet audit action dropped by `011`; see
+[reconciliation](reconciliation-v2.md). Production has since advanced again, so
+recheck deployment identity and preserve the newer payment-wallet implementation
+before any promotion or rollback. The agreed v2 source scope excludes that work.

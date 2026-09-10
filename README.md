@@ -22,9 +22,22 @@ live writes. [STATUS.md](STATUS.md) tracks the remaining acceptance gates.
 
 The public gateway's recorded catalog has eleven Payr operations without account
 context or void; local upstream has twelve including context. [MCP onboarding](docs/ops/mcp-onboarding.md)
-separates discovery from private workspace access. Per-user private credential
-injection into generated MCP remains unverified; never paste account/service
-secrets in chat. Initial-email, verified payment/receipt and separately enabled
+separates discovery from workspace access. Per-user private credential injection
+and live authenticated MCP-client execution remain unverified. The user confirmed
+Bazantic does not forward Authorization. Prefer a private credential path if
+available. The approved hackathon exception allows, only with informed per-user
+consent, a short-lived, least-privilege raw account credential for a dedicated demo
+workspace in generated gateway `requestBody.accountCredential` beside `input`
+(upstream top-level `accountCredential` beside `input`), without `Bearer `.
+Model/tool history and gateway traces may retain the secret. Never use service
+keys, wallet private keys, seed phrases or browser cookies in this path; keep
+secrets out of source control and recordings, and revoke the credential after the
+demo. Codex bearer/OAuth is not this path; client configuration does not
+automatically inject body credentials. Verify with read-only `get_account` and
+owner confirmation of the workspace. Without a private path or explicit consent,
+stop at workspace access pending. This is a guidance exception, not an auth
+plumbing change or proof of authenticated client execution.
+Initial-email, verified payment/receipt and separately enabled
 receipt-delivery proof are required for core acceptance, not inferred from a tool
 list, provider acceptance, old test counts or same-address email evidence.
 
@@ -115,7 +128,7 @@ With Privy configured, `/login` uses Privy authentication and server-provisioned
 
 Sender saves through `POST /api/profile` require `expectedProfileId` from the reviewed `GET /api/profile` response alongside `expectedRevision`. The ID is only a precondition, never authorization scope. A switched browser session returns `PROFILE_CHANGED` without writing the new workspace's profile. Reload older Settings tabs before saving; direct HTTP callers must include the same reviewed ID. The internal service-only profile RPC remains unchanged.
 
-Direct MCP connector credentials are shown once and expire within 30 days. Direct MCP retains the four invoice tools including `void_invoice`; opted-in sender scopes authorize sender read/save, and `wallet:read` gates account context without silently expanding existing tokens. REST gateway account credentials are distinct, service-bound and at most seven days; public generated MCP does not yet have verified private per-user injection. `/install` is the MCP-first guide, not a plugin download. Use the [onboarding boundary](docs/ops/mcp-onboarding.md) and [direct connector smoke procedure](docs/ops/mcp-claude-smoke.md) for the actual transport. Creating a credential does not authenticate an agent automatically. Keep secrets out of chat/recordings and revoke demo credentials; application redaction cannot remove platform/CDN/browser/clipboard copies. Payout changes remain owner-signed; sender saves and voiding require explicit approval.
+Direct MCP connector credentials are shown once and expire within 30 days. Direct MCP retains the four invoice tools including `void_invoice`; opted-in sender scopes authorize sender read/save, and `wallet:read` gates account context without silently expanding existing tokens. REST gateway account credentials are distinct, service-bound and at most seven days; public generated MCP does not yet have verified private per-user injection. `/install` is the MCP-first guide, not a plugin download. Use the [onboarding boundary](docs/ops/mcp-onboarding.md) and [direct connector smoke procedure](docs/ops/mcp-claude-smoke.md) for the actual transport. Creating a credential does not authenticate an agent automatically. Keep secrets out of chat except for the explicitly consented gateway demo exception above, keep them out of recordings, and revoke demo credentials; application redaction cannot remove model/tool history, gateway traces or platform/CDN/browser/clipboard copies. Payout changes remain owner-signed; sender saves and voiding require explicit approval.
 
 Browser tests generate ephemeral identity keys for their local server and workers, never reuse production secrets, and keep Secure cookies enabled. `pnpm test:db:local` also exercises the real signature-to-database route flow; browser API mocks are not the only integration evidence.
 

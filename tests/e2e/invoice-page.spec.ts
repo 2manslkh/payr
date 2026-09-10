@@ -49,7 +49,7 @@ async function storedInvoice(baseURL: string) {
   const savedClient = await rpc<ClientProfile>("payr_save_client_v1", {
     id: null, expectedRevision: null, alias: "document-client", ...snapshot.client,
   });
-  const draft = await createInvoiceDraftService(createDraftRepository(client)).createDraft(actor, {
+  const draft = await createInvoiceDraftService(createDraftRepository(client), app.origin).createDraft(actor, {
     idempotencyKey: randomUUID(), useDefaultTerms: true, client: { id: savedClient.id },
     items: snapshot.items.map((item) => ({ description: item.description, amount: item.amountDecimal })),
   });

@@ -23,6 +23,12 @@ export function PrivyLoginButton() {
   return <button className="button" disabled={!ready || authenticated} onClick={() => login()}>Login</button>;
 }
 
+function openWorkspace() {
+  const path = window.location.pathname;
+  const isInvoice = /^\/app\/invoices\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(path);
+  window.location.replace(isInvoice ? path : "/app");
+}
+
 function Login() {
   const { ready, authenticated, user, login, logout, getAccessToken } = usePrivy();
   const userId = user?.id;
@@ -39,7 +45,7 @@ function Login() {
     return () => window.clearTimeout(timer);
   }, [ready]);
   const accept = (result: PrivyAccount) => {
-    if (result.session && new URLSearchParams(window.location.search).get("link") !== "1") window.location.replace("/app");
+    if (result.session && new URLSearchParams(window.location.search).get("link") !== "1") openWorkspace();
     else setAccount(result);
   };
   useEffect(() => {
@@ -69,7 +75,7 @@ function Login() {
         setStatus("Review the identity-linking message. No funds or payout addresses will change.");
         const signature = await signWalletMessage(connection, nonce.message);
         const result = await request<PrivyAccount>(token, { action, nonceId: nonce.nonceId, signature });
-        if (result.session) window.location.replace("/app");
+        if (result.session) openWorkspace();
       } else accept(await request<PrivyAccount>(token, { action }));
     } catch (failure) { setError(failure); }
     finally { setBusy(false); setStatus(""); }

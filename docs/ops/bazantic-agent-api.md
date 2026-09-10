@@ -8,7 +8,10 @@ including `get_account_context`. Reimport and explicit account `wallet:read` plu
 service-operation permission are required before gateway wallet discovery claims.
 Private per-user injection into generated MCP and signed-in Claude/Cowork use
 remain unverified. The archived optional plugin does not solve that boundary;
-see `mcp-onboarding.md`. Never supply a secret in chat.
+see `mcp-onboarding.md`. The user confirmed Bazantic does not forward
+`Authorization`. Prefer a private credential path if available; the narrowly
+consented model-visible hackathon exception is documented under Secret Handling.
+It changes guidance only, not authentication plumbing or action approvals.
 
 The 9 September production and HTTP gateway records at the end are preserved
 from the newer root donor. They supersede the initial implementation's no-live-
@@ -22,7 +25,7 @@ from the existing publication-only integration documented in
 [`bazantic-publication.md`](bazantic-publication.md). That runbook is not replaced
 by this implementation. Do not import the old publication-only spec for this flow.
 
-At the initial implementation checkpoint, before the dated deployment below:
+Historical initial implementation checkpoint, before the dated deployment below:
 this implementation adds the HTTP API, two-credential authentication, wallet-proof
 registration, an additive database migration, the catalog, and operator tooling.
 **No live operation was executed.** No production service/account key was provisioned,
@@ -42,7 +45,7 @@ paid x402 flow, successful gateway activation, or completed prize qualification.
 | Upstream operations | Twelve local `POST /api/v1/{operation}` routes; recorded public import still eleven |
 | Pricing | All operations initially free; do not configure a paid requirement for initial acceptance |
 | Private shared upstream header | `X-Payr-Service-Key`, containing the Bazantic service key |
-| Per-account authentication | Private bearer header if verified, otherwise trusted body injection as described below |
+| Per-account authentication | Private body injection if available; otherwise the explicitly consented demo body path below. Bazantic does not forward Authorization |
 
 `GET /openapi/agent.json` is public, requires no credentials, and allows public
 cross-origin retrieval. Its sole server URL comes from `discoveryOrigin()` and
@@ -84,8 +87,8 @@ form `pac_UUID.secret`; the two credential types are not interchangeable.
 
 Account operations additionally require **exactly one** of:
 
-- `Authorization: Bearer <pac_UUID.secret>`, privately injected on the upstream request.
-- Top-level JSON `accountCredential`, containing the raw `pac_UUID.secret` string without `Bearer `, injected by a trusted caller when the header path is unavailable.
+- `Authorization: Bearer <pac_UUID.secret>`, privately injected on the upstream request. This is upstream support, not Bazantic forwarding; the user confirmed Bazantic does not forward Authorization.
+- Top-level JSON `accountCredential`, containing the raw `pac_UUID.secret` string without `Bearer `, privately injected or supplied through the consented demo exception below.
 
 Supplying both is rejected, even if their values agree. Neither method may be
 replaced by cookies, a workspace ID, a wallet address, gateway payment, or the
@@ -119,28 +122,44 @@ understands it.
 
 ### Secret Handling
 
-Never place service/account keys in prompts, URLs, recordings, screenshots, logs,
-shared recipes, the public spec, or source control. Never ask a user for a seed
-phrase, private wallet key, browser cookie, or account key in chat. Store the
-one-time registration result directly in private credential storage and redact
-authentication fields, request bodies and secret-bearing registration responses
-from gateway traces before recording.
+Never place service keys, wallet private keys, seed phrases or browser cookies in
+prompts or tool arguments. Keep all secrets out of URLs, recordings, screenshots,
+shared recipes, the public spec and source control. Store one-time registration
+results privately by default and redact authentication fields, request bodies and
+secret-bearing responses before recording. Account credentials in model-visible
+arguments are allowed only under the following explicit hackathon exception.
 
 The body property is marked `writeOnly`, `format:password` and `x-sensitive` for
-tooling, but these annotations **do not hide generated arguments**. If the
-generated tool's arguments cannot be hidden from the model, the body fallback is
-model-visible. Do not describe it as a private vault or ask the model to populate
-it from chat. Prefer a trusted wrapper that injects it after model argument
-generation. Use short-lived, least-privilege scoped account credentials, restrict
-gateway callers, and verify trace/recording redaction. If no acceptable secret
-path is available, stop activation rather than exposing a real workspace key.
+tooling, but these annotations **do not hide generated arguments**. Prefer a
+private credential path if available, such as a trusted wrapper injecting after
+model argument generation. Only with informed per-user consent may the model use
+a short-lived, least-privilege raw account credential for a dedicated demo
+workspace in generated gateway `requestBody.accountCredential` beside `input`.
+Upstream this becomes top-level `accountCredential` beside `input`, never inside
+`input`, without a `Bearer ` prefix. For read-only `get_account` verification:
 
-Caller-to-upstream header forwarding has not been verified externally. Test with
-distinct isolated accounts that the intended caller's credential, not a shared
-demo account credential or Bazantic's own authentication token, reaches Payr.
-Keep registration calls free of forwarded account headers. The body fallback
-exists for this uncertainty, not as evidence that forwarding works. Charging a
-caller, if added later, would still not grant workspace authority.
+```json
+{"requestBody":{"accountCredential":"<raw demo account credential>","input":{}}}
+```
+
+The example is a placeholder, not a real secret or client configuration. Before
+consent, explain that model/tool history and gateway traces may retain the secret;
+this is not a private vault. Restrict gateway callers, avoid recordings, and
+revoke the credential after the demo. Redaction and revocation do not erase
+retained copies. Never substitute service keys, wallet private keys, seed phrases
+or browser cookies. Without a private path or this explicit consent, stop at
+"Workspace access pending". Verify with read-only `get_account` and ask the owner
+to confirm the returned workspace before any separately approved writes.
+
+The user confirmed Bazantic does not forward `Authorization`. Codex bearer/OAuth
+configuration is not this body-credential path, and client configuration does not
+automatically inject body credentials. Do not invent forwarding or configuration
+support. Test with distinct isolated accounts that the intended caller's
+credential, not a shared credential or Bazantic's own authentication token, reaches
+Payr. Keep registration calls free of account credentials. Private injection and
+live authenticated MCP-client execution remain unverified; historical HTTP gateway
+evidence does not prove either. Charging a caller, if added later, would still not
+grant workspace authority.
 
 ## Registration and Recipe
 
@@ -251,7 +270,7 @@ omit `Origin` (or send the canonical Payr origin).
 
 1. Review target migration history and the key CLI; apply only missing forward migrations under a separately approved operations change, and keep `PAYR_AGENT_GATEWAY_ONLY=false` until its separate acceptance gate.
 2. Inspect the already provisioned service key's scope before any approved rotation or new provisioning. Import the reviewed twelve-operation upstream spec, configure private service-header injection and restricted caller access, and verify actual generated tool IDs, free pricing and per-user authentication before using a real account. The recorded eleven-operation import is not evidence that this reimport occurred.
-3. Pass authenticated Bazantic E2E in isolated accounts using the real secret-injection path. Record whether header forwarding actually works or whether the body fallback is used, and document its model/trace exposure. Do not enable cutover based on unit tests or a public spec fetch alone.
+3. Pass authenticated Bazantic E2E in isolated accounts using the actual private-injection or consented demo body path. Bazantic does not forward Authorization; record the body mechanism and its model/trace exposure. Do not enable cutover based on unit tests or a public spec fetch alone.
 4. Pass the acceptance checks below, notify legacy direct-transport users, then enable `PAYR_AGENT_GATEWAY_ONLY=true` only through a separately authorized cutover. Confirm legacy direct rejection and unchanged browser/document behavior after the change.
 5. If cutover fails, an operator may restore the flag to false to restore eligible legacy direct behavior while investigating. This does not make new account keys usable directly. Leave the additive migration in place; do not drop data or loosen the gateway's service/account authentication boundary as rollback.
 
@@ -304,7 +323,7 @@ and re-reviewed with no unresolved findings. Browser E2E and external Bazantic
 acceptance were not run. Production migration, service-key provisioning,
 deployment, and the gateway-only cutover remain separate operator steps.
 
-## Production Deployment: 9 September 2026
+## Historical Production Deployment: 9 September 2026
 
 - Production: `https://payrlink.xyz`, deployment `dpl_33iBWZ4T9QgV6UkKFFEa7vMKX8Mn` (Ready).
 - Unique URL: `https://payr-oxgi44fsn-kenks-projects.vercel.app`.
@@ -357,7 +376,7 @@ wallet-registration/invoice recipe with approval. Keep the marketplace listing
 and legacy cutover unchanged until acceptance. No claim of live paid x402,
 successful agent registration/publication, or final prize qualification is made.
 
-## Live Bazantic Invoice Test: 9 September 2026
+## Historical Live Bazantic Invoice Test: 9 September 2026
 
 The user explicitly requested invoice creation through the Bazantic wrapper.
 All eleven resource operations were exercised via `https://api.payrlink.xyz`,

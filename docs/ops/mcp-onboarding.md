@@ -38,7 +38,32 @@ reconcile these scoped changes with the current production source rather than
 deploying this older root checkout wholesale; see `privy-onboarding.md` for the
 composed production snapshot.
 
-## Public gateway check - 10 September 2026
+## Hackathon Guidance Deployment - 10 September 2026
+
+User-authorized production deployment: `dpl_77Y4LM4sQGypHkQSUuoBPrV1smPd`,
+`https://payr-2er5tjco4-kenks-projects.vercel.app`, promoted to `payrlink.xyz`.
+Source is `ac4188438693429f90414838fbf4888eb0c04c4c` plus the 17-file
+hackathon guidance/error-response delta and `.vercelignore` exclusion of
+`.supabase/`. No commit, migration, environment change or Bazantic reimport was
+performed. The health SHA alone does not identify this uncommitted source delta.
+
+Before upload, the previous production source matched local source except for
+the intended delta. After promotion, 544 compared uploaded entries matched local
+bytes with zero mismatches. `.env.example` and the retained
+`supabase/.branches/_current_branch` marker were not content-read; `.supabase/`
+contents were excluded. Sorted uploaded path/NUL/SHA-1 manifest SHA-256:
+`725c78044135f62a224f08235e556ec2aa9cc44b9e173d033fe9f14b92c423db`.
+This deployment record was added after the upload.
+
+Verification: 2,639 unit tests passed with two workers (13 existing skips),
+typecheck/lint passed, four desktop/mobile install browser checks passed, and
+35 compiled document-package checks passed. Public `/api/health` returned `ok`;
+`/install` exposed the demo warning; `/openapi/agent.json` exposed 12 operations
+with consent/body-credential guidance. Previous production recovery target:
+`dpl_9Ao3oguP3QUTB1huJDzGDt7sPAFp`. Bazantic catalog reimport and authenticated
+client `get_account` acceptance remain separate; no business writes were tested.
+
+## Historical public gateway check - 10 September 2026
 
 Endpoint: `https://api.payrlink.xyz/mcp`.
 
@@ -65,41 +90,61 @@ These checks prove public reachability, discovery, and missing-account denial.
 They do not prove signed-in Claude/Cowork compatibility or authorized workspace
 access. No account was registered and no invoice/profile/payment was mutated.
 
-## Remaining authentication dependency
+## Approved Hackathon Credential Exception
 
 The live generated schemas expose `accountCredential` under `requestBody`.
 Password/write-only annotations do not make model-visible arguments private.
-The gateway's generated generic API-key/Bearer environment-variable advice is not
-evidence that Claude/Cowork can privately forward an individual Payr credential.
-Do not tell users to supply an operator service key or paste an account key in
-chat to work around the missing integration.
+The user confirmed Bazantic does not forward `Authorization`. Codex bearer/OAuth
+configuration is not this body-credential path; client configuration does not
+automatically inject body credentials. Do not invent forwarding or body-injection
+configuration support.
 
-An operator must configure and verify per-user private credential injection in
-the chosen client/gateway integration. The public guide labels this step as still
-needing verification, rather than claiming that adding the public URL signs the
-user in. The existing live HTTP-gateway test used a body fallback; it does not
-establish private generated-MCP authentication. See `bazantic-agent-api.md`.
+Prefer an operator-configured private credential path if available. As an explicit
+hackathon exception, only with informed per-user consent, use a short-lived,
+least-privilege raw account credential for a dedicated demo workspace in generated
+gateway `requestBody.accountCredential` beside `input`. Upstream it is top-level
+`accountCredential` beside `input`, not inside `input`, and has no `Bearer ` prefix.
+For a read-only `get_account` check, the generated argument shape is:
+
+```json
+{"requestBody":{"accountCredential":"<raw demo account credential>","input":{}}}
+```
+
+This is a placeholder, not a real credential or client configuration. Explain
+before consent that the model sees this secret and model/tool history and gateway
+traces may retain it. Never use service keys, wallet private keys, seed phrases or
+browser cookies in this path. Keep secrets out of source control, shared examples,
+screenshots and recordings; revoke the credential after the demo. Redaction and
+revocation cannot erase retained copies. Without a private path or this explicit
+consent, stop at "Workspace access pending".
+
+This changes guidance only, not authentication plumbing or action approvals.
+Private per-user injection and live authenticated MCP-client execution remain
+unverified. Adding the public URL does not sign the user in. The historical HTTP
+gateway test used a body fallback; it does not establish private generated-MCP
+authentication or authenticated Claude/Cowork/Codex execution. See `bazantic-agent-api.md`.
 
 ## Claude/Cowork acceptance
 
-With an operator-provided private credential path and an approved test workspace:
+With an approved test workspace and either a private credential path or informed
+per-user consent to the dedicated demo exception above:
 
 1. Add the public gateway in Claude/Cowork's custom-connector UI; load no plugin.
 2. Confirm initialization and discovered tool names in that client.
-3. Configure one short-lived, appropriately scoped account credential privately.
+3. Configure one short-lived, least-privilege account credential privately if available; otherwise use the consented demo body path above.
 4. Read `get_account`, confirm the expected workspace, and verify that a second
    isolated account cannot access the first account's invoices.
 5. Exercise missing fields, sender setup if opted in, drafting, exact review,
    explicit Publish & Send with both literal approvals, same-input retries and
    canonical status using separately approved fixtures/recipients and mail enablement.
 6. Revoke the test credential and confirm denial. Record client version,
-   redacted outcomes and the real credential-injection mechanism.
+   redacted outcomes and the actual private-injection or model-visible body mechanism.
 
 Do not mark workspace access verified solely because the server URL was added,
 the tool list appeared, or the setup prompt was copied. Publication remains a
 separately approved action, not part of the public connection check.
 
-## Local implementation verification (Donor, 10 September)
+## Historical local implementation verification (Donor, 10 September)
 
 - 35 focused tests passed across the install prompt, quick start, public discovery
   and homepage suites. Coverage includes delayed clipboard completion, denied or

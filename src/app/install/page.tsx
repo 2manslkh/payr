@@ -32,8 +32,9 @@ export default function InstallPage() {
           </li>
           <li>
             <h3>Connect your workspace</h3>
-            <p>Sign in to Payr and open Connections. Create a REST gateway connection for the operator-registered service, with the permissions you need. The gateway needs your own account credential through a private credential configuration.</p>
-            <p className={styles.pending}><strong>Claude/Cowork workspace setup still needs verification.</strong> The gateway operator must configure and verify private account-credential handling. If that setup is unavailable, you can add the server, but cannot yet use your workspace through it. Do not paste credentials into chat.</p>
+            <p>Sign in to Payr and open Connections. Create a REST gateway connection for the operator-registered service. For a demo, use a dedicated workspace with test data, only the permissions you need and a one-day expiry. Prefer a verified private credential path if available.</p>
+            <p className={styles.pending}><strong>Hackathon setup: credentials are model-visible.</strong> If you explicitly accept this exposure, your agent can pass the demo credential in tool calls. Chat, tool history and Bazantic traces may retain it. Never supply service keys, wallet private keys or cookies. Revoke the credential after your demo.</p>
+            <p>After you consent, supply the raw account credential to your agent or approve reading <code>PAYR_ACCOUNT_CREDENTIAL</code> from its local environment. The agent must put it in <code>requestBody.accountCredential</code>, beside <code>requestBody.input</code>, on each protected call if the discovered schema exposes that field. Do not include <code>Bearer </code> or put it inside <code>input</code>. Reading it from an environment variable still exposes it when used in a tool argument.</p>
             <Link className="text-link" href="/app/connections">Open Payr Connections</Link>
           </li>
           <li>
@@ -49,7 +50,11 @@ export default function InstallPage() {
         <h2 id="connection-help">Connection questions</h2>
         <details>
           <summary>I can see tools, but account access fails</summary>
-          <p>The gateway can list tools before you authenticate a workspace. Ask the gateway operator to check your private account-credential configuration, expiry and scopes. The gateway&apos;s service key alone does not grant workspace access.</p>
+          <p>The gateway can list tools before you authenticate a workspace. Check that the protected call includes your account credential in the discovered body field, then check expiry, revocation and scopes. If it still fails, ask the operator to check gateway configuration without sharing your credential. The gateway&apos;s service key alone does not grant workspace access.</p>
+        </details>
+        <details>
+          <summary>Codex asks me to authenticate or OAuth login returns 404</summary>
+          <p>This demo flow does not use OAuth. Keep the public gateway URL, but remove the Payr account credential from its bearer or Authorization header settings. Bazantic does not forward Authorization upstream. Restart the client after configuration changes. Neither MCP settings nor an exported environment variable automatically inserts a credential into tool bodies; the agent must populate the discovered field after your consent. Authenticated client execution must still be verified with <code>get_account</code>.</p>
         </details>
         <details>
           <summary>I already use a direct Payr MCP connection</summary>

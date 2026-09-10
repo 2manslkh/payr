@@ -65,7 +65,10 @@ it("requires the private service header in every security alternative and never 
       expect(op.description).toContain("valid ONLY when accountCredential is supplied");
       expect(op.description).toContain("never both");
       expect(op.description).toContain("model-visible");
-      expect(op.description).toContain("externally unverified");
+      expect(op.description).toContain("Bazantic does not forward Authorization upstream");
+      expect(op.description).toContain("requestBody.accountCredential beside requestBody.input");
+      expect(op.description).toContain("without a Bearer prefix");
+      expect(op.description).toContain("Verify with get_account before business actions");
     } else {
       expect(op.security).toEqual([{ serviceKey: [] }]);
       expect(Object.keys(schema.properties)).toEqual(["input"]);
@@ -74,6 +77,9 @@ it("requires the private service header in every security alternative and never 
     }
     expect(op.description).toContain("out of prompts, URLs, recordings");
     expect(op.description).toContain("short-lived, least-privilege scoped credentials");
+    expect(op.description).toContain("explicit user consent before requesting or reading a demo credential");
+    expect(op.description).toContain("chat, tool history and gateway traces");
+    expect(op.description).toContain("revoke after the demo");
   }
 });
 

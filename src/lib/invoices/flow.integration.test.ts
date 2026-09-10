@@ -171,7 +171,7 @@ it.each(["https://EXAMPLE.com:000443/contact", "https://source_name.example.test
 });
 
 it("replays when an identical revision commits between the initial lookup and context read", async () => {
-  const service = createInvoiceDraftService(repository);
+  const service = createInvoiceDraftService(repository, "http://localhost:3124");
   const first = await service.createDraft(actor, input());
   const request = { draftId: first.draftId, expectedVersion: 1, idempotencyKey: randomUUID(), memo: "Revision" };
   let sawLookup!: () => void;
@@ -182,7 +182,7 @@ it("replays when an identical revision commits between the initial lookup and co
     ...repository,
     async findReplay(...args) { const result = await repository.findReplay(...args); sawLookup(); return result; },
     async getContext(...args) { await contextGate; return repository.getContext(...args); },
-  }).createDraft(actor, request);
+  }, "http://localhost:3124").createDraft(actor, request);
   await lookedUp;
   try {
     const winner = await service.createDraft(actor, request);
@@ -193,7 +193,7 @@ it("replays when an identical revision commits between the initial lookup and co
 });
 
 it("replays if a saved client alias changes after the initial lookup", async () => {
-  const service = createInvoiceDraftService(repository);
+  const service = createInvoiceDraftService(repository, "http://localhost:3124");
   const request = input();
   request.client!.alias = client.alias;
   let sawLookup!: () => void;
@@ -204,7 +204,7 @@ it("replays if a saved client alias changes after the initial lookup", async () 
     ...repository,
     async findReplay(...args) { const result = await repository.findReplay(...args); sawLookup(); return result; },
     async getContext(...args) { await gate; return repository.getContext(...args); },
-  }).createDraft(actor, request);
+  }, "http://localhost:3124").createDraft(actor, request);
   await lookedUp;
   try {
     const winner = await service.createDraft(actor, request);

@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 
-test("public MCP guide separates discovery from private authentication without a plugin", async ({ page, context }, testInfo) => {
+test("public MCP guide separates discovery from consent-based demo authentication", async ({ page, context }, testInfo) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const response = await page.goto("/install");
   expect(response?.status()).toBe(200);
   await expect(page.getByRole("heading", { name: "Connect Payr to your agent." })).toBeVisible();
-  await expect(page.getByText("Claude/Cowork workspace setup still needs verification.")).toBeVisible();
+  await expect(page.getByText("Hackathon setup: credentials are model-visible.")).toBeVisible();
   const prompt = page.getByRole("textbox", { name: "Payr connection prompt" });
   await expect(prompt).toHaveValue(/Workspace access pending/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -28,8 +28,8 @@ test("MCP setup and its authentication warning remain readable without JavaScrip
   try {
     const page = await context.newPage();
     await page.goto("/install");
-    await expect(page.getByRole("textbox", { name: "Payr connection prompt" })).toHaveValue(/Never ask me to paste credentials/);
-    await expect(page.getByText("Claude/Cowork workspace setup still needs verification.")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Payr connection prompt" })).toHaveValue(/Ask for my explicit consent/);
+    await expect(page.getByText("Hackathon setup: credentials are model-visible.")).toBeVisible();
     await page.getByRole("link", { name: "Open Payr Connections" }).click();
     await expect(page.getByRole("heading", { name: "Login to connect to your Payr dashboard" })).toBeVisible();
   } finally { await context.close(); }

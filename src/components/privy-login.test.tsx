@@ -40,6 +40,22 @@ it("does not call provisioning before authentication", () => {
   expect(state.login).toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
 });
 
+it.each([
+  ["/app/invoices/00000000-0000-4000-8000-000000000001", "/app/invoices/00000000-0000-4000-8000-000000000001"],
+  ["/login", "/app"],
+  ["//untrusted.example", "/app"],
+])("returns to a valid invoice path after sign-in from %s", async (pathname, destination) => {
+  const replace = vi.fn();
+  vi.stubGlobal("window", new Proxy(window, {
+    get: (target, key) => key === "location"
+      ? { pathname, search: "?next=https://untrusted.example", replace }
+      : Reflect.get(target, key, target),
+  }));
+  vi.stubGlobal("fetch", vi.fn(async () => json({ wallet, session: { workspaceId: "workspace" } })));
+  render(<PrivyLogin appId="app" />);
+  await waitFor(() => expect(replace).toHaveBeenCalledWith(destination));
+});
+
 it("shares the navbar login action without provisioning twice after authentication", async () => {
   state.authenticated = false;
   const fetcher = vi.fn(async () => json({ wallet, session: null })); vi.stubGlobal("fetch", fetcher);

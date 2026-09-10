@@ -55,14 +55,14 @@ export async function publishedFixture(sameRecipient = false, keys: ReadonlyMap<
   return { db, actor, target, draft, publication, hash, keys };
 }
 
-export async function settledFixture(sameRecipient = false, linkKeys?: ReadonlyMap<number, Uint8Array>, receiptKeyVersion = 1, seededIdentity?: IdentitySession) {
+export async function settledFixture(sameRecipient = false, linkKeys?: ReadonlyMap<number, Uint8Array>, receiptKeyVersion = 1, seededIdentity?: IdentitySession, blockTime?: string) {
   const fixture = await publishedFixture(sameRecipient, linkKeys, seededIdentity);
   const { db, actor, target, hash, keys } = fixture;
   const tokenId = randomUUID();
   const token = createKeyedTokenCodec(keys).derive(tokenId, "receipt-bearer", receiptKeyVersion);
   const result = await createReconciliationRepository(db).recordSettlement({ workspaceId: actor.workspaceId, chainId: 5042002,
     contractAddress: target.contractAddress, invoiceKey: target.invoiceKey, transactionHash: hash(), logIndex: 0,
-    blockNumber: "100", blockTime: new Date().toISOString(), documentCommitment: target.artifact!.documentCommitment,
+    blockNumber: "100", blockTime: blockTime ?? new Date().toISOString(), documentCommitment: target.artifact!.documentCommitment,
     payer: `0x${"5".repeat(40)}`, payee: target.snapshot.sender.payoutWallet as `0x${string}`, amountAtomic: target.snapshot.amountAtomic,
     receiptTokenId: tokenId, receiptKeyVersion, receiptVerifierHash: token.verifierHash, receiptExpiresAt: "2035-01-01T00:00:00Z",
     deliveries: receiptRecipients(target.snapshot.sender.contactEmail!, target.snapshot.client.contactEmail) });

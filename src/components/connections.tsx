@@ -101,7 +101,7 @@ export function Connections({ gatewayOnly = false }: { gatewayOnly?: boolean }) 
             : "Use a show-once MCP endpoint URL or a REST gateway account credential. Creating a credential does not connect your agent automatically."}
           {" "}Publish &amp; Send requires approval of the exact draft and email to both snapshot recipients. Invoice email must be enabled; do not send a duplicate through Gmail. Voiding requires separate approval and payment stays in the client&apos;s wallet.
         </p>
-        {gateway && <p>Gateway workspace access needs operator-configured private credential injection, which still needs verification for Claude/Cowork. Never paste credentials into chat or model-visible tool arguments, and never request the gateway service key. Tool discovery alone does not verify workspace access. Refresh the gateway schemas for Publish &amp; Send before activation.</p>}
+        {gateway && <p>Prefer verified private credential injection. Hackathon setup permits a model-visible demo credential only after your explicit consent: the agent passes it in the discovered <code>requestBody.accountCredential</code> field beside <code>requestBody.input</code>, without a Bearer prefix. Never supply the gateway service key, wallet private keys or cookies. Verify your workspace with read-only <code>get_account</code>; tool discovery alone does not verify access. Refresh the gateway schemas for Publish &amp; Send before activation.</p>}
         <Link className="text-link" href="/install">View the Payr connection guide</Link>
       </section>
       <section className="ledger-section">
@@ -124,7 +124,7 @@ export function Connections({ gatewayOnly = false }: { gatewayOnly?: boolean }) 
           <div className="retention-warning" id="retention-warning">
             <h3>Know where a secret can remain</h3>
             <p>
-              {gateway ? "Store the gateway account credential only in the operator-configured private credential path." : "The direct MCP endpoint URL contains the credential."} Platform access logs, CDN logs, browser history,
+              {gateway ? "The hackathon body fallback exposes your credential to the model, chat, tool history and Bazantic traces. Use a dedicated demo workspace with test data, minimum permissions and preferably a one-day expiry. This is not private secret injection." : "The direct MCP endpoint URL contains the credential."} Platform access logs, CDN logs, browser history,
               clipboard history, and Claude connector configuration may retain it. Payr can redact only its
               own application logs and analytics.
             </p>

@@ -30,7 +30,7 @@ async function fixture() {
     contactName: "Test Owner", contactEmail: "owner@example.test", invoicePrefix: "PAY", defaultPaymentTermsDays: 7 });
   const client = await identity.saveClient(owner, { id: null, expectedRevision: null, alias: "test-client", ...snapshot.client });
   const actor = { ...owner, connectorId: null };
-  const draft = await createInvoiceDraftService(createDraftRepository(db)).createDraft(actor, { client: { id: client.id },
+  const draft = await createInvoiceDraftService(createDraftRepository(db), process.env.NEXT_PUBLIC_APP_URL!).createDraft(actor, { client: { id: client.id },
     items: [{ description: "Payment UI fixture", amount: "1" }], useDefaultTerms: true, idempotencyKey: randomUUID() });
   const hash = () => `0x${randomBytes(32).toString("hex")}` as const;
   const config = createPublicationLinkEnv();

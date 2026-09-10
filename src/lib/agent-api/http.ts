@@ -34,6 +34,11 @@ export function agentErrorResponse(error: unknown, accountBearer = false): Respo
     : (error instanceof IdentityError || error instanceof DraftError || error instanceof PublicationError)
       && Object.hasOwn(statuses, error.code) ? error.code : "INTERNAL_ERROR";
   const safe: Record<string, unknown> = { code };
+  if (statuses[code] === 401 && accountBearer) {
+    safe.message = "Payr could not verify workspace access. Open Payr Connections to create or replace a scoped demo account credential. Prefer a verified private path; the hackathon body fallback requires explicit consent because credentials are model-visible and may remain in chat, tool history and gateway traces. Use the raw credential in the discovered requestBody.accountCredential field beside requestBody.input (upstream: accountCredential beside input), without a Bearer prefix. Use a short-lived credential for a dedicated demo workspace and revoke it after the demo. Never supply service keys, wallet private keys or cookies. Do not echo credentials. This flow does not use OAuth or gateway Authorization forwarding. Verify with read-only get_account before resuming; stop mutation retries on authentication failure.";
+    safe.setupUrl = "https://payrlink.xyz/install";
+    safe.connectionsUrl = "https://payrlink.xyz/app/connections";
+  }
   if (error instanceof DraftError && code === "MISSING_FIELDS") {
     safe.draftCreated = false;
     const fields = error.details.missingFields;

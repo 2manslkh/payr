@@ -9,6 +9,7 @@ import { POST } from "./route";
 
 vi.mock("../../../../lib/auth/runtime", async (importOriginal) => ({
   ...await importOriginal<typeof import("../../../../lib/auth/runtime")>(), requireRequestSession: vi.fn(),
+  getIdentityRuntime: () => ({ config: { appOrigin: "https://billing.example" } }),
 }));
 vi.mock("../../../../lib/invoices/runtime", () => ({ getDraftRepository: vi.fn() }));
 
@@ -146,7 +147,8 @@ it("returns a real service replay in the success envelope under only the session
   const response = await POST(request);
   expect(response.status).toBe(200);
   const body = await response.json();
-  expect(Object.keys(body).sort()).toEqual(["approvalInstruction", "canonicalInvoiceJson", "code", "draftCreated", "draftId", "preview", "previewText", "version"]);
+  expect(Object.keys(body).sort()).toEqual(["approvalInstruction", "canonicalInvoiceJson", "code", "draftCreated", "draftId", "draftUrl", "preview", "previewText", "version"]);
+  expect(body.draftUrl).toBe(`https://billing.example/app/invoices/${version.draftId}`);
   expect(body).toMatchObject({ code: "DRAFT_READY", draftCreated: true, draftId: version.draftId, version: 2, preview: version.snapshot });
   expect(JSON.parse(body.canonicalInvoiceJson)).toEqual(version.snapshot);
   expect(body.approvalInstruction).toContain("version 2");

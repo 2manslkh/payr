@@ -1,4 +1,4 @@
-import { apiError, privateJson, requireRequestSession } from "../../../../lib/auth/runtime";
+import { apiError, getIdentityRuntime, privateJson, requireRequestSession } from "../../../../lib/auth/runtime";
 import { DraftError } from "../../../../lib/invoices/errors";
 import { getDraftRepository } from "../../../../lib/invoices/runtime";
 import { MAX_DRAFT_BODY_BYTES, parseDraftInput } from "../../../../lib/invoices/schemas";
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
   try {
     const identity = await requireRequestSession(request, true);
     const input = parseDraftInput(await readDraftJson(request));
-    const service = createInvoiceDraftService(getDraftRepository());
+    const service = createInvoiceDraftService(getDraftRepository(), getIdentityRuntime().config.appOrigin);
     return privateJson(await service.createDraft({
       workspaceId: identity.workspaceId, ownerWallet: identity.ownerWallet, connectorId: null,
     }, input));

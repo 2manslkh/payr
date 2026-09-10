@@ -176,6 +176,13 @@ it.each([
   expect(JSON.stringify(services[method].mock.calls)).not.toContain(key.token);
 });
 
+it("preserves the canonical draft review link in gateway results", async () => {
+  const result = { code: "DRAFT_READY", draftId: account.workspaceId,
+    draftUrl: `https://payr.example/app/invoices/${account.workspaceId}`, version: 1 };
+  services.createDraft.mockResolvedValue(result);
+  expect(await api.execute("create_invoice_draft", { idempotencyKey: "draft-link" }, context, ip)).toEqual(result);
+});
+
 it("lists and reads only in the authenticated workspace with bounded pagination", async () => {
   const actor = { workspaceId: account.workspaceId, ownerWallet: null, connectorId: key.id };
   await api.execute("list_invoices", { search: " client ", state: "draft", offset: 50 }, context, ip);

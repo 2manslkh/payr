@@ -42,12 +42,34 @@ it("distinguishes the source gateway catalog from live discovery and private aut
     expect(text).toContain("approval:true and deliveryApproval:true");
     expect(text).toContain("invoice-only");
   }
-  expect(authMarkdown).toContain("Never paste credentials into chat or model-visible tool arguments");
   expect(authMarkdown).toContain("select Login to sign in through Privy");
   expect(authMarkdown).toContain("optional plugin is archived");
   expect(apiMarkdown).toContain("12 operations");
   expect(homepageMarkdown).toContain("[Go To Dashboard](/app)");
   expect(homepageMarkdown).toContain("Publish & Send");
+});
+
+it("limits model-visible body credentials to the consented hackathon demo exception", () => {
+  for (const text of [apiMarkdown, authMarkdown]) {
+    for (const boundary of [
+      "Prefer an operator-configured private credential path if available",
+      "only with informed per-user consent",
+      "short-lived, least-privilege raw account credential for a dedicated demo workspace",
+      "requestBody.accountCredential beside input (upstream top-level accountCredential beside input)",
+      "without a Bearer prefix",
+      "Model/tool history and gateway traces may retain the secret",
+      "Never use service keys, wallet private keys, seed phrases, or browser cookies",
+      "revoke the credential after the demo",
+      "Without a private path or this explicit consent, stop",
+      "Bazantic does not forward Authorization",
+      "Codex bearer/OAuth configuration is not this body-credential path",
+      "client configuration does not automatically inject body credentials",
+      "read-only get_account",
+      "live authenticated MCP-client execution remain unverified",
+      "not authentication plumbing or action-approval requirements",
+    ]) expect(text).toContain(boundary);
+    expect(text).not.toContain("Never paste credentials into chat or model-visible tool arguments");
+  }
 });
 
 const get = (resource: string) => discovery(new Request(`https://untrusted.test/.well-known/${resource}`), {

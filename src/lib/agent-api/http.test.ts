@@ -366,6 +366,36 @@ it("adds a Bearer challenge only for account authentication failure", async () =
   expect(runtime.execute).not.toHaveBeenCalled();
 });
 
+it.each([false, true])("returns sanitized recovery for missing or rejected body credentials (rejected=%s)", async (rejected) => {
+  vi.mocked(runtime.authenticateAccount).mockRejectedValue(new IdentityError("UNAUTHORIZED", 401));
+  const response = await send(request(JSON.stringify({ input: {}, ...(rejected ? { accountCredential: accountToken } : {}) })));
+  expect(response.status).toBe(401);
+  const body = await response.json();
+  expect(body.error).toMatchObject({
+    code: rejected ? "UNAUTHORIZED" : "AUTH_REQUIRED",
+    setupUrl: "https://payrlink.xyz/install",
+    connectionsUrl: "https://payrlink.xyz/app/connections",
+  });
+  expect(body.error.message).toContain("explicit consent");
+  expect(body.error.message).toContain("model-visible");
+  expect(body.error.message).toContain("requestBody.accountCredential");
+  expect(body.error.message).toContain("read-only get_account");
+  expect(body.error.message).toContain("revoke it after the demo");
+  expect(JSON.stringify(body)).not.toContain(accountToken);
+  expect(JSON.stringify(body)).not.toContain(serviceToken);
+  expect(runtime.execute).not.toHaveBeenCalled();
+  privateHeaders(response);
+});
+
+it("does not suggest account credentials to recover service authentication failures", async () => {
+  vi.mocked(runtime.authenticateService).mockRejectedValue(new IdentityError("UNAUTHORIZED", 401));
+  const response = await send(request(JSON.stringify({ input: {}, accountCredential: accountToken })));
+  expect(response.status).toBe(401);
+  expect(await response.json()).toEqual({ error: { code: "UNAUTHORIZED" } });
+  expect(runtime.authenticateAccount).not.toHaveBeenCalled();
+  expect(runtime.execute).not.toHaveBeenCalled();
+});
+
 it("preserves only bounded canonical missing-field metadata and no raw issues", async () => {
   const missingFields = [
     { path: "sender.billingAddress.countryCode", reason: "confirmation_required" as const },

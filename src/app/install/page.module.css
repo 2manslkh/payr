@@ -18,6 +18,7 @@
 .steps li::before { content: counter(connection) "."; grid-row: 1 / 5; color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1.45; }
 .steps h3 { font-size: 1.125rem; }
 .steps li > p { grid-column: 2; margin-top: 0.5rem; color: var(--muted); font-size: 1rem; max-width: 70ch; }
+.steps code, .access code { overflow-wrap: anywhere; }
 .steps li > a { grid-column: 2; justify-self: start; margin-top: 0.75rem; }
 .clientSetup { grid-column: 2; min-width: 0; }
 .steps .pending { margin-top: 1rem; }

@@ -19,7 +19,17 @@ it("copies public discovery-only guidance without claiming workspace access", as
   expect(writeText).toHaveBeenCalledWith(prompt);
   expect(prompt).toContain("https://api.payrlink.xyz/mcp");
   expect(prompt).toContain("Workspace access pending");
-  expect(prompt).toContain("Never ask me to paste credentials, private keys or cookies into chat or tool arguments");
+  expect(prompt).toContain("Ask for my explicit consent");
+  expect(prompt).toContain("model-visible");
+  expect(prompt).toContain("chat, tool history and Bazantic traces");
+  expect(prompt).toContain("requestBody.accountCredential beside requestBody.input");
+  expect(prompt).toContain("only if that field exists in the discovered schema");
+  expect(prompt).toContain("Do not echo the credential");
+  expect(prompt).toContain("Never request the gateway's service key");
+  expect(prompt).toContain("never on create_account_challenge or register_account");
+  expect(prompt).toContain("Do not use codex mcp login payr");
+  expect(prompt).toContain("MCP configuration does not automatically inject tool-body fields");
+  expect(prompt).toContain("original idempotency key");
   expect(prompt).toContain("read-only get_account");
   expect(prompt).toContain("Do not register an account, create a draft, publish an invoice");
   expect(prompt).not.toMatch(/(?:pgw|pac)_[a-f\d-]{36}\.|\/api\/mcp\//i);
@@ -42,7 +52,9 @@ it.each([undefined, { writeText: vi.fn().mockRejectedValue(new Error("Denied")) 
 it("separates MCP discovery from pending workspace authentication and approved Publish & Send", () => {
   render(<InstallPage />);
   expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Connect Payr to your agent.");
-  expect(screen.getByText(/Claude\/Cowork workspace setup still needs verification/)).toBeTruthy();
+  expect(screen.getByText("Hackathon setup: credentials are model-visible.")).toBeTruthy();
+  expect(screen.getByText(/Chat, tool history and Bazantic traces may retain it/)).toBeTruthy();
+  expect(screen.getByText(/After you consent, supply the raw account credential/).textContent).toContain("requestBody.accountCredential");
   expect(screen.getByRole("link", { name: "Open Payr Connections" }).getAttribute("href")).toBe("/app/connections");
   expect(screen.getByRole("tab", { name: "Claude / Cowork", selected: true })).toBeTruthy();
   expect(screen.getByText(/currently imported gateway catalog does not include/).textContent).toContain("get_account_context");

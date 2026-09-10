@@ -11,4 +11,5 @@ coverage/
 *.tsbuildinfo
 scripts/*.local.*
 .operator-payment.json
+.supabase/
 supabase/.temp/

@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("landing explains the problem, released capabilities, and live verification limits", async ({ page }, testInfo) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "From finished work to verified payment." })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Sign in to Payr", exact: true })).toHaveAttribute("href", "/login");
+  await expect(page.getByRole("link", { name: "Go To Dashboard", exact: true }).first()).toHaveAttribute("href", "/app");
   await expect(page.getByRole("heading", { name: "Shipping the work isn't the end of the work." })).toBeVisible();
   await expect(page.getByText("Receipt email is operator-controlled; automatic sending remains disabled.")).toBeVisible();
   await expect(page.locator("#roadmap").getByText(/Full live Claude and external-wallet acceptance checks remain outstanding/)).toBeVisible();
@@ -181,7 +181,7 @@ test("WebGL failure preserves content and sign-in", async ({ page }) => {
   await expect(page.getByText("Static illustration", { exact: true })).toBeVisible();
   await expect(page.locator('[data-renderer="static"]')).toBeVisible();
   await expect(page.getByRole("heading", { name: "Start with the facts. Not a blank invoice." })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Sign in to Payr", exact: true })).toHaveAttribute("href", "/login");
+  await expect(page.getByRole("link", { name: "Go To Dashboard", exact: true }).first()).toHaveAttribute("href", "/app");
 });
 
 test("the landing remains usable without JavaScript", async ({ browser, baseURL }) => {
@@ -191,7 +191,8 @@ test("the landing remains usable without JavaScript", async ({ browser, baseURL 
   await expect(page.getByRole("heading", { name: "From finished work to verified payment." })).toBeVisible();
   await expect(page.locator('[data-renderer="static"]')).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Workflow stages" }).getByRole("link")).toHaveCount(5);
-  await page.getByRole("link", { name: "Sign in to Payr", exact: true }).click();
-  await expect(page).toHaveURL(/\/login$/);
+  await page.getByRole("link", { name: "Go To Dashboard", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.getByRole("heading", { name: "Login to connect to your Payr dashboard" })).toBeVisible();
   await context.close();
 });

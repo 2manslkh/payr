@@ -1,14 +1,19 @@
 "use client";
 
 import { useId, useState } from "react";
+import Link from "next/link";
+import { PAYR_GATEWAY_URL as gatewayUrl, PAYR_GATEWAY_MCP_URL as mcpUrl } from "../../lib/payr-connection";
 import styles from "./skill-install.module.css";
 
-const gatewayUrl = "https://api.payrlink.xyz";
-const mcpUrl = `${gatewayUrl}/mcp`;
 const mcpConfig = JSON.stringify({ mcpServers: { payr: { url: mcpUrl } } }, null, 2);
 const clients = [
   {
-    name: "Claude",
+    name: "Claude / Cowork",
+    snippet: mcpUrl,
+    instruction: "In Claude, open Customize > Connectors > Add custom connector. Name it Payr and paste this server URL. In Cowork, open the Cowork tab first. Workspace authentication is a separate step; this URL only adds the server.",
+  },
+  {
+    name: "Claude Code",
     snippet: `claude mcp add --transport http payr ${mcpUrl}`,
     instruction: "Run this command in your terminal with Claude Code installed.",
   },
@@ -34,7 +39,7 @@ const clients = [
   },
 ];
 
-export function SkillInstall() {
+export function SkillInstall({ heading = "Connect Payr", showGuideLink = true }: { heading?: string; showGuideLink?: boolean }) {
   const id = useId();
   const [selected, setSelected] = useState(0);
   const [copyState, setCopyState] = useState<"idle" | "copying" | "copied" | "error">("idle");
@@ -42,7 +47,7 @@ export function SkillInstall() {
 
   return (
     <section className={styles.install} aria-labelledby={`${id}-heading`}>
-      <h2 id={`${id}-heading`} className={styles.heading}>Customer Quick Start</h2>
+      <h2 id={`${id}-heading`} className={styles.heading}>{heading}</h2>
       <div className={styles.terminal}>
         <div role="tablist" aria-label="Agent or client" className={styles.tabs}>
           {clients.map((client, index) => (
@@ -83,7 +88,9 @@ export function SkillInstall() {
           <p className={styles.instruction}>{client.instruction}</p>
         </div>
       </div>
-      <p className={styles.note}>Connect your agent to Payr.<br />Powered by <a href="https://bazantic.com">Bazantic</a>.</p>
+      <p className={styles.note}>No plugin required. Add the server, then configure and verify workspace access. Private gateway authentication still needs operator setup.<br />
+        {showGuideLink && <><Link href="/install">Workspace setup and connection guide</Link><br /></>}
+        Powered by <a href="https://bazantic.com">Bazantic</a>.</p>
       <span role="status" className={copyState === "error" ? styles.error : "sr-only"}>{copyState === "copied" ? "Setup snippet copied." : copyState === "error" ? "Couldn't copy. Select and copy the snippet above." : ""}</span>
     </section>
   );

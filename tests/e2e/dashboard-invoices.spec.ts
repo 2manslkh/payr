@@ -98,7 +98,9 @@ test("real empty workspace SSR, incomplete setup and independent session guards"
   await context.clearCookies();
   for (const path of ["/app", "/app/invoices", `/app/invoices/${randomUUID()}`]) {
     await page.goto(path);
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole("heading", { name: "Login to connect to your Payr dashboard" })).toBeVisible();
+    await expect(page.getByTestId("receivables")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Publish & Send", exact: true })).toHaveCount(0);
   }
   for (const path of ["/api/invoices", "/api/invoices/overview", `/api/invoices/${randomUUID()}`]) {
     const denied = await context.request.get(path, { headers: { authorization: "Bearer not-an-owner-session" } });

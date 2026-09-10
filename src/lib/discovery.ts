@@ -1,4 +1,5 @@
 import { parsePublicEnv } from "../config/env";
+import { PAYR_GATEWAY_MCP_URL } from "./payr-connection";
 
 export function discoveryOrigin() {
   return parsePublicEnv({ NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "https://payrlink.xyz" }).NEXT_PUBLIC_APP_URL;
@@ -36,16 +37,22 @@ Workspace and client setup, invoice tools for Claude, protected PDFs and payment
 
 The complete live Claude and external-wallet journey, human inbox receipt checks, and unattended delivery are still being verified. One approved receipt email has been verified as delivered by the provider. Automatic receipt sending remains disabled.
 
-[Sign in to Payr](/login) | [API documentation](/docs/api.md) | [Authentication and connector setup](/auth.md)
+[Connect your agent](/install) | [Go To Dashboard](/app) | [API documentation](/docs/api.md) | [Authentication and connector setup](/auth.md)
 `;
 
 export const authMarkdown = `# Payr auth.md
 
-For agents and MCP clients connecting to a human-authorized Payr workspace. The supported provisioning method is owner-assisted registration with a wallet signature. Payr does not operate an OAuth/OIDC authorization server and does not support autonomous agent registration.
+For agents and MCP clients connecting to a human-authorized Payr workspace. Start with the MCP connection guide at /install. The optional plugin is archived, not required. Payr does not operate an OAuth/OIDC authorization server or support autonomous agent registration.
 
-## Human setup
+## Gateway connection
 
-1. Open /login on the Payr origin and sign the short-lived wallet challenge. The browser receives an origin-bound, HttpOnly session cookie. Never give an agent your wallet key or session cookie.
+The public gateway MCP endpoint is ${PAYR_GATEWAY_MCP_URL}. Adding it enables tool discovery, not workspace access. Sign in through Privy and create a REST gateway connection in /app/connections for the operator-registered service. Its account credential must be supplied through an operator-configured private credential path, separately from the gateway operator's service key. Private credential injection and authenticated Claude/Cowork execution still need operator setup and verification. Never paste credentials into chat or model-visible tool arguments. If the private credential path is unavailable, stop at "Workspace access pending" and ask the operator to complete setup.
+
+The source gateway catalog at /openapi/agent.json is not proof of the live imported catalog. The currently imported gateway catalog lacks get_account_context; wallet discovery requires a catalog refresh, explicit wallet:read permission and the service operation scope. Verify access with the read-only get_account tool only after private authentication is configured, and ask the owner to confirm the returned workspace. Never request the gateway service key or invent OAuth or header-forwarding support. Gateway account credentials cannot be used as direct MCP credentials.
+
+## Direct MCP setup (where enabled)
+
+1. Open /app on the Payr origin and select Login to sign in through Privy. The browser receives an origin-bound, HttpOnly session cookie. Never give an agent your wallet key or session cookie. Existing owners can link their workspace with the original owner wallet; linking preserves invoices, payout and credentials.
 2. Configure your sender profile and payout details in /app/settings.
 3. Open /app/connections and explicitly create a workspace-scoped connector credential. The first-party console provisions it through POST /api/connectors with expiresInDays and optional scopes, using the owner's session and same-origin protections. Agents must ask the owner to do this, not extract browser cookies or silently create credentials. Copy the credential when shown; it is shown only once.
 4. For clients supporting custom headers, use the stable Streamable HTTP endpoint /api/mcp on this origin, with Authorization: Bearer <connector credential>. The credential is the value from Copy credential, not the full private endpoint URL. Clients that cannot set headers may continue using their existing private /api/mcp/<credential> URL. Creating a credential does not connect a client automatically.
@@ -54,7 +61,7 @@ The connector credential is not an OAuth access token. Keep credentials, Authori
 
 ## Authorization boundaries
 
-Default connections authorize create_invoice_draft, publish_invoice, get_invoice_status, and void_invoice. New connections can separately opt into Direct Chat Setup: get_sender_profile requires sender:read and save_sender_profile requires sender:write. Existing connections remain invoice-only. Tool discovery is not a permission grant. Sender saves require explicit approval of all fields and the current profile id/revision; after an uncertain result or conflict, read again rather than retrying blindly. Payout changes always require an owner signature in Payr Settings.
+Default direct connections authorize create_invoice_draft, publish_invoice, get_invoice_status, and void_invoice. Gateway connections do not include void authority. New connections can separately opt into Direct Chat Setup: get_sender_profile requires sender:read and save_sender_profile requires sender:write. Existing connections remain invoice-only. Tool discovery is not a permission grant. Sender saves require explicit approval of all fields and the current profile id/revision; after an uncertain result or conflict, read again rather than retrying blindly. Payout changes always require an owner signature in Payr Settings. Optional wallet:read grants address discovery only, never signing or spending.
 
 Publish & Send requires explicit approval of the exact version, defaults, client changes and both snapshot email recipients, with approval:true and deliveryApproval:true. Refresh/reimport stale tool schemas before activation. Payr queues those specific invoice emails; do not send another through Gmail. Historical no-send approvals are not upgraded. Voiding has its own approval, and payments remain under the client's wallet control.
 
@@ -73,7 +80,11 @@ GET /api/health returns application/json with status ("ok") and commit (deployme
 
 ## Private MCP integration
 
-Complete the human wallet and connector setup in /auth.md. Use POST /api/mcp with Authorization: Bearer <connector credential>. The URL is public; all protocol operations, including initialize and tools/list, require an authorized credential. Missing, expired, or revoked credentials return 401 with a Bearer challenge. This is connector-token authentication, not OAuth. Existing /api/mcp/<credential> URLs remain supported for clients without custom header support.
+For the gateway-first flow, see /install and /auth.md. The gateway at ${PAYR_GATEWAY_MCP_URL} exposes its own catalog; public discovery is not workspace authentication. The source /openapi/agent.json composes 12 operations, but the currently imported gateway catalog lacks get_account_context. It must be refreshed for wallet discovery and the current Publish & Send contract before activation. Workspace access requires an operator-configured private credential path and separately scoped service key; never put either secret in chat or model-visible tool arguments. Optional get_account_context requires explicit wallet:read permission and the service operation scope, and never permits signing or spending. Confirm the actual tools through discovery, not the source operation count.
+
+The following describes the separate direct MCP transport. Deployments with PAYR_AGENT_GATEWAY_ONLY=true reject direct MCP calls; use the gateway flow on those deployments. No plugin is required for either transport.
+
+Complete the Privy sign-in and connector setup in /auth.md. Use POST /api/mcp with Authorization: Bearer <connector credential>. The URL is public; all protocol operations, including initialize and tools/list, require an authorized credential. Missing, expired, or revoked credentials return 401 with a Bearer challenge. This is connector-token authentication, not OAuth. Existing /api/mcp/<credential> URLs remain supported for clients without custom header support.
 
 The server uses stateless Streamable HTTP with POST JSON responses, no SSE stream, session resume, or request batching. Authenticated non-POST methods return 405. Admission limits and origin checks apply to both transport URLs. Never pass credentials through query parameters or session cookies.
 

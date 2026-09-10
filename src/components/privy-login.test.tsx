@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { PrivyLogin } from "./privy-login";
+import { PrivyLogin, PrivyLoginButton } from "./privy-login";
 
 const state = vi.hoisted(() => ({ ready: true, authenticated: true, user: { id: "did:privy:owner" },
   login: vi.fn(), logout: vi.fn(), getAccessToken: vi.fn(async () => "private-access-token") }));
@@ -36,8 +36,21 @@ it("does not call provisioning before authentication", () => {
   state.authenticated = false;
   const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
   render(<PrivyLogin appId="app" />);
-  fireEvent.click(screen.getByRole("button", { name: "Sign in with Privy" }));
+  fireEvent.click(screen.getByRole("button", { name: "Login" }));
   expect(state.login).toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("shares the navbar login action without provisioning twice after authentication", async () => {
+  state.authenticated = false;
+  const fetcher = vi.fn(async () => json({ wallet, session: null })); vi.stubGlobal("fetch", fetcher);
+  const view = render(<><PrivyLoginButton /><PrivyLogin appId="app" /></>);
+  screen.getAllByRole("button", { name: "Login" }).forEach((button) => fireEvent.click(button));
+  expect(state.login).toHaveBeenCalledTimes(2);
+  expect(fetcher).not.toHaveBeenCalled();
+  state.authenticated = true;
+  view.rerender(<><PrivyLoginButton /><PrivyLogin appId="app" /></>);
+  await screen.findByText(wallet.address);
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });
 
 it("offers recovery when Privy initialization is unreachable rather than leaving a silent disabled button", async () => {

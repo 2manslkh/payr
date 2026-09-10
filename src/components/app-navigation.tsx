@@ -8,13 +8,14 @@ import { consoleApi } from "./console-api";
 import { RequestError } from "./console-ui";
 import { PayrWordmark } from "./payr-wordmark";
 import { usePrivyWalletActions } from "./privy-provider";
+import { PrivyLoginButton } from "./privy-login";
 
 const IdentityContext = createContext<IdentitySession | null>(null);
 export function ConsoleIdentity({
   session,
   children,
 }: {
-  session: IdentitySession;
+  session: IdentitySession | null;
   children: React.ReactNode;
 }) {
   return <IdentityContext value={session}>{children}</IdentityContext>;
@@ -42,10 +43,10 @@ const destinations = [
   { label: "Settings", href: "/app/settings", path: "M4 6h16M4 12h16M4 18h16M9 3v6M15 9v6M9 15v6" },
 ];
 
-export function AppNavigation() {
+export function AppNavigation({ loginConfigured = false }: { loginConfigured?: boolean }) {
   const privy = usePrivyWalletActions();
   const pathname = usePathname();
-  const session = useConsoleIdentity();
+  const session = use(IdentityContext);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -55,7 +56,7 @@ export function AppNavigation() {
     try {
       await consoleApi<{ ok: true }>("/api/auth/logout", {});
       await privy?.logout();
-      window.location.replace("/login");
+      window.location.replace("/app");
     } catch (failure) {
       setError(failure);
       setBusy(false);
@@ -108,7 +109,7 @@ export function AppNavigation() {
         <span className="topbar-label">
           Workspace console <span className="muted">/ Arc testnet</span>
         </span>
-        <div
+        {session ? <div
           className="account"
           onKeyDown={(event) => {
             if (event.key === "Escape") {
@@ -137,7 +138,7 @@ export function AppNavigation() {
               <RequestError error={error} />
             </div>
           )}
-        </div>
+        </div> : <div className="account">{loginConfigured ? <PrivyLoginButton /> : <button className="button" disabled>Login</button>}</div>}
       </header>
       <nav className="bottom-nav" aria-label="Mobile workspace">
         {destinations.slice(0, 4).map(navLink)}

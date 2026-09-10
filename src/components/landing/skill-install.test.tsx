@@ -7,7 +7,8 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const mcpUrl = "https://api.payrlink.xyz/mcp";
 const config = JSON.stringify({ mcpServers: { payr: { url: mcpUrl } } }, null, 2);
 const snippets = [
-  ["Claude", `claude mcp add --transport http payr ${mcpUrl}`],
+  ["Claude / Cowork", mcpUrl],
+  ["Claude Code", `claude mcp add --transport http payr ${mcpUrl}`],
   ["Cursor", config],
   ["ChatGPT / Codex", `codex mcp add payr --url ${mcpUrl}`],
   ["Custom MCP", config],
@@ -15,15 +16,16 @@ const snippets = [
 ];
 
 describe("SkillInstall", () => {
-  it("defaults to Claude in the Bazantic quick start instead of the skill installer", () => {
+  it("defaults to Claude/Cowork server setup without claiming workspace authentication", () => {
     render(<SkillInstall />);
-    expect(screen.getByRole("region", { name: "Customer Quick Start" })).toBeTruthy();
-    expect(screen.getAllByRole("tab")).toHaveLength(5);
-    expect(screen.getByRole("tab", { name: "Claude", selected: true })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Connect Payr" })).toBeTruthy();
+    expect(screen.getAllByRole("tab")).toHaveLength(6);
+    expect(screen.getByRole("tab", { name: "Claude / Cowork", selected: true })).toBeTruthy();
     expect(screen.getByRole("tabpanel").querySelector("code")?.textContent).toBe(snippets[0][1]);
     expect(screen.getByRole("link", { name: "Bazantic" }).getAttribute("href")).toBe("https://bazantic.com");
     expect(screen.queryByText(/skills add|Connect Payr tools separately/)).toBeNull();
-    expect(screen.getByText(/Claude Code installed/)).toBeTruthy();
+    expect(screen.getByText(/Workspace authentication is a separate step/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Workspace setup and connection guide" }).getAttribute("href")).toBe("/install");
   });
 
   it.each(snippets)("shows and copies the exact %s snippet", async (name, snippet) => {
@@ -36,18 +38,19 @@ describe("SkillInstall", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy setup snippet" }));
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Setup snippet copied."));
     expect(writeText).toHaveBeenCalledWith(snippet);
-    fireEvent.click(screen.getByRole("tab", { name: "Claude" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Claude / Cowork" }));
     expect(screen.getByRole("status").textContent).toBe("");
   });
 
   it("supports arrow keys, wrapping, Home and End with roving focus", () => {
     render(<SkillInstall />);
     for (const [from, key, to] of [
-      ["Claude", "ArrowLeft", "CLI"],
-      ["CLI", "ArrowRight", "Claude"],
-      ["Claude", "ArrowRight", "Cursor"],
+      ["Claude / Cowork", "ArrowLeft", "CLI"],
+      ["CLI", "ArrowRight", "Claude / Cowork"],
+      ["Claude / Cowork", "ArrowRight", "Claude Code"],
+      ["Claude Code", "ArrowRight", "Cursor"],
       ["Cursor", "End", "CLI"],
-      ["CLI", "Home", "Claude"],
+      ["CLI", "Home", "Claude / Cowork"],
     ]) {
       fireEvent.keyDown(screen.getByRole("tab", { name: from }), { key });
       const active = screen.getByRole("tab", { name: to, selected: true });

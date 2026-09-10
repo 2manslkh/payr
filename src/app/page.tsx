@@ -23,7 +23,7 @@ export default function HomePage() {
         <nav aria-label="Main navigation">
           <a className={styles.workflowLink} href="#workflow">How it works</a>
           <span className={styles.network}>Arc Testnet</span>
-          <Link href="/login" className={styles.headerSignIn}>Sign in <Arrow /></Link>
+          <Link href="/app" className={styles.headerSignIn}>Go To Dashboard <Arrow /></Link>
         </nav>
       </header>
       <main id="main-content">
@@ -33,7 +33,7 @@ export default function HomePage() {
             <p>AI-powered invoicing.</p>
             <SkillInstall />
             <div className={styles.heroActions}>
-              <Link className={`button ${styles.primaryAction}`} href="/login">Sign in to Payr <Arrow /></Link>
+              <Link className={`button ${styles.primaryAction}`} href="/app">Go To Dashboard <Arrow /></Link>
               <a className={styles.textAction} href="#workflow">See the workflow <Arrow down /></a>
             </div>
           </div>
@@ -70,9 +70,9 @@ export default function HomePage() {
               <p className={styles.comingNote}>Connect Claude to Payr&apos;s invoice tools. Creating a credential does not connect Claude automatically.</p>
             </article>
             <article id="publish-invoice" data-workflow-step="1" className={styles.chapter}>
-              <span className={styles.stepNumber}>02 / Publish</span>
+              <span className={styles.stepNumber}>02 / Publish &amp; Send</span>
               <h3>Make it official.<br />Keep it protected.</h3>
-              <p>Approve the exact draft. Payr freezes the invoice, assigns its number, and creates a downloadable PDF and protected payment link you can share with your client.</p>
+              <p>Approve the exact draft and email delivery to its client and sender. When invoice email is enabled, Payr freezes the invoice, assigns its number, and queues its PDF and protected payment links to those recipients. Disabled invoice email blocks new publication.</p>
               <div className={styles.chapterFact}>A fixed record, not an editable moving target.</div>
             </article>
             <article id="approve-payment" data-workflow-step="2" className={styles.chapter}>
@@ -109,7 +109,7 @@ export default function HomePage() {
         <Roadmap />
 
         <section className={styles.closing} aria-labelledby="closing-title">
-          <div><h2 id="closing-title">You did the work.<br />Give it a proper finish.</h2><p>Set up your profile and clients in Payr.</p><Link href="/login" className={`button ${styles.primaryAction}`}>Open your workspace <Arrow /></Link></div>
+          <div><h2 id="closing-title">You did the work.<br />Give it a proper finish.</h2><p>Set up your profile and clients in Payr.</p><Link href="/app" className={`button ${styles.primaryAction}`}>Go To Dashboard <Arrow /></Link></div>
           <Image src="/brand/payr-mascot.webp" alt="" width={180} height={166} className={styles.mascot} />
         </section>
       </main>

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { DashboardLogin } from "../../../../../components/dashboard-login";
 import { PageHeading } from "../../../../../components/console-ui";
 import { InvoiceDocument } from "../../../../../components/invoice-document";
 import { InvoiceReadError, invoiceTitle, InvoiceWorkflow, OpenClaude } from "../../../../../components/invoice-ui";
@@ -16,7 +17,7 @@ export const metadata = { title: "Invoice | Payr" };
 
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getDashboardSession();
-  if (!session) redirect("/login");
+  if (!session) return <DashboardLogin />;
   let id;
   try {
     id = invoiceId((await params).id);

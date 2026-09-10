@@ -3,11 +3,11 @@ import { expect, test } from "@playwright/test";
 test("Bazantic quick start switches, copies, and fits the viewport", async ({ page, context }, testInfo) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
-  const quickStart = page.getByRole("region", { name: "Customer Quick Start" });
+  const quickStart = page.getByRole("region", { name: "Connect Payr", exact: true });
   await expect(quickStart).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("quick-start-hero.png") });
 
-  for (const name of ["Claude", "Cursor", "ChatGPT / Codex", "Custom MCP", "CLI"]) {
+  for (const name of ["Claude / Cowork", "Claude Code", "Cursor", "ChatGPT / Codex", "Custom MCP", "CLI"]) {
     await quickStart.getByRole("tab", { name, exact: true }).click();
     const panel = quickStart.getByRole("tabpanel", { name, exact: true });
     await expect(panel).toBeVisible();
@@ -19,12 +19,12 @@ test("Bazantic quick start switches, copies, and fits the viewport", async ({ pa
       const bounds = element.getBoundingClientRect();
       return bounds.left >= 0 && bounds.right <= window.innerWidth && element.scrollWidth <= element.clientWidth;
     })).toBe(true);
-    await quickStart.screenshot({ path: testInfo.outputPath(`quick-start-${name.split(" ")[0].toLowerCase()}.png`) });
+    await quickStart.screenshot({ path: testInfo.outputPath(`quick-start-${name.toLowerCase().replace(/[^a-z]+/g, "-")}.png`) });
   }
 
   await quickStart.getByRole("tab", { name: "CLI", exact: true }).focus();
   await page.keyboard.press("ArrowRight");
-  await expect(quickStart.getByRole("tab", { name: "Claude", exact: true })).toBeFocused();
+  await expect(quickStart.getByRole("tab", { name: "Claude / Cowork", exact: true })).toBeFocused();
   await page.keyboard.press("End");
   await expect(quickStart.getByRole("tab", { name: "CLI", exact: true })).toBeFocused();
 
@@ -40,8 +40,8 @@ test("default installation instructions remain readable without JavaScript", asy
   const page = await context.newPage();
   try {
     await page.goto("/");
-    await expect(page.getByRole("region", { name: "Customer Quick Start" }).locator("code")).toHaveText(
-      "claude mcp add --transport http payr https://api.payrlink.xyz/mcp",
+    await expect(page.getByRole("region", { name: "Connect Payr", exact: true }).locator("code")).toHaveText(
+      "https://api.payrlink.xyz/mcp",
     );
   } finally {
     await context.close();

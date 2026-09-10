@@ -18,6 +18,11 @@ async function request<T>(token: string | null, input: unknown): Promise<T> {
   return data as T;
 }
 
+export function PrivyLoginButton() {
+  const { ready, authenticated, login } = usePrivy();
+  return <button className="button" disabled={!ready || authenticated} onClick={() => login()}>Login</button>;
+}
+
 function Login() {
   const { ready, authenticated, user, login, logout, getAccessToken } = usePrivy();
   const userId = user?.id;
@@ -70,7 +75,7 @@ function Login() {
     finally { setBusy(false); setStatus(""); }
   }
   return <div className="login-action">
-    {!authenticated && <button className="button" disabled={!ready} onClick={() => login()}>{ready ? "Sign in with Privy" : "Loading secure sign-in..."}</button>}
+    {!authenticated && <button className="button" disabled={!ready} onClick={() => login()}>{ready ? "Login" : "Loading secure sign-in..."}</button>}
     {!ready && initializationTimedOut && <div role="alert">
       <p>Privy could not finish loading. Check your connection or content blocker, then reload to try again. No workspace has been changed.</p>
       <button className="button secondary" onClick={() => window.location.reload()}>Reload sign-in</button>
@@ -91,14 +96,19 @@ function Login() {
       <p>Each Privy account links to one workspace. Changing that link later requires operator-assisted recovery; PAYR never merges or replaces your workspace automatically.</p>
     </>}
     {authenticated && <button className="button secondary" disabled={busy} onClick={async () => {
-      try { await consoleApi("/api/auth/logout", {}); await logout(); window.location.replace("/login"); } catch (failure) { setError(failure); }
+      try { await consoleApi("/api/auth/logout", {}); await logout(); window.location.replace("/app"); } catch (failure) { setError(failure); }
     }}>Use a different account</button>}
     <p role="status" aria-live="polite">{status}</p>
     <RequestError error={error} />
   </div>;
 }
 
+export function PrivyLoginContent({ configured }: { configured: boolean }) {
+  if (!configured) return <><button className="button" disabled>Login</button><p role="status">Sign-in is not configured. Contact the PAYR operator to enable Privy.</p></>;
+  return <Login />;
+}
+
 export function PrivyLogin({ appId }: { appId?: string }) {
-  if (!appId) return <p role="status">Sign-in is not configured. Contact the PAYR operator to enable Privy.</p>;
+  if (!appId) return <PrivyLoginContent configured={false} />;
   return <PayrPrivyProvider appId={appId}><Login /></PayrPrivyProvider>;
 }

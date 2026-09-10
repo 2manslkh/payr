@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Children, cloneElement, isValidElement, type ComponentProps, type ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -6,7 +6,7 @@ import { getDashboardSession } from "../lib/auth/runtime";
 import type { DraftRepository, DraftSnapshot, InvoiceDetail, InvoiceOverview, InvoiceSummary } from "../lib/invoices/contracts";
 import { DraftError } from "../lib/invoices/errors";
 import { getDraftRepository } from "../lib/invoices/runtime";
-import { getPublicationRepository } from "../lib/invoices/publication-runtime";
+import { getPublicationEmailConfig, getPublicationRepository } from "../lib/invoices/publication-runtime";
 import { publicationView } from "../lib/invoices/lifecycle";
 import type { PublicationRepository, PublicationStatusData } from "../lib/invoices/publication-contracts";
 import OverviewRoute, { OverviewContent, OverviewRecords } from "./overview";
@@ -14,12 +14,16 @@ import InvoicesPage from "../app/(dashboard)/app/invoices/page";
 import InvoicePage, { metadata } from "../app/(dashboard)/app/invoices/[id]/page";
 import { InvoiceDocument } from "./invoice-document";
 import { PublicationActions } from "./publication-actions";
+import ActivityPage from "../app/(dashboard)/app/activity/page";
+import ClientsPage from "../app/(dashboard)/app/clients/page";
+import ConnectionsPage from "../app/(dashboard)/app/connections/page";
+import SettingsPage from "../app/(dashboard)/app/settings/page";
 
 vi.mock("../lib/auth/runtime", async (original) => ({
   ...await original<typeof import("../lib/auth/runtime")>(), getDashboardSession: vi.fn(),
 }));
 vi.mock("../lib/invoices/runtime", () => ({ getDraftRepository: vi.fn() }));
-vi.mock("../lib/invoices/publication-runtime", () => ({ getPublicationRepository: vi.fn() }));
+vi.mock("../lib/invoices/publication-runtime", () => ({ getPublicationRepository: vi.fn(), getPublicationEmailConfig: vi.fn() }));
 vi.mock("../lib/invoices/lifecycle", () => ({ publicationView: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
@@ -82,13 +86,30 @@ beforeEach(() => {
   publicationRepository.statusData.mockResolvedValue({ invoiceId: id, invoiceVersion: 2, commercialState: "draft", attempt: null });
   vi.mocked(publicationView).mockReturnValue({ state: null, failureCode: null, canShare: false, canVoid: false });
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
-it.each(pages)("$name independently rejects a missing session before repository creation", async ({ render: page }) => {
+it.each([...pages,
+  { name: "overview route", render: () => OverviewRoute({ searchParams: Promise.resolve({}) }) },
+  { name: "activity", render: ActivityPage }, { name: "clients", render: ClientsPage },
+  { name: "connections", render: ConnectionsPage }, { name: "settings", render: SettingsPage },
+])("$name independently shows login before private reads or client components", async ({ render: page }) => {
+  vi.stubEnv("NEXT_PUBLIC_PRIVY_APP_ID", "");
+  vi.stubEnv("PRIVY_APP_ID", "");
   vi.mocked(getDashboardSession).mockResolvedValue(null);
-  await expect(page()).rejects.toThrow("redirect:/login");
+  render(await page());
+  expect(screen.getByRole("heading", { name: "Login to connect to your Payr dashboard" })).toBeDefined();
   expect(getDraftRepository).not.toHaveBeenCalled();
   expect(getPublicationRepository).not.toHaveBeenCalled();
+  vi.unstubAllEnvs();
+});
+
+it("opens explicit workspace linking instead of reading invoices for an existing session", async () => {
+  vi.stubEnv("NEXT_PUBLIC_PRIVY_APP_ID", "");
+  vi.stubEnv("PRIVY_APP_ID", "");
+  render(await OverviewRoute({ searchParams: Promise.resolve({ link: "1" }) }));
+  expect(screen.getByRole("heading", { name: "Login to connect to your Payr dashboard" })).toBeDefined();
+  expect(getDraftRepository).not.toHaveBeenCalled();
+  vi.unstubAllEnvs();
 });
 
 it("renders actual setup and draft attention without counting draft value as receivables or inventing settlement", async () => {
@@ -219,6 +240,37 @@ it("handles legacy records without inventing an immutable snapshot", async () =>
   expect(screen.getByText(/No draft snapshot is available for this legacy record/)).toBeDefined();
   expect(screen.queryByRole("heading", { name: "Applied defaults" })).toBeNull();
   expect(screen.getByRole("heading", { name: "Version history" })).toBeDefined();
+});
+
+it("retains Publish & Send with both frozen recipients behind the independent detail guard", async () => {
+  vi.mocked(getPublicationEmailConfig).mockReturnValue({ from: "Payr <invoices@example.test>", appOrigin: "https://payr.example",
+    templateVersion: "invoice-issued-v1", network: "Arc Testnet" });
+  render(await InvoicePage({ params: Promise.resolve({ id }) }));
+  const button = screen.getByRole("button", { name: "Publish & Send" });
+  expect(button.hasAttribute("disabled")).toBe(true);
+  const approval = screen.getByRole("checkbox");
+  expect(approval.hasAttribute("disabled")).toBe(false);
+  expect(approval.closest("section")?.textContent).toContain(snapshot.client.contactEmail);
+  expect(approval.closest("section")?.textContent).toContain(snapshot.sender.contactEmail);
+  fireEvent.click(approval);
+  expect(button.hasAttribute("disabled")).toBe(false);
+});
+
+it("retains invoice delivery progress independently from unpaid commercial records", async () => {
+  repository.getInvoiceDetail.mockResolvedValue({ ...detail, invoice: { ...invoice, commercialState: "published" } });
+  publicationRepository.statusData.mockResolvedValue({ invoiceId: id, invoiceVersion: 2, commercialState: "published", attempt: null,
+    invoiceDeliveries: [
+      { roles: ["client"], state: "sent", attemptCount: 1, nextAttemptAt: null },
+      { roles: ["issuer"], state: "retry_wait", attemptCount: 1, nextAttemptAt: "2026-09-10T12:00:00Z" },
+    ],
+  });
+  render(await InvoicePage({ params: Promise.resolve({ id }) }));
+  expect(screen.getByRole("heading", { name: "Invoice email" })).toBeDefined();
+  expect(screen.getByText("Accepted by email provider")).toBeDefined();
+  expect(screen.getByText("Retry scheduled")).toBeDefined();
+  expect(screen.getByText(/Provider acceptance does not confirm inbox delivery/)).toBeDefined();
+  expect(screen.getByText("Unpaid")).toBeDefined();
+  expect(screen.queryByRole("button", { name: "Publish & Send" })).toBeNull();
 });
 
 it("shows pending client creation with no saved reference, defaults, memo or history safely", async () => {

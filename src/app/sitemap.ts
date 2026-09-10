@@ -3,5 +3,5 @@ import { discoveryOrigin } from "../lib/discovery";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   // Public pages only. Publishing an invoice must never add its bearer URL.
-  return ["/"].map((path) => ({ url: `${discoveryOrigin()}${path}` }));
+  return ["/", "/install"].map((path) => ({ url: `${discoveryOrigin()}${path}` }));
 }

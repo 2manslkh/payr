@@ -13,11 +13,19 @@ vi.mock("next/navigation", () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
 });
 
-it("awaits the frozen server session and redirects a missing identity", async () => {
+it("shows the dashboard shell and login without rendering private children", async () => {
+  vi.stubEnv("NEXT_PUBLIC_PRIVY_APP_ID", "");
+  vi.stubEnv("PRIVY_APP_ID", "");
   vi.mocked(getDashboardSession).mockResolvedValue(null);
-  await expect(DashboardLayout({ children: <p>Private child</p> })).rejects.toThrow("redirect:/login");
+  render(await DashboardLayout({ children: <p>Private child</p> }));
+  expect(screen.queryByText("Private child")).toBeNull();
+  expect(screen.getByRole("heading", { name: "Login to connect to your Payr dashboard" })).toBeDefined();
+  expect(screen.getByRole("navigation", { name: "Workspace" })).toBeDefined();
+  expect(screen.getAllByRole("button", { name: "Login" })).toHaveLength(2);
+  expect(screen.queryByRole("button", { name: "Account" })).toBeNull();
 });
 
 it("renders static children with only workspace identity from the session", async () => {

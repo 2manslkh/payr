@@ -34,7 +34,7 @@ export function Connections({ gatewayOnly = false }: { gatewayOnly?: boolean }) 
   }, []);
   async function create(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!Number.isInteger(Number(days)) || Number(days) < 1 || Number(days) > 30) return;
+    if (!Number.isInteger(Number(days)) || Number(days) < 1 || Number(days) > (gateway ? 7 : 30)) return;
     setBusy(true);
     setError(null);
     setStatus("");
@@ -91,7 +91,7 @@ export function Connections({ gatewayOnly = false }: { gatewayOnly?: boolean }) 
       </PageHeading>
       <section className="notice">
         <h2>{gatewayOnly ? "Connect your agent through the gateway" : "Connect your agent to Payr"}</h2>
-        {!gatewayOnly && <ol>
+        {!gateway && <ol>
           <li>Create a short-lived credential below and copy its endpoint URL.</li>
           <li>In Claude, open Customize {">"} Connectors, choose Add custom connector, and paste the full endpoint URL. Leave optional OAuth fields blank.</li>
           <li>Start a new chat and enable Payr in the Connectors menu.</li>
@@ -99,14 +99,15 @@ export function Connections({ gatewayOnly = false }: { gatewayOnly?: boolean }) 
         <p>
           {gatewayOnly ? "This deployment accepts REST gateway connections only. Sign in through Privy to issue a gateway account credential."
             : "Use a show-once MCP endpoint URL or a REST gateway account credential. Creating a credential does not connect your agent automatically."}
-          {" "}Publication and voiding require explicit approval; payment stays in the client&apos;s wallet. Keep credentials private.
+          {" "}Publish &amp; Send requires approval of the exact draft and email to both snapshot recipients. Invoice email must be enabled; do not send a duplicate through Gmail. Voiding requires separate approval and payment stays in the client&apos;s wallet.
         </p>
-        <Link className="text-link" href="/install">View the Payr installation guide</Link>
+        {gateway && <p>Gateway workspace access needs operator-configured private credential injection, which still needs verification for Claude/Cowork. Never paste credentials into chat or model-visible tool arguments, and never request the gateway service key. Tool discovery alone does not verify workspace access. Refresh the gateway schemas for Publish &amp; Send before activation.</p>}
+        <Link className="text-link" href="/install">View the Payr connection guide</Link>
       </section>
       <section className="ledger-section">
         <div className="section-heading">
           <h2>Create a connection credential</h2>
-          <span>Expires in 1 to 30 days</span>
+          <span>Expires in 1 to {gateway ? "7" : "30"} days</span>
         </div>
         <div className="section-body">
           <p>
@@ -114,7 +115,7 @@ export function Connections({ gatewayOnly = false }: { gatewayOnly?: boolean }) 
             No connector can change your payout wallet or manage other connections.
           </p>
           <ul className="scope-list">
-            {CONNECTOR_SCOPES.map((scope) => (
+            {CONNECTOR_SCOPES.filter((scope) => !gateway || scope !== "invoice:void").map((scope) => (
               <li key={scope}>
                 <code>{scope}</code>
               </li>
@@ -123,7 +124,7 @@ export function Connections({ gatewayOnly = false }: { gatewayOnly?: boolean }) 
           <div className="retention-warning" id="retention-warning">
             <h3>Know where a secret can remain</h3>
             <p>
-              The endpoint URL contains the credential. Platform access logs, CDN logs, browser history,
+              {gateway ? "Store the gateway account credential only in the operator-configured private credential path." : "The direct MCP endpoint URL contains the credential."} Platform access logs, CDN logs, browser history,
               clipboard history, and Claude connector configuration may retain it. Payr can redact only its
               own application logs and analytics.
             </p>
@@ -143,7 +144,7 @@ export function Connections({ gatewayOnly = false }: { gatewayOnly?: boolean }) 
             </>}
             <label className="check-field"><input type="checkbox" checked={walletRead} disabled={busy || !!secret}
               onChange={(event) => setWalletRead(event.target.checked)} /><span>Wallet address discovery</span></label>
-            <p className="field-help">Grants wallet:read. Ask your agent to call get_account_context after connecting. It can read the business wallet and invoice payout addresses, but cannot sign or spend. Existing credentials are unchanged.</p>
+            <p className="field-help">Grants wallet:read for business wallet and invoice payout address discovery, never signing or spending. Existing credentials are unchanged. {gateway ? "The currently imported gateway catalog lacks get_account_context. The operator must refresh the catalog and grant its service operation scope before this permission can be used." : "After connecting, use get_account_context if exposed by your direct MCP connection."}</p>
             <label className="check-field" htmlFor="connection-sender-setup">
               <input id="connection-sender-setup" type="checkbox" checked={senderSetup}
                 onChange={(event) => setSenderSetup(event.target.checked)} disabled={busy || !!secret}

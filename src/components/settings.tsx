@@ -45,7 +45,7 @@ function BusinessWalletDetails() {
       {resource.loading && <Loading label="Loading business wallet..." />}
       {resource.data?.businessWallet && <code className="wallet-address">{resource.data.businessWallet.address}</code>}
       <p>You control this wallet. Agents with wallet:read can discover its address, but cannot sign or spend. Your invoice payout address is shown separately below. Testnet funds only; withdrawals are not available in PAYR.</p>
-      <Link className="text-link" href="/login?link=1">Link an existing workspace</Link>
+      <Link className="text-link" href="/app?link=1">Link an existing workspace</Link>
       <p className="field-help">A Privy account links to one workspace. If you selected the wrong workspace during setup, contact the PAYR operator for verified recovery. Existing business data is never moved or deleted automatically.</p>
     </div></section>;
 }

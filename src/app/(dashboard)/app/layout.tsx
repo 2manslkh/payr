@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import { DashboardLogin } from "../../../components/dashboard-login";
 import { AppNavigation, ConsoleIdentity } from "../../../components/app-navigation";
 import { getDashboardSession } from "../../../lib/auth/runtime";
 import { PayrPrivyProvider } from "../../../components/privy-provider";
@@ -13,16 +13,15 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getDashboardSession();
-  if (!session) redirect("/login");
   return (
     <PayrPrivyProvider appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || process.env.PRIVY_APP_ID}><ConsoleIdentity session={session}>
       <div className="workspace">
         <a className="skip-link" href="#main-content">
           Skip to content
         </a>
-        <AppNavigation />
+        <AppNavigation loginConfigured={Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID || process.env.PRIVY_APP_ID)} />
         <main id="main-content" className="workspace-main" tabIndex={-1}>
-          {children}
+          {session ? children : <DashboardLogin />}
         </main>
       </div>
     </ConsoleIdentity></PayrPrivyProvider>

@@ -340,6 +340,25 @@ it("grants both sender scopes only when Direct Chat Setup is checked", async () 
     scopes: ["invoice:draft", "invoice:publish", "invoice:status", "invoice:void", "sender:read", "sender:write"] });
 });
 
+it("keeps gateway credentials invoice-only by default and explains pending private access", async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce(json({ connectors: [] }))
+    .mockResolvedValueOnce(json({ connector, token: "private-value", endpointUrl: "" }));
+  vi.stubGlobal("fetch", fetcher);
+  render(<ConsoleIdentity session={{ ...identity, privyUserId: "did:privy:owner" }}><Connections gatewayOnly /></ConsoleIdentity>);
+  await screen.findByText("No connection credentials");
+  expect(screen.getByRole("checkbox", { name: "Direct Chat Setup" })).toHaveProperty("checked", false);
+  expect(screen.getByRole("checkbox", { name: "Wallet address discovery" })).toHaveProperty("checked", false);
+  expect(screen.getByText(/currently imported gateway catalog lacks get_account_context/)).toBeDefined();
+  expect(screen.getByText(/Never paste credentials into chat/)).toBeDefined();
+  expect(screen.getByRole("link", { name: "View the Payr connection guide" }).getAttribute("href")).toBe("/install");
+  fireEvent.click(screen.getByRole("button", { name: "Create credential" }));
+  await screen.findByLabelText("Credential");
+  expect(fetcher.mock.calls[1][0]).toBe("/api/connectors/gateway");
+  expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ expiresInDays: 7, serviceId: "bazantic",
+    scopes: ["invoice:draft", "invoice:publish", "invoice:status"] });
+  expect(screen.queryByLabelText("Endpoint URL")).toBeNull();
+});
+
 it("forgets an unacknowledged secret on browser pagehide", async () => {
   vi.stubGlobal(
     "fetch",

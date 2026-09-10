@@ -66,6 +66,7 @@ export type DraftResult = {
   code: "DRAFT_READY";
   draftCreated: true;
   draftId: string;
+  draftUrl: string;
   version: number;
   preview: DraftSnapshot;
   previewText: string;

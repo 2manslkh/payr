@@ -42,7 +42,7 @@ function publicationFixture() {
     const savedClient = await rpc<ClientProfile>("payr_save_client_v1", { ...scope, p_input: {
       id: null, expectedRevision: null, alias: "publication-client", ...snapshot.client,
     } });
-    return createInvoiceDraftService(createDraftRepository(client)).createDraft(actor, {
+    return createInvoiceDraftService(createDraftRepository(client), process.env.NEXT_PUBLIC_APP_URL!).createDraft(actor, {
       idempotencyKey: randomUUID(), useDefaultTerms: true,
       client: { id: savedClient.id, proposed: {
         contactEmail: { value: "approved@example.test", provenance: { kind: "user_provided" }, confirmed: true },

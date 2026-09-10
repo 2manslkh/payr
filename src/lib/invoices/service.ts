@@ -113,7 +113,7 @@ function buildCompleteDraftSnapshot(input: CreateInvoiceDraftInput, context: Dra
   };
 }
 
-function draftResult(version: DraftVersion): DraftResult {
+function draftResult(version: DraftVersion, dashboardUrl: URL): DraftResult {
   const snapshot = version.snapshot;
   const canonicalInvoiceJson = canonicalJson(snapshot);
   // Quoted JSON data stays plain text, including embedded markup and control characters.
@@ -123,14 +123,16 @@ function draftResult(version: DraftVersion): DraftResult {
   ].join("\n");
   return {
     code: "DRAFT_READY", draftCreated: true, draftId: version.draftId, version: version.version,
+    draftUrl: new URL(version.draftId, dashboardUrl).href,
     preview: snapshot, previewText, canonicalInvoiceJson,
-    approvalInstruction: `Before Publish & Send, explicitly approve draft ${version.draftId} version ${version.version}, all resolved facts and defaults, the pending client-profile diff: ${canonicalJson(snapshot.proposedClientChanges)}, and invoice email to client ${snapshot.client.contactEmail} and sender ${snapshot.sender.contactEmail}. Set approval:true and deliveryApproval:true only after this review. Payr queues one message per distinct address with the frozen PDF and private links; do not send a duplicate through Gmail. No invoice number, artifact, access link, client-profile save, or email has been created by this draft.`,
+    approvalInstruction: `Show the user draftUrl as a review link. It requires signing in to the owning workspace and opens the current draft, not a version-pinned public payment page. Before Publish & Send, explicitly approve draft ${version.draftId} version ${version.version}, all resolved facts and defaults, the pending client-profile diff: ${canonicalJson(snapshot.proposedClientChanges)}, and invoice email to client ${snapshot.client.contactEmail} and sender ${snapshot.sender.contactEmail}. Set approval:true and deliveryApproval:true only after this review. Payr queues one message per distinct address with the frozen PDF and private links; do not send a duplicate through Gmail. No invoice number, artifact, public access link, client-profile save, or email has been created by this draft.`,
   };
 }
 
-export function createInvoiceDraftService(repository: DraftRepository, now: () => Date = () => new Date()): {
+export function createInvoiceDraftService(repository: DraftRepository, appOrigin: string, now: () => Date = () => new Date()): {
   createDraft(actor: InvoiceActor, input: unknown): Promise<DraftResult>;
 } {
+  const dashboardUrl = new URL("/app/invoices/", appOrigin);
   return {
     async createDraft(actor, rawInput) {
       const input = parseDraftInput(rawInput);
@@ -143,7 +145,7 @@ export function createInvoiceDraftService(repository: DraftRepository, now: () =
       })).digest("hex");
       // Repository admission authorizes the actor even on replay; it must not load fresh resolution facts here.
       const replay = await repository.findReplay(actor, idempotencyKey, requestFingerprint);
-      if (replay) return draftResult(replay);
+      if (replay) return draftResult(replay, dashboardUrl);
       try {
         const context = await repository.getContext(actor, {
           draftId: input.draftId ?? null, clientId: input.client?.id ?? null, clientAlias: input.client?.alias ?? null,
@@ -159,12 +161,12 @@ export function createInvoiceDraftService(repository: DraftRepository, now: () =
         return draftResult(await repository.saveDraft(actor, {
           draftId: input.draftId ?? null, expectedVersion: input.expectedVersion ?? null,
           idempotencyKey, requestFingerprint, snapshot,
-        }));
+        }), dashboardUrl);
       } catch (error) {
         // An identical request may commit after the first replay lookup but before resolution.
         if (error instanceof DraftError && ["VERSION_CONFLICT", "PROFILE_CONFLICT", "MISSING_FIELDS", "INVALID_INPUT", "DRAFT_NOT_EDITABLE", "NOT_FOUND"].includes(error.code)) {
           const completed = await repository.findReplay(actor, idempotencyKey, requestFingerprint);
-          if (completed) return draftResult(completed);
+          if (completed) return draftResult(completed, dashboardUrl);
         }
         throw error;
       }

@@ -57,7 +57,7 @@ function fixture() {
     const lifecycle = createInvoiceLifecycleService(publications as unknown as PublicationRepository, () => config);
     const runtime = { appOrigin: config.appOrigin, authenticate, services: {
       ...createConnectorSenderService(profiles),
-      ...createInvoiceDraftService(drafts as unknown as DraftRepository, () => new Date("2030-01-01T00:00:00Z")),
+      ...createInvoiceDraftService(drafts as unknown as DraftRepository, "https://payr.example", () => new Date("2030-01-01T00:00:00Z")),
       ...createPublicationService(publications as unknown as PublicationRepository, { getLinkConfig: () => config,
         getDocuments: () => { throw new Error("No rendering on replay"); }, getReservationConfig: () => { throw new Error("No reservation on replay"); } }),
       status: lifecycle.status, void: lifecycle.void,
@@ -159,9 +159,12 @@ it("creates and revises through the same canonical tool with exact preview/defau
   const proposed = Object.fromEntries(Object.entries(snapshot.client).map(([key, value]) => [key, { value, confirmed: true, provenance: { kind: "user_provided" } }]));
   const first = await call("create_invoice_draft", { idempotencyKey: "draft", client: { alias: "new", proposed }, items: [{ description: "Work", amount: "1.23" }], useDefaultTerms: true });
   expect(first.structuredContent).toMatchObject({ code: "DRAFT_READY", draftId: id, version: 1, preview: { amountDecimal: "1.23", proposedClientChanges: { kind: "create" } } });
+  expect(first.structuredContent.draftUrl).toBe(`https://payr.example/app/invoices/${id}`);
+  expect(JSON.parse(first.content[0].text).draftUrl).toBe(first.structuredContent.draftUrl);
   expect(first.structuredContent.preview.appliedDefaults).toContainEqual({ field: "dueDate", value: "2030-01-31", source: "sender_terms" });
   const revised = await call("create_invoice_draft", { idempotencyKey: "revision", draftId: id, expectedVersion: 1, memo: "Confirmed revision" });
   expect(revised.structuredContent).toMatchObject({ version: 2, preview: { memo: "Confirmed revision" } });
+  expect(revised.structuredContent.draftUrl).toBe(first.structuredContent.draftUrl);
   expect(drafts.saveDraft.mock.calls[0][0]).toEqual({ workspaceId, connectorId: tokenId, ownerWallet: null });
   expect((await call("create_invoice_draft", { idempotencyKey: "stale", draftId: id, expectedVersion: 1 })).structuredContent).toEqual({ code: "VERSION_CONFLICT", draftId: id, currentVersion: 2 });
 });

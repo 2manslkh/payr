@@ -59,7 +59,7 @@ function setup() {
     listInvoices: vi.fn(), getInvoiceDetail: vi.fn(), getOverview: vi.fn(),
   };
   const now = vi.fn(() => new Date("2026-09-06T00:30:00.000Z"));
-  return { context, repository, now, service: createInvoiceDraftService(repository, now) };
+  return { context, repository, now, service: createInvoiceDraftService(repository, "https://payr.example", now) };
 }
 
 it("reports structured omissions without reserving an idempotency key or creating a draft", async () => {
@@ -69,7 +69,7 @@ it("reports structured omissions without reserving an idempotency key or creatin
     getContext: vi.fn().mockResolvedValue({ sender: null, client: null, previous: null, commercialState: null }),
     saveDraft,
   } as unknown as DraftRepository;
-  await expect(createInvoiceDraftService(repository).createDraft({
+  await expect(createInvoiceDraftService(repository, "https://payr.example").createDraft({
     workspaceId: "00000000-0000-4000-8000-000000000001", ownerWallet: `0x${"1".repeat(40)}`, connectorId: null,
   }, { idempotencyKey: "missing-fields" })).rejects.toMatchObject({
     code: "MISSING_FIELDS", status: 422,
@@ -81,7 +81,7 @@ it("reports structured omissions without reserving an idempotency key or creatin
 it("builds a complete authoritative snapshot with exact amounts and visible UTC defaults", async () => {
   const { service, repository } = setup();
   const result = await service.createDraft(actor, input);
-  expect(result).toMatchObject({ code: "DRAFT_READY", draftCreated: true, draftId, version: 1 });
+  expect(result).toMatchObject({ code: "DRAFT_READY", draftCreated: true, draftId, draftUrl: `https://payr.example/app/invoices/${draftId}`, version: 1 });
   expect(result.preview).toEqual({
     schemaVersion: "payr.draft.v1", sender,
     client: { businessName: client.businessName, billingAddress: address, contactName: client.contactName, contactEmail: client.contactEmail },
@@ -107,6 +107,17 @@ it("builds a complete authoritative snapshot with exact amounts and visible UTC 
   expect(result.approvalInstruction).toContain("version 1");
   expect(result.approvalInstruction).toContain("diff");
   expect(repository.saveDraft).toHaveBeenCalledOnce();
+});
+
+it.each(["https://billing.example/", "http://localhost:3197"])("uses the configured origin %s for a credential-free dashboard link", async (origin) => {
+  const { repository, now } = setup();
+  const service = createInvoiceDraftService(repository, origin, now);
+  const result = await service.createDraft(actor, input);
+  expect(result.draftUrl).toBe(`${new URL(origin).origin}/app/invoices/${draftId}`);
+  expect(result.approvalInstruction).toContain("Show the user draftUrl");
+  expect(result.approvalInstruction).toContain("signing in to the owning workspace");
+  expect(result.canonicalInvoiceJson).not.toContain("draftUrl");
+  expect(await service.createDraft(actor, input)).toEqual(result);
 });
 
 it.each([undefined, "New Studio"])("retains a complete confirmed proposal as a pending creation (alias %s)", async (alias) => {
@@ -165,6 +176,7 @@ it("patches revision omissions, refreshes only the sender, replaces items, and c
   now.mockReturnValue(new Date("2026-11-30T00:00:00Z"));
   const revision = await service.createDraft(actor, { draftId, expectedVersion: 1, idempotencyKey: "revision", memo: "", items: [{ description: "Replacement", amount: "2" }] });
   expect(revision.version).toBe(2);
+  expect(revision.draftUrl).toBe(original.draftUrl);
   expect(revision.preview.sender).toEqual(context.sender);
   expect(revision.preview.client).toEqual(original.preview.client);
   expect(revision.preview.clientReference).toEqual(original.preview.clientReference);

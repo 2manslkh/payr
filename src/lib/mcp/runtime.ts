@@ -16,7 +16,7 @@ export function createMcpRuntime(): McpRuntime {
     services: {
       getAccountContext: (actor, input) => createAccountContextService(createSupabaseAdminClient())(actor, input),
       ...createConnectorSenderService(repository),
-      createDraft: (actor, input) => createInvoiceDraftService(getDraftRepository()).createDraft(actor, input),
+      createDraft: (actor, input) => createInvoiceDraftService(getDraftRepository(), config.appOrigin).createDraft(actor, input),
       publish: (actor, input) => createPublicationService(getPublicationRepository(), {
         getReservationConfig: getPublicationConfig, getLinkConfig: getPublicationLinkConfig, getDocuments: getPublicationDocumentPort,
         getEmailConfig: getPublicationEmailConfig, afterPublication,

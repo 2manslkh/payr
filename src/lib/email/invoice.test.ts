@@ -3,10 +3,13 @@ import { keccak256 } from "viem";
 import { afterEach, expect, it, vi } from "vitest";
 import { createInvoiceDeliveryEnv, createReceiptDeliveryEnv } from "../../config/env";
 import { createInvoiceOutboxRepository, invoiceDeliveryWorkSchema } from "../db/outbox";
+import { DocumentVerificationError } from "../documents/contracts";
 import { testReceiptWork } from "../receipts/test-support";
+import { receiptRecipients } from "./address";
 import { prepareInvoiceEmail } from "./invoice";
 import { createOutboxWorker } from "./outbox";
 import type { InvoiceDeliveryWork, OutboxRepository } from "./outbox-contracts";
+import { createResendReceiptProvider } from "./resend";
 
 afterEach(() => vi.restoreAllMocks());
 function setup() {
@@ -38,6 +41,60 @@ it.each(["client", "issuer", "both"] as const)("prepares %s from snapshot facts 
   expect(storage.create).not.toHaveBeenCalled();
   expect(await prepareInvoiceEmail(work, config, storage)).toEqual(payload);
   expect(invoiceDeliveryWorkSchema.safeParse(work).success).toBe(true);
+});
+
+it.each(["distinct", "deduplicated"])("completes %s invoice deliveries for a valid multiline issuer without changing frozen facts", async (mode) => {
+  const { work, config, storage, bytes } = setup();
+  work.publication.snapshot.sender = { ...work.publication.snapshot.sender, businessName: "Acme\nStudio",
+    contactEmail: mode === "deduplicated" ? work.publication.snapshot.client.contactEmail : work.publication.snapshot.sender.contactEmail };
+  const frozen = structuredClone(work);
+  const recipients = receiptRecipients(work.publication.snapshot.sender.contactEmail!, work.publication.snapshot.client.contactEmail);
+  expect(recipients.map(({ roles }) => roles)).toEqual(mode === "distinct" ? [["client"], ["issuer"]] : [["issuer", "client"]]);
+  const request = vi.fn().mockImplementation(async () => Response.json({ id: receiptId }));
+  const provider = createResendReceiptProvider("mock-only", request);
+  for (const recipient of recipients) {
+    const row: InvoiceDeliveryWork = { ...work, normalizedRecipient: recipient.normalizedRecipient, roles: recipient.roles,
+      providerIdempotencyKey: `invoice-issued/test/${recipient.roles.join("-")}` };
+    expect(invoiceDeliveryWorkSchema.safeParse(row).success).toBe(true);
+    const repository: OutboxRepository<InvoiceDeliveryWork> = { claim: vi.fn().mockResolvedValue(row),
+      begin: vi.fn(async (_id, _fence, payloadHash) => ({ ...row, payloadHash, firstProviderAttemptAt: "2030-01-02T00:00:00Z", providerRequestStartedAt: "2030-01-02T00:00:00Z" })),
+      finish: vi.fn<OutboxRepository<InvoiceDeliveryWork>["finish"]>(async (_id, _fence, result) => ({ ...row, state: result.kind === "sent" ? "sent" : "failed" })) };
+    const worker = createOutboxWorker(repository, (claimed) => prepareInvoiceEmail(claimed, { ...config, appOrigin: "https://changed.test" }, storage), provider);
+    expect(await worker.run()).toEqual({ outcome: "sent", id: row.id });
+    expect(repository.finish).toHaveBeenCalledExactlyOnceWith(row.id, row.fence, { kind: "sent", providerMessageId: receiptId });
+    const payload = JSON.parse(request.mock.lastCall![1].body);
+    expect(payload.subject).toBe(row.roles.length === 1 && row.roles[0] === "issuer"
+      ? "Invoice Issued: INV-2030-000001 / Your copy" : "Invoice INV-2030-000001 from Acme Studio");
+    expect(payload.to).toEqual([row.normalizedRecipient]);
+    expect(payload.text).toContain("From: Acme\nStudio");
+    expect(payload.html).toContain("Acme\nStudio");
+    expect(payload.text).toContain(`${config.appOrigin}/invoice/`);
+    expect(payload.text).not.toContain("changed.test");
+    expect(payload.attachments).toEqual([{ filename: frozen.publication.artifact!.pdfFilename, content: bytes.toString("base64") }]);
+  }
+  expect(request).toHaveBeenCalledTimes(mode === "distinct" ? 2 : 1);
+  expect(work).toEqual(frozen);
+  expect(storage.create).not.toHaveBeenCalled();
+});
+
+it.each(["subject", "attachment", "sender"])("rejects an invalid prepared %s before recording a provider attempt", async (field) => {
+  const { work, config, storage } = setup();
+  if (field === "subject") work.publication.snapshot.sender = { ...work.publication.snapshot.sender, businessName: "A".repeat(301) };
+  if (field === "attachment") work.publication.artifact!.pdfFilename = "../invoice.pdf";
+  if (field === "sender") work.emailConfig.from = "Payr\r\nBcc: other@example.test";
+  const repository: OutboxRepository<InvoiceDeliveryWork> = { claim: vi.fn().mockResolvedValue(work),
+    begin: vi.fn(async (_id, _fence, payloadHash) => ({ ...work, payloadHash, firstProviderAttemptAt: "2030-01-02T00:00:00Z", providerRequestStartedAt: "2030-01-02T00:00:00Z" })),
+    finish: vi.fn().mockResolvedValue({ ...work, state: "failed" }) };
+  const request = vi.fn();
+  const provider = createResendReceiptProvider("mock-only", request);
+  const send = vi.spyOn(provider, "send");
+  const worker = createOutboxWorker(repository, (row) => prepareInvoiceEmail(row, config, storage), provider);
+  expect(await worker.run()).toEqual({ outcome: "failed", id: work.id });
+  expect(repository.begin).not.toHaveBeenCalled();
+  expect(send).not.toHaveBeenCalled();
+  expect(request).not.toHaveBeenCalled();
+  expect(repository.finish).toHaveBeenCalledExactlyOnceWith(work.id, work.fence, { kind: "failed", code: "DOCUMENT_INVALID" });
+  await expect(prepareInvoiceEmail(work, config, storage)).rejects.toThrow(DocumentVerificationError);
 });
 
 it.each(["hash", "length", "type", "missing", "recipient", "roles", "attempt", "network", "template"])("fails closed before provider I/O for %s", async (mode) => {

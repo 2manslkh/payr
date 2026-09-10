@@ -94,7 +94,8 @@ export function buildInvoiceEmail(input: InvoiceEmailInput, logoOrigin?: string)
     logoOrigin,
     network: input.network,
     networkText: issuer ? `Invoice currency: USDC on ${input.network ?? "Arc"}` : undefined,
-    subject: issuer ? `Invoice Issued: ${input.invoiceNumber} / Your copy` : `Invoice ${input.invoiceNumber} from ${input.businessName}`,
+    // Only the mail header is single-line; body and frozen invoice facts stay verbatim.
+    subject: (issuer ? `Invoice Issued: ${input.invoiceNumber} / Your copy` : `Invoice ${input.invoiceNumber} from ${input.businessName}`).replace(/[\r\n]+/g, " "),
     previewText: `${input.amountDecimal} USDC due ${input.dueDate}. ${issuer ? "Your copy of the issued invoice." : both ? "Your issuer copy and client payment details." : "View your invoice and payment details."} ${input.attachmentIncluded ? "PDF attached." : "PDF available at the link below."}`,
     heading: issuer ? "Invoice Issued" : `Invoice from ${input.businessName}`,
     introduction: `${issuer ? "Your copy of the issued invoice is ready for your records. Open the invoice to review the details."

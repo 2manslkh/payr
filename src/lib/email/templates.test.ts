@@ -14,6 +14,15 @@ const receipt = {
 const audiences = ["client", "issuer", "both"] as const;
 
 describe.each(audiences)("invoice audience: %s", (audience) => {
+  it.each(["\n", "\r", "\r\n", "\n\r\n"])("derives a single-line subject from a business name containing %j without rewriting body facts", (lineBreak) => {
+    const input = { ...invoice, audience, businessName: `Acme${lineBreak}Studio` };
+    const email = buildInvoiceEmail(input);
+    expect(email.subject).toBe(audience === "issuer" ? "Invoice Issued: INV-42 / Your copy" : "Invoice INV-42 from Acme Studio");
+    expect(email.textBody).toContain(`From: Acme${lineBreak}Studio`);
+    expect(email.htmlBody).toContain(`Acme${lineBreak}Studio`);
+    expect(input.businessName).toBe(`Acme${lineBreak}Studio`);
+  });
+
   it.each(["Arc", "Arc Testnet"] as const)("preserves exact facts and protected URLs on %s", (network) => {
     const input = { ...invoice, audience, network, clientBusinessName: "Client Studio", attachmentIncluded: true,
       invoiceUrl: "https://payr.example/invoice/a%2Fb?token=A%2Bz%3D&v=01#details",

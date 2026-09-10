@@ -3,8 +3,9 @@ import { ARC_TESTNET_CHAIN_ID } from "../chain/arc";
 import { DocumentUnavailableError, DocumentVerificationError, type PrivateDocumentStorage } from "../documents/contracts";
 import type { PublicationLinkConfig } from "../invoices/publication-contracts";
 import { publicationLink } from "../invoices/publication-links";
-import { receiptRecipients, receiptSenderSchema } from "./address";
+import { receiptRecipients } from "./address";
 import type { InvoiceDeliveryWork, ReceiptEmailPayload } from "./outbox-contracts";
+import { resendEmailPayloadSchema } from "./resend";
 import { buildInvoiceEmail } from "./templates";
 
 export async function prepareInvoiceEmail(work: InvoiceDeliveryWork, links: PublicationLinkConfig, storage: PrivateDocumentStorage): Promise<ReceiptEmailPayload> {
@@ -26,7 +27,10 @@ export async function prepareInvoiceEmail(work: InvoiceDeliveryWork, links: Publ
     clientBusinessName: attempt.snapshot.client.businessName, businessName: attempt.snapshot.sender.businessName!,
     invoiceNumber: attempt.invoiceNumber, amountDecimal: attempt.snapshot.amountDecimal, dueDate: attempt.snapshot.dueDate,
     invoiceUrl, invoicePdfUrl: `${invoiceUrl}/pdf` });
-  return { from: receiptSenderSchema.parse(work.emailConfig.from), to: [work.normalizedRecipient], subject: content.subject,
+  // Fail preparation before the outbox records a provider-attempt marker.
+  const payload = resendEmailPayloadSchema.safeParse({ from: work.emailConfig.from, to: [work.normalizedRecipient], subject: content.subject,
     html: content.htmlBody, text: content.textBody,
-    attachments: [{ filename: artifact.pdfFilename, content: Buffer.from(stored.bytes).toString("base64") }] };
+    attachments: [{ filename: artifact.pdfFilename, content: Buffer.from(stored.bytes).toString("base64") }] });
+  if (!payload.success) throw new DocumentVerificationError();
+  return payload.data;
 }

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { canonicalJson } from "../domain/canonical-json";
 import type { ReceiptEmailProvider } from "./outbox-contracts";
 import { receiptSenderSchema } from "./address";
-const payloadSchema = z.object({
+export const resendEmailPayloadSchema = z.object({
   from: receiptSenderSchema, to: z.tuple([z.email().max(254)]), subject: z.string().min(1).max(300).regex(/^[^\r\n]+$/),
   html: z.string().max(200000), text: z.string().max(100000),
   attachments: z.tuple([z.object({ filename: z.string().max(200).regex(/^[A-Za-z0-9_-]+\.pdf$/),
@@ -11,7 +11,7 @@ const payloadSchema = z.object({
 
 export function createResendReceiptProvider(apiKey: string, request: typeof fetch = fetch): ReceiptEmailProvider {
   return { async send(payload, idempotencyKey, deadline) {
-    if (!apiKey || !payloadSchema.safeParse(payload).success || !/^[A-Za-z0-9_/-]{1,256}$/.test(idempotencyKey)) {
+    if (!apiKey || !resendEmailPayloadSchema.safeParse(payload).success || !/^[A-Za-z0-9_/-]{1,256}$/.test(idempotencyKey)) {
       return { kind: "failed", code: "PROVIDER_REJECTED" };
     }
     try {

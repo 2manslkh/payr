@@ -1,5 +1,29 @@
 # Privy Business Wallet Onboarding
 
+## 10 September Reconciliation Scope
+
+Privy onboarding and receiving-wallet discovery are selected core scope for the
+planned `v2.0.0` candidate. The production record below is preserved from the newer
+root donor, not a deployment or test performed during docs reconciliation. Its
+health base does not identify the complete deployed source; do not promote an
+older checkout over it. The guarded local-testnet payment attestor remains
+distinct from the Privy receiving wallet. No agent signing/spending is introduced.
+
+Use `mcp-onboarding.md` before public gateway setup: its recorded imported catalog
+has eleven Payr operations without `get_account_context` or `void_invoice`; local
+upstream has twelve including context. The context instructions below apply only
+where that operation is actually exposed and both account `wallet:read` and
+service-operation permission are present. Private per-user generated-MCP
+credential injection is still unverified; neither public discovery nor an archived
+plugin establishes it. Secrets stay out of chat.
+
+The live checklist's fresh publication now requires both `approval:true` and
+`deliveryApproval:true`, approved real client/issuer recipients and separately
+authorized mail enablement under `publish-and-send.md`. Disabled invoice email
+blocks fresh publication; finalized legacy replay stays read-only without send.
+Payment, verified receipt and independently gated receipt delivery remain required.
+Source consolidation authorizes none of these live writes or policy administration.
+
 ## Scope
 
 PAYR sign-in uses Privy authentication. The server provisions one Ethereum receiving wallet per verified Privy user, with that user as its sole owner and no additional signers. The wallet is linked to a PAYR workspace. Agents can discover public addresses with explicit `wallet:read` permission; no agent signing, payment, export, wallet creation, or administration API exists.
@@ -82,6 +106,23 @@ For a REST gateway, select **REST gateway connection** and the operator-register
 Credential issuance is intentionally show-once and non-replayable. If the response is lost, inspect the credential list and revoke the unknown credential before minting another. Do not put tokens in chat, URLs or recordings.
 
 ## Verification
+
+### Vercel Deployment (2026-09-10)
+
+The user authorized production deployment. Privy is live at `https://payrlink.xyz/login`.
+
+- Deployment: `dpl_GLDNXmDkssP7DFaFJWBNcNYs9zXV`, `https://payr-4vajkiydd-kenks-projects.vercel.app`.
+- Production aliases verified: `payrlink.xyz`, `payr-sandy.vercel.app`.
+- Rollback deployment: `dpl_3VwyXCNunStit6v7LjmxHLzTQnXY`.
+- Source: production v1.8.0 commit `cbcf7e28b9882d7ea3ee93599d2398381fe7938e` plus the uncommitted Privy implementation. This is a composed snapshot, not a new tagged release. Health reports the base commit; deployment metadata records the complete snapshot digest.
+- Snapshot SHA-256: `a7b93764ac8e9232d5a43fb305b0f77a6f7dd73f2514fdd2d7318fce40f08840` (280 uploaded source files).
+- Reviewed source retained under `.worktrees/privy-vercel-deploy-20260909/`. It preserves the newer production dashboard, install guide, gateway and publication paths rather than deploying the older root checkout wholesale. Login/connection copy conflicts were reconciled; Next build/tracing roots were pinned to the staging directory to prevent parent-checkout dependencies.
+- Only production Privy variables were added. Hosted Supabase, session and connector credentials, deployment policy, and cron schedules were preserved. The production-origin receiving policy is `l9kzom8jzihbb2izbc3kh52g`; the local policy remains separate.
+- Combined-snapshot verification: 124 test files passed, 2,453 tests passed, 13 skipped; lint and build passed; all 35 PDF verification tests passed with valid native function traces.
+- Candidate checks passed before promotion. Live health, login, install guide, gateway/publication specifications, missing-session denial and invalid-Privy-token denial passed after promotion.
+- The real Privy login sheet opened on desktop (1440x1000) and mobile (390x844), with visible email inputs, no horizontal overflow and no browser runtime errors.
+
+No real user login credentials were submitted during deployment verification. Authenticated wallet provisioning, existing-workspace linking and a genuine policy-denial demonstration still require the approved user's sign-in. No funds moved and no commits or version tags were created.
 
 ### Implementation Evidence (2026-09-09)
 

@@ -1,5 +1,15 @@
 # Publish and Send Implementation
 
+## 10 September Reconciliation
+
+This behavior is selected core scope for planned breaking `v2.0.0`, under the
+10 September decision and `reconciliation-v2.md`. It supersedes older no-initial-
+email and separate-Gmail plans. The worktree manifest and verification counts
+below record the earlier Publish & Send donor, not this lane or fresh candidate
+results. Preserve the deployed Privy snapshot described in `privy-onboarding.md`;
+source consolidation is not migration, deployment, Cron setup or live-send approval.
+The optional direct-MCP plugin is archived outside the active product.
+
 ## Approved Scope
 
 Publishing a newly approved invoice must queue separate Resend messages for the
@@ -55,7 +65,10 @@ Keccak-256 hash without regenerating its bytes.
 
 After publication commits, Next.js `after()` processes at most two deliveries for
 that exact attempt. Recurring recovery uses `GET /api/jobs/invoice-outbox`,
-authenticated by `CRON_SECRET`. Each bounded invocation can resume one unfinished
+authenticated by `PAYR_INVOICE_CRON_SECRET ?? CRON_SECRET`. Fallback applies only
+when the dedicated variable is absent; an explicitly empty dedicated value fails
+closed rather than using the shared secret. The selected value must be at least
+32 characters and is compared timing-safely. Each bounded invocation can resume one unfinished
 email-approved publication and then process up to eight eligible invoice deliveries.
 It does not drain the historical no-send publication or receipt-email queues.
 Send-start serialization shares settlement's invoice advisory lock; stale payment
@@ -87,7 +100,10 @@ No Vercel cron frequency or paid plan was changed.
    silently create them.
 4. In Vault, create exactly one `payr_invoice_email_origin` entry with value
    `https://payrlink.xyz`, and one `payr_invoice_email_cron_secret` entry containing
-   the existing production `CRON_SECRET`. Never store a raw secret in checked-in
+   the worker's selected secret: `PAYR_INVOICE_CRON_SECRET` when configured, otherwise
+   `CRON_SECRET`. Do not configure an empty dedicated variable; it fails closed.
+   Vault must match the selected value, not a stale fallback after dedicated-key
+   configuration or rotation. Keep shared-worker credentials unchanged. Never store a raw secret in checked-in
    SQL, job-command text, screenshots or logs. Duplicate names fail closed.
 5. Execute `supabase/ops/install-invoice-email-cron.sql` as the persistent `postgres`
    role. It verifies prerequisites, installs a private wakeup function and creates
@@ -98,9 +114,12 @@ No Vercel cron frequency or paid plan was changed.
    progress are healthy. A successful cron execution only proves that `pg_net`
    queued a request; it does not prove the worker ran or that Resend accepted mail.
 7. Refresh/reimport Bazantic's changed publication schema and update existing MCP
-   clients before enabling `PAYR_INVOICE_EMAIL_ENABLED=true`. The catalog remains
-   eleven resources; there is no separate agent send action and no invoice void
-   resource. Do not enable the receipt gate as part of this rollout.
+   clients before enabling `PAYR_INVOICE_EMAIL_ENABLED=true`. The recorded imported
+   gateway has eleven Payr operations; local upstream has twelve including account
+   context. Neither has a separate send action or invoice void resource. Review
+   context scope/service permissions separately and verify private per-user MCP
+   credential injection before authenticated client acceptance. Do not enable the
+   receipt gate as part of this rollout.
 8. With separately approved real recipient and sender test addresses, publish one
    new test invoice, inspect both messages/PDFs/links, and retry publication to prove
    no duplicate sends. Only after provider read-back should delivery be reported
@@ -114,7 +133,9 @@ reset provider keys, or undo already accepted emails as rollback.
 
 ## Verification
 
-All checks below passed on this worktree; no production operations were performed.
+Historical donor verification, before 10 September reconciliation: all checks below
+passed on that worktree; no production operations were performed. These counts
+are not fresh verification of the 10 September combined source.
 
 | Gate | Result |
 | --- | --- |
@@ -142,6 +163,8 @@ status redaction, and preserving the approved link origin during reserved,
 rendering and stored publication recovery. No original invoice bytes or legacy
 v1 SQL DTO contracts were rewritten.
 
-Outstanding: commit/release review, production migration/deployment, Vault/Cron
+At the donor checkpoint, outstanding: commit/release review, production migration/deployment, Vault/Cron
 provisioning, Resend activation and the approved live inbox test. This worktree
-contains no production credentials and remains uncommitted.
+contained no production credentials and remained uncommitted. Current commit/gate
+ownership is in `reconciliation-v2.md`; those operator gates are not discharged
+by importing this record.

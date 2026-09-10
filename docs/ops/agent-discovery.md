@@ -1,5 +1,25 @@
 # Public Agent Discovery
 
+## Current Scope: 10 September Reconciliation
+
+Preserve the later production/scanner record at the end, imported from the newer
+root donor, alongside the original implementation evidence. Neither record is
+fresh CI/deployment proof for this candidate. `privy-onboarding.md` identifies the
+later production snapshot as base `cbcf7e2` plus uncommitted Privy source; health
+does not identify its complete content. Privy login/receiving-wallet onboarding
+does not implement OAuth for Payr's agent credentials or replace the payment signer.
+
+Public onboarding now follows the MCP-first guide in `mcp-onboarding.md`, without
+the archived optional plugin. The recorded public gateway has eleven Payr
+operations without context/void, while local upstream has twelve including context.
+Direct MCP and public generated MCP have different authentication/catalogs; listing
+tools is not proof of private per-user account injection, which remains unverified.
+Keep secrets out of chat. New Publish & Send requires both literal approvals,
+frozen recipients/PDF/private links and configured email; disabled email blocks
+fresh publication. The served portable skill must match that current contract,
+not older separate-Gmail prose. Recheck its exact hash on the eventual candidate
+deployment; this docs edit does not claim it has been deployed.
+
 ## Implemented
 
 - `/robots.txt`: plain text, explicit crawler groups, sitemap link. Owner-selected policy: search allowed, AI training and AI input disallowed. Content Signals are preferences, not authorization. Specific search groups repeat private-path exclusions because wildcard groups are not inherited.
@@ -62,3 +82,13 @@ Preview `dpl_JAi1HvYnjNqvEFETmdoKHwhpjnnC` at `https://payr-k9u8ba7kc-kenks-proj
 Six focused desktop/mobile tests exercise public discovery and real page-load tool registration/execution/cleanup using both browser API adapters. Native experimental-browser availability is not claimed by the instrumented tests. The new MCP route tests use the real credential verifier and SDK with a repository fixture to cover scopes, expiry/revocation, rate limits, origin denial, redaction, and unsupported methods; existing token-in-path route tests remain unchanged. The package trace gate now checks the stable MCP function's PDF dependencies as well.
 
 Final focused regression run: 146 tests passed across nine files. Lint, typecheck, production builds, ten release-tool tests, and 35 compiled-document tests passed. A full current-worktree run passed 2,073 tests with 13 package-only skips before the final matcher regression cases. A later full run passed 2,077 tests but hit the existing 45-second native PDF inspection budget on the 100-item document test; the entire affected 21-test file subsequently passed in isolation. No PDF code, resource limits, or test deadlines were changed. Database fixtures and live financial workflows were not run for this implementation.
+
+## Production Verification (2026-09-09)
+
+User-approved production deployment `dpl_HSVN4DC2t5sETjG1wQg5GimJD6FL` is Ready at `https://payr-2gnlg8xf8-kenks-projects.vercel.app`, with `payrlink.xyz` and `payr-sandy.vercel.app` promoted to it. Source is committed AEO `fba7a1fc0c327d0f073dec23ce1ba37a1cd2b7e2` plus the exact already-deployed Bazantic publication route and `/openapi/publish.json` source, preserved with explicit user approval from `dpl_DfNrv7RPaYgrxb5wbHgF5q7Y7rG6`. Both preserved source files matched Vercel's stored SHA-1 hashes before upload. Other live runtime source files matched the recorded v1.6.0 baseline. No unrelated worktree files were uploaded.
+
+Combined source manifest SHA-256: `7be7bcaba1c46d3a2f1e22efc923268ea229e7235e0cbd4537ae65a8f57bac35`, computed from sorted file paths and content SHA-1 hashes. Vercel metadata records the AEO commit, preserved deployment, and combined fingerprint. Health reports the AEO commit; it is not the complete identity of the preserved Bazantic overlay. This is a deployment, not a new tagged version or a merge to main.
+
+Production HTTP checks passed HTML/Markdown alternation, warm-cache isolation, q=0 and wildcard defaults, GET/HEAD, RSC, discovery documents, exact skill hashes, and 401/Bearer/private-no-store responses for invalid MCP and publication credentials. The Bazantic spec still exposes only its publication operation. Node/build settings, production environment metadata, disabled Git-triggered deployments, and all three daily cron schedules were preserved. Receipt email remains disabled. No database migrations, authenticated publication, payments, or email sends were performed.
+
+At `2026-09-09T07:57:11.843Z`, the external scanner reported **73/100, 11 of 15 passes**, using the same check selection as the original 53-point screenshot, and labeled it Level 5 / Agent-Native. Newly passing checks: Markdown negotiation, MCP Server Card, and WebMCP (both actual registered tools detected). Remaining failures: DNS-AID, OAuth discovery, OAuth Protected Resource, and Auth.md agent-registration detection. Auth.md's heading now passes, but the scanner still does not recognize the documented owner-assisted provisioning as agent registration. Do not claim that check is fixed or fabricate OAuth registration to satisfy it. The scanner API's broader default adds unsupported A2A and reports 69/100 (11/16); compare like-for-like profiles.

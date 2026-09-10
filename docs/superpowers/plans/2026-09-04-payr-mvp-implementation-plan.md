@@ -4,9 +4,29 @@
 
 **Goal:** Deliver one narrow Payr vertical slice before 13 September 2026 at 12:00 EDT / 16:00 UTC: a freelancer uses a deployed Claude connector to create and approve an immutable USDC invoice, a client pays it from an external wallet through the Payr contract on Arc testnet, and Payr independently reconciles the event into a receipt and durable Resend deliveries. The original 44-hour decomposition is an effort estimate, not remaining availability. A separate one-click mainnet readiness milestone is due 30 September.
 
-**Architecture:** One Next.js application owns the dashboard, canonical invoice service, stateless Streamable HTTP MCP endpoint, protected invoice and receipt routes, payment authorization, reconciliation, and database-backed workers. Supabase/PostgreSQL is the private system of record. A minimal Arc contract accepts exact native USDC and emits the event that creates settlement evidence. Commercial invoice state remains independent from settlement evidence. A `PaymentSigner` port uses a tightly guarded testnet-only local signer for the committed MVP; a policy-controlled Privy adapter is an optional out-of-schedule enhancement.
+**Architecture:** One Next.js application owns the dashboard, canonical invoice service, stateless Streamable HTTP MCP endpoint, protected invoice and receipt routes, payment authorization, reconciliation, and database-backed workers. Supabase/PostgreSQL is the private system of record. A minimal Arc contract accepts exact native USDC and emits the event that creates settlement evidence. Commercial invoice state remains independent from settlement evidence. A `PaymentSigner` port uses the guarded testnet-only local signer. The selected Privy onboarding/receiving-wallet integration is distinct from that attestor, not the historical optional Privy payment-signer spike below.
 
 **Source context:** Read `PROJECT.md`, `DECISIONS.md`, `docs/superpowers/specs/2026-09-04-payr-framing-design.md`, `DESIGN.md`, and `docs/superpowers/plans/2026-09-05-payr-agent-orchestration-plan.md` before execution. This plan owns technical decomposition and verification. It does not silently override product scope, acceptance criteria, design, or dated decisions; reconcile any conflict in the authoritative documents before implementation continues.
+
+## 2026-09-10 Execution Override
+
+The 10 September decision, current charter and framing amendment supersede the
+older task decomposition below for planned breaking `v2.0.0`. Retain the dated
+estimates, released-source results and legacy DTO rationale as history; do not
+restart completed tasks or use their Gmail/no-send/Privy-signer assumptions as
+fresh implementation requirements. Current lane ownership and gates are in
+`docs/ops/reconciliation-v2.md`, not the original fanout or version labels.
+
+- Task 3 now retains Privy onboarding, business-wallet discovery and newer dashboard login/MCP setup. Preserve existing workspace/payout/profile/invoice/credential bindings and explicit `wallet:read` plus gateway service-operation permission; no automatic credential expansion. Live ownership/linking/genuine policy denial remain required and are not established by the recorded login-sheet smoke.
+- Tasks 4/7/9 now require Publish & Send: both `approval:true` and `deliveryApproval:true`, exact reviewed version/defaults/client changes/recipients, frozen PDF/private links, transactional distinct-address delivery and bounded invoice-only recovery. Disabled invoice email blocks fresh publication before reservation; authorized finalized legacy no-send replay cannot reserve/resume/send. No historical backfill or separate Gmail send. Use `docs/ops/invoice-email-contract.md` and `docs/ops/publish-and-send.md`, not the legacy package's sending instructions below.
+- Invoice-only Cron selects `PAYR_INVOICE_CRON_SECRET ?? CRON_SECRET` with fallback only when absent; an explicit empty dedicated value fails closed. Vault's `payr_invoice_email_cron_secret` must match the selected value. Other worker secrets and receipt enablement remain independent. Cron/Vault provisioning and email activation require operator approval.
+- Task 6 keeps the guarded local-testnet payment attestor, distinct from the Privy receiving wallet. The old optional Privy payment-signer spike is not the selected onboarding integration and must not replace or delay this contract.
+- Task 9 uses the chosen transport's discovered schema: the recorded public gateway has eleven Payr operations without context/void; local upstream has twelve including context, not void; direct MCP retains void. Private per-user injection into generated MCP is unverified, and the archived optional plugin cannot solve it. Stop authenticated setup until a private credential path is proven; never put a secret in chat. See `docs/ops/mcp-onboarding.md`.
+- Task 10 requires fresh combined-source CI/review plus approved initial-email, verified payment/receipt and independently enabled receipt-delivery proof. Link-only/email-disabled fallback is not fresh core acceptance. Preserve the recorded production `cbcf7e2` plus uncommitted Privy snapshot and its digest; consolidation grants no live writes or new release/deployment evidence. The optional plugin is excluded from active packaging and demo setup.
+
+The final acceptance matrix below includes the added onboarding/email gates.
+Older "Separate Enhancement Status" and optional-Gmail task prose remain historical
+decomposition, not authority to omit these selected core features or send duplicates.
 
 ## Scope And Execution Rules
 
@@ -21,7 +41,7 @@
 - Do not mark an external integration complete from mocks. Read back every external write from its authoritative API, chain, deployment, inbox, or dashboard.
 - Do not log secrets, raw connector path tokens, protected invoice/receipt slugs, authorization signatures, private keys, or provider credentials. Application logs and analytics must redact path credentials. The platform/CDN may still retain URL paths, as documented below.
 - Agents commit only their owned ticket files in isolated worktrees. The coordinator integrates them into one versioned PR per tranche, stages intended paths explicitly, and merges through protected `main`; trusted CI tags the resulting merge commit under `docs/ops/versioning.md`.
-- Claude Gmail execution, Gmail PDF attachment, host-agent web-search implementation, Privy, and Bazantic are outside the submission critical path. The data contract still accepts confirmed `web_source` provenance. Optional spikes begin only after every core acceptance criterion passes early and never consume recording, submission, or contingency time.
+- The current critical path retains Privy onboarding, the newer MCP guide and mandatory Payr Publish & Send under the 10 September override. Separate Gmail execution/attachment is not the selected sending workflow; host-agent search remains optional and confirmed `web_source` provenance stays supported. Further sponsor spikes cannot consume recording, submission or contingency time, and retained HTTP gateway evidence does not prove generated-MCP authentication.
 - Marketplace settlement/escrow, invoice-history credit assessment, and undercollateralized USDC lending using suitable Circle/Arc infrastructure are post-MVP roadmap work, not additional acceptance criteria or schema work for this build. See `PROJECT.md` for underwriting, anti-manipulation, and privacy boundaries.
 - `docs/architecture.excalidraw.svg` is the user's in-progress architecture diagram. Inspect and report discrepancies without overwriting it. Final video recording follows the completed deployed product flow; script preparation and diagram work may proceed in parallel.
 
@@ -239,7 +259,11 @@ export type PublicInvoiceStatusResult = {
 
 It excludes internal invoice/workspace IDs, recipient addresses, per-delivery rows, provider message IDs, attempt counts, and scheduling metadata. All explicit null behavior is inherited from the canonical result.
 
-### Exact Gmail-Ready Package
+### Exact Gmail-Ready Package (Legacy Compatibility)
+
+The six-field package remains for shipped consumers, not as a candidate send
+workflow. The 10 September override requires both approvals and Payr delivery for
+fresh publication; older separate-send instructions in this subsection are superseded.
 
 Every successful publication response reconstructs this link-only package from frozen snapshots and deterministic links:
 
@@ -1621,10 +1645,10 @@ Each core criterion appears exactly once below. A row is green only from the lis
 
 | ID | Core criterion | Implemented by | Required proof |
 | --- | --- | --- | --- |
-| C1 | A deployed Claude custom connector discovers Payr tools | Task 9 | Redacted deployed Claude initialize plus exact four-tool discovery |
+| C1 | A deployed Claude connector discovers the actual transport catalog and privately accesses its workspace | Task 9 | Redacted initialize/discovery/authenticated read and cross-account denial; public tool listing is not authenticated MCP proof |
 | C2 | One instruction creates a complete draft from confirmed profiles and visibly applies saved terms | Tasks 3, 4, 9 | Claude draft result showing profile selection, preview, and applied default |
 | C3 | Missing fields do not mutate; unconfirmed changes and URL-less web provenance are rejected | Task 4 | Unit/API/DB mutation-count and strict provenance tests |
-| C4 | Explicit publication allocates one immutable number/version and safe retry returns the same reconstructed artifacts | Tasks 2, 4 | Concurrency, fingerprint, crash recovery, restart-link, and frozen-row tests |
+| C4 | Both-approval Publish & Send allocates one immutable number/version and safe retry returns the same artifacts without duplicate delivery | Tasks 2, 4 | Approval/disabled-gate, fingerprint, concurrency, crash/origin recovery, legacy read-only/no-backfill and frozen-row tests |
 | C5 | Protected invoice page/PDF/hash/QR represent the same immutable invoice and URL | Task 5 | Page/PDF parity, served-byte hash, content type/headers, and actual embedded QR decode |
 | C6 | Pay Now persists a short-lived authorization and refuses voided/expired/settled invoices | Task 6 | Boundary/API/DB tests and a recovered guarded-local-signer signature |
 | C7 | A real external wallet settles exact native USDC through the deployed Arc contract | Tasks 6, 10 | Public operator/live transaction, event, zero contract balance, and payee delta |
@@ -1635,9 +1659,11 @@ Each core criterion appears exactly once below. A row is green only from the lis
 | C12 | Claude status returns commercial/display state, settlement/explorer, receipt, delivery, and settled-after-void facts | Tasks 4, 7, 9 | Exact-schema contract test and deployed Claude status result |
 | C13 | Private invoice content stays out of calldata/events and direct storage/table access is denied | Tasks 2, 5, 6 | Calldata/event inspection, salted commitment, direct RPC/table/object denial tests |
 | C14 | Production lint, typecheck, unit, DB integration, desktop/mobile browser, build, and Foundry suites pass | Tasks 1, 10 | Local commands and green separate Supabase CI job plus other CI jobs |
-| C15 | Core live path fits under three minutes without Gmail or search | Task 10 | Two timed rehearsals, retained uncut proof, final 2-4 minute video recorded after product completion, and real prior fallback |
+| C15 | Core live path includes Publish & Send, verified payment and receipt within three minutes, without separate Gmail or search | Task 10 | Two timed rehearsals, initial-email and separately gated receipt-delivery proof, retained uncut proof and final 2-4 minute video; fallback is labeled prior evidence, not a fresh pass |
 | C16 | Repository, architecture, demo, and submission tell the same implemented product story | Task 10 | User diagram review, final README/runbook/evidence review, and verified dashboard submission before 13 September 16:00 UTC (internal target 14:00 UTC) |
 | C17 | The authenticated console and protected payment/receipt surfaces implement `Commit Ledger`, remain agent-first, separate commercial/payment state, and expose neither direct web authoring nor Bills | Tasks 3, 4, 7, 8, 10 | Desktop/mobile screenshots, browser assertions, keyboard/contrast checks, and final `DESIGN.md` reconciliation |
+| C18 | Privy onboarding/discovery preserves user ownership and existing workspace bindings without expanding scopes | Task 3 reconciliation | Framing AC-45: live ownership, repeat-login uniqueness, linking preservation, scoped/cross-workspace discovery denial and genuine policy rejection; invalid-token denial is insufficient |
+| C19 | Approved initial invoice email delivers the frozen PDF/private links only to the approved distinct addresses | Tasks 4, 7, 9 reconciliation | Framing AC-46: both approvals, equal/distinct-address cases, immutable bytes/origin, disabled/no-backfill/retry tests and approved real inbox inspection; provider acceptance alone is not inbox delivery |
 
 ## Separate Enhancement Status
 

@@ -1,5 +1,15 @@
 # Bazantic: Invoice Publication Only
 
+**10 September current scope:** "publication only" describes this older spec's
+one-operation catalog, not publish-without-email behavior. The candidate keeps
+the newer Publish & Send recipe below: both approvals, frozen PDF/private links
+and client/issuer recipients; disabled email blocks fresh publication. Authorized
+finalized legacy no-send replay is read-only and never backfills. The older root
+donor's no-send recipe does not supersede this contract. The full agent catalog
+and preserved 9 September HTTP evidence are in `bazantic-agent-api.md`; current
+generated-MCP private authentication remains unverified in `mcp-onboarding.md`.
+No release, reimport, deployment or live send is authorized by this reconciliation.
+
 This integration exposes one operation: publish an existing Payr invoice draft.
 Draft creation and review stay in Payr or the existing MCP. It does not expose
 client/profile administration, draft creation, status tools, voiding, payment

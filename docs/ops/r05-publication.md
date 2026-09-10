@@ -2,6 +2,13 @@
 
 Evidence recorded `2026-09-06`. Base: `v0.3.0` / `57638dcbfc34342ea680d42acfba9b3988ee2ad6`.
 
+**Current-scope note (10 September):** the observations below remain historical.
+For the planned breaking candidate, `publish-and-send.md` and the 10 September
+decision supersede the no-email/no-publication-form scope: both literal approvals
+are mandatory for new Publish & Send, and dashboard review is not draft authoring.
+Finalized legacy no-send replay stays read-only; none of this evidence authorizes
+new sends, migration/deployment or reuse of consumed approvals.
+
 ## Delivered Scope
 
 - Authorized publication replay lookup before current configuration, permanent sequence allocation, immutable attempt binding, inactive link reservation, and active-attempt draft revision exclusion.

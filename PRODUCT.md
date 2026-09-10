@@ -16,7 +16,34 @@ Connect agent-driven invoice creation, protected documents, invoice-bound USDC s
 
 ## Capabilities and Constraints
 
-`PROJECT.md` remains the authoritative charter and source-precedence guide. Consult `STATUS.md`, `docs/ops/r09-release.md`, and the separately dated R07/R08 records for current capabilities and evidence limits.
+`PROJECT.md` remains the authoritative charter and source-precedence guide, subject to newer dated decisions in `DECISIONS.md`. Current reconciliation is tracked in `docs/ops/reconciliation-v2.md` and `STATUS.md`.
+
+The 10 September candidate selectively consolidates released `v1.8.0` main
+(`cbcf7e2`) with Privy onboarding/business-wallet discovery, newer dashboard
+login/MCP setup and mandatory Publish & Send for planned `v2.0.0`. Both literal
+approvals are required for new publication; disabled invoice email blocks it.
+The frozen PDF and private links go to each distinct approved client/issuer
+address; finalized legacy no-send replay stays read-only. Receipt email remains
+independently gated, and provider acceptance is not inbox delivery.
+
+The optional direct-MCP plugin is archive-only, not pending distribution. Public
+MCP discovery is not authenticated access: the recorded gateway exposes eleven
+Payr operations without context/void, while local upstream has twelve including
+context. Private per-user credential injection remains unverified; never put a
+secret in chat. `docs/ops/mcp-onboarding.md` owns this acceptance boundary.
+
+Production is documented as `cbcf7e2` plus an uncommitted Privy snapshot, not this
+candidate. Its login sheet was exercised without submitting real user credentials;
+ownership, linking and genuine policy denial remain live gates. The guarded
+local-testnet payment signer is distinct from the Privy receiving wallet. Fresh
+combined CI/review, initial-email, payment and receipt proof are required; no
+release, deployment or live write is authorized by these docs.
+
+### Historical Root-Updates Checkpoint (9 September)
+
+The following two paragraphs retain the earlier source checkpoint and its then-
+pending plugin plan. The 10 September scope above supersedes that plan and base;
+the dated test/deployment/migration observations remain evidence, not fresh gates.
 
 The clean release candidate starts from `v1.6.0` at `aebcd15` (PR #16), not a new deployment-evidence claim. Protected publication/PDFs, client wallet payments, settlement authorization/reconciliation, receipt rendering, durable receipt-email workers, public discovery, and stateless Claude MCP are implemented. Four default invoice tools use canonical draft/publication/status/void services; two sender tools require explicit opt-in and approval, and payout authority remains owner-signed. There is no browser invoice editor. The separately recorded R09 `v1.3.0` release remains historical deployment evidence. One scoped operator receipt email is verified; production-wide email remains disabled. Deployed Claude and full external-wallet rehearsals, human inbox opening, and unattended delivery remain unproven. Landing illustrations are not live account evidence.
 

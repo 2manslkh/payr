@@ -1,11 +1,29 @@
 ---
 name: payr-create-invoice
-description: Create or revise a Payr invoice, set up or update sender details with opt-in Direct Chat Setup, explicitly approve publication, check settlement and receipt status, or explicitly void an unpaid invoice through the connected Payr tools.
+description: Create or revise a Payr invoice, set up sender details with opt-in Direct Chat Setup, review Publish & Send approval, check payment and receipt status, discover a receiving wallet when scoped, or void an unpaid invoice where the connected transport supports it.
 ---
 
 # Payr Invoice Workflow
 
-Use the authenticated Payr connector and its discovered schemas. The four invoice tools are `create_invoice_draft`, `publish_invoice`, `get_invoice_status`, and `void_invoice`. `get_sender_profile` and `save_sender_profile` require separately opted-in sender scopes; discovery is not a permission grant. If the connector is unavailable, ask the user to configure or renew it in Payr Connections. Keep its credential URL out of chat, screenshots, logs, and documents.
+Use the authenticated Payr connector and its actual discovered schemas. Direct MCP
+retains invoice draft/publish/status/void tools. The recorded public gateway has
+eleven Payr operations without `get_account_context` or `void_invoice`; local
+upstream has twelve including context, not void. Generated gateway arguments may
+use a `requestBody` wrapper; follow discovery rather than assuming direct-MCP input.
+Sender tools require opt-in sender scopes; context requires `wallet:read` and, for
+the gateway, explicit service-operation permission. Discovery grants no authority.
+
+If workspace access is unavailable, direct the user to Payr Connections and the
+MCP-first `/install` guide. Per-user private credential injection into generated
+MCP remains unverified: stop authenticated work until the operator proves a private
+path. Never request or put account/service credentials, credential URLs or Privy
+tokens in chat, screenshots, logs or documents. The optional direct-MCP plugin is
+archive-only, not a prerequisite or an authentication fix.
+
+When context is actually exposed and scoped, call it read-only and distinguish
+`businessWallet.address` from `invoicePayoutAddress`; existing users may retain an
+external payout. A receiving address is not proof of live ownership or policy
+denial and grants no signing/spending authority. The payment signer is separate.
 
 ## Direct Chat Setup
 
@@ -32,7 +50,7 @@ Use the authenticated Payr connector and its discovered schemas. The four invoic
 
 - Use `get_invoice_status` with the canonical invoice ID to report commercial state, payment, receipt readiness, and delivery separately. Only persisted reconciliation-derived settlement means Paid. A submitted transaction or successful wallet notification alone is not settlement proof.
 - A ready receipt has its own protected links. Email `sent` means provider acceptance, not confirmed human inbox delivery. Preserve pending, failed, and manual-review states rather than promising delivery.
-- For a requested void, show the exact unpaid invoice and current version, explain that void is not a refund and cannot revoke an already issued onchain authorization, then obtain separate explicit approval. Call `void_invoice` with the invoice ID, expected version, `approval: true`, and its own idempotency key. Report a later valid settlement even if it occurred after void.
+- For a requested void, first confirm `void_invoice` is exposed by this transport. The public gateway does not expose it; direct the owner to Payr's supported dashboard void flow instead, without inventing a gateway action. Where available, show the exact unpaid invoice/current version, explain that void is not a refund and cannot revoke an already issued onchain authorization, then obtain separate explicit approval. Call with the invoice ID, expected version, `approval: true`, and its own idempotency key. Report a later valid settlement even after void.
 - Payment remains under the client's wallet control on the protected invoice page. Invoice tools grant no sender-write authority. Only opt-in sender tools can read/save sender setup. Publish & Send permits only its approved invoice deliveries, not arbitrary email, payout, connector-management, search, or payment operations.
 
 ## Completion

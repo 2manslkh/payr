@@ -1,5 +1,7 @@
 # PayR Demo Video Guide
 
+> Preserved main recording plan. [Current Recording Scope](README.md#current-recording-scope-10-september) supersedes older separate-send/link-only fallback and optional initial-email scenes. Core acceptance requires both-approval Publish & Send, verified payment/receipt and separately gated receipt-delivery proof, not this planned footage.
+
 **Target length:** 3 minutes 20 seconds
 
 **Allowed range:** 2–4 minutes

@@ -1,5 +1,14 @@
 # F3 Publication And Recovery Contract
 
+**10 September supersession:** this is the historical v1 freeze. The approved
+breaking candidate requires `deliveryApproval:true` as well as `approval:true`
+for fresh publication; email-disabled blocks reservation. Use
+`docs/ops/invoice-email-contract.md` for frozen recipients/PDF/origin, transactional
+delivery and invoice-only Cron. Authorized finalized legacy no-send replay is
+read-only, without reserve/resume/backfill. The Gmail package below is compatibility
+data, not a separate-send workflow. Historical v1 SQL/DTOs remain immutable;
+this notice does not rewrite them or claim fresh verification.
+
 Base: `v0.3.0` / `57638dcbfc34342ea680d42acfba9b3988ee2ad6`.
 
 R05 implements Task 4.3-4.6 using the frozen `InvoiceDocumentPort`. R06 supplies real PDF/QR/storage/protected-route behavior. A deterministic document adapter exists only in tests; production publication and cron processing must fail closed before reservation/claim when no real adapter is installed. No fake provider environment switch or application test bypass is permitted.

@@ -1,10 +1,22 @@
 # MCP Claude Smoke
 
+## 10 September Transport Boundary
+
+This runbook covers direct Payr MCP, not the public generated gateway. Use
+`mcp-onboarding.md` for the newer MCP-first public guide and its still-unverified
+private per-user credential injection. The recorded gateway has eleven Payr
+operations without account context or void; local upstream has twelve including
+context. The optional direct-MCP plugin is archive-only, not required here.
+Privy login/receiving-wallet onboarding is retained with separate live ownership,
+linking and policy-denial gates; it does not replace the local-testnet attestor.
+Old R09 test counts below remain dated evidence; fresh combined CI and approved
+authenticated-client, initial-email, payment and receipt acceptance remain gates.
+
 ## Scope And Preconditions
 
 R09 adds a stateless Streamable HTTP endpoint at `/api/mcp/[token]` using the pinned official MCP SDK. Each request uses existing connector credential verification and atomic database token/IP admission. Protocol discovery consumes the existing read-only `invoice:status` action; tool calls consume their actual canonical action once. Direct Chat Setup adds opt-in `sender:read` and `sender:write`, without expanding existing/default credentials. There is no session registry, SSE resume, or cookie authorization fallback. Unsupported methods and resume headers are rejected explicitly.
 
-The four invoice tools are `create_invoice_draft`, `publish_invoice`, `get_invoice_status`, and `void_invoice`. The two opt-in sender tools are `get_sender_profile` and `save_sender_profile`. The portable workflow is `skills/payr-create-invoice/SKILL.md`. Tool calls delegate to canonical services, including publication approval/version checks, F5 status projection, and connector-scoped sender RPCs. Payout changes are always owner-signed dashboard actions. See `docs/ops/mcp-sender-profile.md` before enabling sender setup.
+Direct MCP retains the four invoice tools `create_invoice_draft`, `publish_invoice`, `get_invoice_status`, and `void_invoice`, the two opt-in sender tools, and `get_account_context` gated by `wallet:read`. The portable workflow is `skills/payr-create-invoice/SKILL.md`. Tool calls delegate to canonical services, including both publication/delivery approvals, version checks, separate invoice/receipt delivery status and connector-scoped sender/context reads. Existing credentials gain no scopes. Payout changes remain owner-signed dashboard actions. See `docs/ops/mcp-sender-profile.md` before enabling sender setup.
 
 Before any live smoke, confirm operator approval for deployment, fixture publication, and connector creation/revocation. Confirm Claude custom-connector availability and compatibility with a credential-bearing URL and stateless POST transport. Local SDK tests do not prove Claude compatibility. No production credential, payment, email send, or deployment is authorized by this runbook.
 
@@ -32,7 +44,7 @@ The browser suite uses simulated wallet/RPC/authorization/status responses, not 
 
 1. Verify the approved deployment and preserved application origin. Confirm there is no body/path capture in application telemetry and that hosting/access-log controls protect bearer URLs. The route strips credentials before handing the request to the SDK and returns generic errors, but cannot control upstream access logging. Disable traces, video, screenshots, and network exports that could retain connector or document bearers.
 2. In Payr Connections, create a fresh short-lived demo connector. Enter its secret URL directly in Claude's connector settings. Record only its token ID and expiry in private operator records, never the raw URL or credential. Load the portable workflow where the host supports skills.
-3. Prove initialization and discovery return the four invoice and two sender tool names. An invoice-only connector must be denied both sender calls. If separately approved, create a new connection with Direct Chat Setup checked and verify both sender scopes. Record client version and negotiated protocol version without copying credential-bearing requests.
+3. Prove direct-MCP discovery returns the four invoice, two sender and one account-context tool names. An invoice-only connector must be denied sender/context calls. With separate approval, create appropriately scoped connections and verify sender access and `wallet:read` context, including cross-workspace denial. Record client and negotiated protocol versions without copying credential-bearing requests. Do not impose this seven-tool catalog or void step on the public gateway.
 4. Submit a synthetic invoice with an incomplete sender. Expect structured `MISSING_FIELDS`, `draftCreated: false`, and no invoice mutation. With an opted-in connection, read the sender, review and explicitly approve all setup fields, then save with the returned ID/revision. Verify payout is unchanged, repeat-save conflict is clear, and the original invoice payload/key now returns `DRAFT_READY`. Never put sender fields into draft input. Record its ID/version without protected links.
 5. Revise using `create_invoice_draft` and its actual expected version. Show the complete preview, defaults, payout, and client-profile diff. Confirm that a missing/false approval cannot publish. Obtain explicit operator approval before publishing the reviewed fixture.
 6. Refresh/reimport discovery, review the exact version/default/client diff and both snapshot email addresses, and obtain explicit Publish & Send approval. Use `approval:true`, `deliveryApproval:true` and one stable idempotency key. Reconnect and retry unchanged input: links reconstruct without re-enqueueing. Inspect `invoiceEmail` separately from `receiptEmail`; do not send a duplicate Gmail message. Live sends require separately authorized real test addresses and operator enablement; while invoice email is disabled, fresh publication must fail before writes. Historical v1 finalized replay remains no-send.

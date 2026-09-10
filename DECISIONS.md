@@ -27,6 +27,29 @@ separate operator gates. Do not promote a migration-only release over the record
 deployed Privy snapshot. Target `v2.0.0` through protected release tooling after
 all integrated gates pass; never rewrite historical SQL or published tags.
 
+For this candidate, this decision takes precedence over the charter's former
+email non-goal, the framing/implementation baseline's separate Gmail workflow,
+and older demo scripts. Preserve those dated observations as history, not active
+acceptance requirements. The portable invoice skill remains active; the optional
+direct-MCP plugin and its public packaging/install instructions do not.
+
+The recorded 10 September production state is main `cbcf7e2` plus an uncommitted
+Privy snapshot, not main alone. Preserve its source digest and deployment evidence
+in `docs/ops/privy-onboarding.md`. No live user credentials were submitted there;
+genuine wallet ownership, existing-workspace linking and policy denial remain
+unproven. The payment attestor remains the guarded local-testnet signer, distinct
+from the Privy receiving wallet. The public gateway's imported catalog has eleven
+Payr operations without account context or void; local upstream has twelve,
+including context but not void. Private per-user credential injection into generated
+MCP remains unverified and is not solved by the archived plugin. Keep account and
+service secrets out of chat; stop authenticated setup until a private path is proven.
+
+Approval here is source consolidation only. `v2.0.0` is planned, not released:
+fresh combined-source CI/review, authorized migration/deployment, gateway reimport,
+Cron/Vault setup, both-approval initial-email proof and verified payment/receipt
+acceptance remain gates. Email-disabled means fresh publication is blocked, not
+a supported publish-only fallback. Older test counts are dated evidence only.
+
 ## Earlier Decisions
 
 | Date | Decision | Reason | Alternatives rejected | Revisit when |

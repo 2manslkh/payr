@@ -4,6 +4,11 @@ Implementation contract for the user-approved 9 September Publish & Send change.
 This is not deployment, cron provisioning, credential or live-send authorization.
 The coordinator owns `publish-and-send.md` and the operator rollout.
 
+10 September scope: this is the mandatory breaking cutover for planned `v2.0.0`,
+not optional email on new publications. `reconciliation-v2.md` owns current lanes
+and gates. The local verification/file-manifest sections retain earlier donor
+observations and do not claim tests run against this combined candidate.
+
 ## Approval And Cutover
 
 New published requests require literal `approval:true` and `deliveryApproval:true`.
@@ -19,7 +24,10 @@ independent gate plus Resend sender/key before reservation. Receipt enablement i
 unchanged, remains off and is never consulted by the invoice worker. Replays of
 already-finalized work do not need current mail configuration. New reservations
 are Arc Testnet only. Agents must refresh discovery/reimport changed schemas;
-the Baz catalog still has exactly eleven operations, with no added void resource.
+the recorded imported Baz catalog has eleven Payr operations, while local upstream
+has twelve including `get_account_context`, not void. Reimport and explicit
+`wallet:read`/service-operation permission are required before claiming gateway
+context. Private per-user generated-MCP authentication remains unverified.
 
 `invoiceEmail` contains `state` and `deliveries` with only `roles`, `state`,
 `attemptCount`, `nextAttemptAt`. It is separate from `receiptEmail`. `sent` means
@@ -127,8 +135,12 @@ with Resend. Neither exactly-once sending nor inbox delivery is guaranteed.
 ## Coordinator Integration
 
 Endpoint ready: `GET /api/jobs/invoice-outbox`, Node runtime, `maxDuration=300`.
-Authenticate with the existing `Authorization: Bearer <CRON_SECRET>` contract
-(at least 32 characters). No caller-controlled batch size or recipient input.
+Authenticate with `Authorization: Bearer <selected secret>`, selecting
+`PAYR_INVOICE_CRON_SECRET ?? CRON_SECRET` (at least 32 characters). Fallback applies
+only when the dedicated variable is absent; an explicit empty value fails closed.
+Vault's `payr_invoice_email_cron_secret` must contain that same selected value;
+update it with any approved dedicated-key configuration/rotation. Other workers
+retain their shared-secret contract. No caller-controlled batch size or recipient input.
 Response is `{outcome:"disabled"|"drained",processed:number}`; failures are
 sanitized by `privateWorkerRequest`. The HTTP batch limit is eight and the loop
   has a 240-second soft budget, subject to bounded per-operation timeouts.

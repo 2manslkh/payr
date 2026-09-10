@@ -1,5 +1,13 @@
 # Root Release Execution
 
+**10 September supersession:** this is the historical root-updates execution
+record, not the current lane manifest or remaining test gate. Use
+`reconciliation-v2.md` for planned breaking `v2.0.0` consolidation and fresh CI.
+The former pending-plugin statement below is superseded by the archive-only
+decision; `/install` now follows the retained MCP-first guide in `mcp-onboarding.md`.
+Later Privy deployment/migration evidence is preserved in `privy-onboarding.md`.
+Do not repeat this record's migrations, releases or consumed live approvals.
+
 User-approved clean replay, 9 September 2026. Base `aebcd154810c234ade8f59cf2a451aa161ce11ff` (`v1.6.0`); replay commit `0be2fb9`. Original branch `integration/root-updates` remains at `72629a31bc3eb7fe22c4d91e45e00e4d1f453fa4`. The release-history dry run now accepts minor `1.7.0` without changing the gate.
 
 ## Ownership

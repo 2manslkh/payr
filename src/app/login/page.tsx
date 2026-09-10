@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PayrWordmark } from "../../components/payr-wordmark";
-import { WalletLogin } from "../../components/wallet-login";
+import { PrivyLogin } from "../../components/privy-login";
 
 export const metadata: Metadata = { title: "Sign in | Payr", robots: { index: false, follow: false } };
 
@@ -16,19 +16,21 @@ export default function LoginPage() {
       </header>
       <main id="main-content" className="login-page">
         <h1>
-          Your wallet.
+          Your business.
           <br />
           Your workspace.
         </h1>
         <p>Sign in to manage your sender profile, clients, and agent connections.</p>
-        <WalletLogin />
+        <PrivyLogin appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || process.env.PRIVY_APP_ID} />
+        <noscript>Enable JavaScript to sign in securely through Privy.</noscript>
         <section className="ruled-section">
-          <h2>A signature, not a payment</h2>
+          <h2>A wallet, ready for your business</h2>
           <p>
-            Your first sign-in creates a workspace owned by this wallet. It also becomes your initial payout
-            address. Changing that address later requires a new owner signature.
+            Sign-in provisions a wallet you control. Your agent can read its address with your permission,
+            but cannot control it. New workspaces use it as their default invoice payout address.
           </p>
           <p>After signing in, set up your sender profile and connect Claude from Connections. Publishing an invoice requires your explicit approval.</p>
+          <p>Already use Payr? Link your existing workspace after signing in to retain invoices and agent connections. Testnet funds only.</p>
         </section>
         <Link className="text-link" href="/">
           Back to Payr

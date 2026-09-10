@@ -2,6 +2,33 @@
 
 Record choices that are consequential, hard to reverse, or likely to be questioned later. Do not use this as a daily activity log.
 
+## 2026-09-10: Reconcile The Major Release
+
+The user approved selective reconciliation onto released main, retaining Privy
+business-wallet onboarding, dashboard login, MCP-first setup and Publish & Send.
+The optional direct-MCP plugin is archived outside the active product. Historical
+source and user-owned artwork are preserved before retiring any donor.
+
+The user explicitly chose a breaking publication cutover rather than preserving
+fresh publish-only requests. Every new publication requires `approval:true` and
+`deliveryApproval:true`; email configuration is required before reserving work.
+This overrides the older separate-Gmail-approval decision and the initial-email
+non-goal for this major release. Send the frozen invoice PDF and private links to
+the frozen client and issuer addresses, deduplicating equal normalized addresses.
+Do not automatically send historical invoices or enable receipt delivery.
+Authorized finalized legacy requests retain read-only replay, not retroactive send
+approval. Provider acceptance is not inbox delivery or exactly-once delivery.
+
+Privy onboarding remains user-owned, receiving-wallet discovery only: no agent
+signing, withdrawals, payment-attestor replacement or automatic scope expansion.
+Existing workspace, invoice, payout and credential bindings must survive linking.
+Production activation, credential changes, live email and payment evidence remain
+separate operator gates. Do not promote a migration-only release over the recorded
+deployed Privy snapshot. Target `v2.0.0` through protected release tooling after
+all integrated gates pass; never rewrite historical SQL or published tags.
+
+## Earlier Decisions
+
 | Date | Decision | Reason | Alternatives rejected | Revisit when |
 | --- | --- | --- | --- | --- |
 | 2026-09-09 | Approve R09 Direct Chat Setup: opt-in `sender:read` and `sender:write` allow MCP sender business/contact/address, invoice prefix and default-term setup and later updates after explicit approval | Overrides the older dashboard-only sender policy and four-supported-scopes freeze for this narrow capability. Existing/default credentials remain invoice-only; Connections grants both sender scopes only through an unchecked opt-in. Saves atomically match profile ID and revision, use a server-derived connector actor and token-attributed audit. Payout remains ALWAYS owner-signed dashboard only; draft input accepts no sender or payout fields | Impersonating the owner wallet; silently expanding existing tokens; accepting sender fields through draft; granting payout authority; blind save replay | Sender fields or connector authority change; see `docs/ops/mcp-sender-profile.md` for the exact additive contract and verification |

@@ -181,7 +181,7 @@ test("dashboard balance follows the selected wallet with motion, independent err
   await expect(page).toHaveURL(/\/install$/);
 });
 
-test("immutable current version SSR shows defaults, provenance and pending diff without unsafe markup or actions", async ({ page, context, workspace }, testInfo) => {
+test("immutable current version SSR shows defaults, provenance and pending diff without unsafe markup", async ({ page, context, workspace }, testInfo) => {
   const { sender, savedClient, snapshot } = await workspace.prepare();
   const first = await workspace.draft(snapshot);
   const current = await workspace.draft({ ...snapshot, memo: "Revised memo: <img src=x onerror=alert(1)>" }, first);
@@ -201,7 +201,9 @@ test("immutable current version SSR shows defaults, provenance and pending diff 
     await expect(page.getByRole("heading", { name: heading })).toBeVisible();
   }
   await expect(page.getByRole("heading", { name: "Version 1", exact: true })).toBeVisible();
-  await expect(page.locator(".invoice-surface script, .invoice-surface img, .invoice-surface form, .invoice-surface button")).toHaveCount(0);
+  await expect(page.locator(".invoice-surface script, .invoice-surface img, .invoice-surface form")).toHaveCount(0);
+  await expect(page.locator(".invoice-surface button")).toHaveCount(1);
+  await expect(page.locator(".invoice-surface").getByRole("button", { name: "Publish & Send", exact: true })).toBeDisabled();
   await expect(page.locator(".invoice-surface a[href*='example.com'], .invoice-surface a[href*='/pay/'], .invoice-surface a[href*='/receipt/']")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Open Claude", exact: true })).toHaveAttribute("href", "https://claude.ai/new");
   const read = await context.request.get(`/api/invoices/${current.draftId}`);

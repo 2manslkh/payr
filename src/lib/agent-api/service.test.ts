@@ -169,7 +169,7 @@ it.each([
   ["get_sender_profile", {}, "getSenderProfile"],
   ["save_sender_profile", { approval: true }, "saveSenderProfile"],
   ["create_invoice_draft", { idempotencyKey: "draft-key" }, "createDraft"],
-  ["publish_invoice", { draftId: account.workspaceId, expectedVersion: 1, approval: true, idempotencyKey: "publish-key" }, "publish"],
+  ["publish_invoice", { draftId: account.workspaceId, expectedVersion: 1, approval: true, deliveryApproval: true, idempotencyKey: "publish-key" }, "publish"],
 ] as const)("%s calls only the canonical service with a connector actor", async (operation, input, method) => {
   await api.execute(operation, input, context, ip);
   expect(services[method]).toHaveBeenCalledExactlyOnceWith({ workspaceId: account.workspaceId, ownerWallet: null, connectorId: key.id }, input);

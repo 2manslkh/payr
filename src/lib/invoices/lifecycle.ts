@@ -61,6 +61,7 @@ export function createInvoiceLifecycleService(repository: PublicationRepository,
         },
         explorer: settlement === null ? null : { transactionUrl: new URL(`/tx/${settlement.transactionHash}`, getConfig().explorerOrigin).href },
         invoiceDocument, receiptDocument,
+        invoiceDeliveries: data.invoiceDeliveries,
         deliveries: data.deliveries.map((delivery) => ({
           roles: delivery.roles.filter((role) => role === "issuer" || role === "client"),
           normalizedRecipient: delivery.normalizedRecipient, state: delivery.state,

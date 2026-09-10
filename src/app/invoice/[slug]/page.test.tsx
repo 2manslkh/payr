@@ -14,11 +14,11 @@ vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("NOT_FOUND
 
 beforeEach(() => { for (const mock of Object.values(mocks)) mock.mockReset(); });
 
-it("revalidates independently, uses the shared formatter/QR, and sends only precise document DTO props", async () => {
+it.each([undefined, "https://approved.test"])("revalidates independently and uses the pinned origin for formatter/QR when present (%s)", async (appOrigin) => {
   const attempt = {
     invoiceId: "internal-invoice", invoiceVersion: 1, invoiceNumber: "INV-2030-000001", invoiceKey: `0x${"1".repeat(64)}`,
     chainId: 5042002, contractAddress: `0x${"2".repeat(40)}`, snapshot: testPublicationSnapshot(),
-    publicationSalt: "secret-salt", storageKey: "secret-storage", artifact: { pdfContentHash: "pdf-hash", documentCommitment: "commitment" },
+    publicationSalt: "secret-salt", storageKey: "secret-storage", link: { appOrigin }, artifact: { pdfContentHash: "pdf-hash", documentCommitment: "commitment" },
   } as unknown as PublicationAttempt;
   attempt.artifact!.invoiceDataHash = keccak256(toHex(canonicalPublicationJson(attempt)));
   mocks.resolve.mockResolvedValue({ invoiceId: attempt.invoiceId, invoiceVersion: 1, invoiceNumber: attempt.invoiceNumber,
@@ -30,8 +30,8 @@ it("revalidates independently, uses the shared formatter/QR, and sends only prec
   mocks.qr.mockResolvedValue("data:image/png;base64,inert");
   const result = await InvoicePage({ params: Promise.resolve({ slug: "inert" }) });
   expect(mocks.resolve).toHaveBeenCalledExactlyOnceWith("inert");
-  expect(mocks.view).toHaveBeenCalledExactlyOnceWith({ parsed: true }, "https://configured.test/invoice/inert");
-  expect(mocks.qr).toHaveBeenCalledExactlyOnceWith("https://configured.test/invoice/inert");
+  expect(mocks.view).toHaveBeenCalledExactlyOnceWith({ parsed: true }, `${appOrigin ?? "https://configured.test"}/invoice/inert`);
+  expect(mocks.qr).toHaveBeenCalledExactlyOnceWith(`${appOrigin ?? "https://configured.test"}/invoice/inert`);
   expect(result.props).toEqual({ view: { invoiceNumber: attempt.invoiceNumber }, qrDataUrl: "data:image/png;base64,inert",
     pdfContentHash: "pdf-hash", documentCommitment: "commitment", commercialState: "expired", paymentStatus: "unpaid", displayStatus: "Expired",
     receipt: { state: "not_applicable", pageUrl: null, pdfUrl: null, pdfFilename: null, pdfContentHash: null }, receiptEmailState: "not_applicable" });

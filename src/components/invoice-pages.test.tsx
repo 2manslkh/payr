@@ -210,7 +210,7 @@ it("renders immutable snapshot facts, defaults, provenance, pending changes and 
   expect(screen.getByText("Version 1")).toBeDefined();
   expect(screen.getAllByText("https://example.com/billing").length).toBeGreaterThan(0);
   expect(document.querySelectorAll("script, img, form, a[href*='example.com'], a[href*='/pay/'], a[href*='/receipt/']")).toHaveLength(0);
-  expect(screen.queryByRole("button")).toBeNull();
+  expect(screen.getByRole("button", { name: "Publish & Send" }).hasAttribute("disabled")).toBe(true);
 });
 
 it("handles legacy records without inventing an immutable snapshot", async () => {

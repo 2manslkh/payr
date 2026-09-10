@@ -14,11 +14,13 @@ import type { createInvoiceLifecycleService } from "../invoices/lifecycle";
 export type McpServices = Pick<ReturnType<typeof createInvoiceDraftService>, "createDraft">
   & Pick<ReturnType<typeof createPublicationService>, "publish">
   & Pick<ReturnType<typeof createInvoiceLifecycleService>, "status" | "void">
-  & ReturnType<typeof createConnectorSenderService>;
+  & ReturnType<typeof createConnectorSenderService>
+  & { getAccountContext?: (actor: InvoiceActor, input: unknown) => Promise<Record<string, unknown>> };
 export const toolActions = {
   create_invoice_draft: "invoice:draft", publish_invoice: "invoice:publish",
   get_invoice_status: "invoice:status", void_invoice: "invoice:void",
   get_sender_profile: "sender:read", save_sender_profile: "sender:write",
+  get_account_context: "wallet:read",
 } as const;
 
 // Discovery documentation only. Canonical services own all validation and mutations.
@@ -30,8 +32,10 @@ const confirmed = (value: object) => object({ value, confirmed: { const: true },
   object({ kind: { const: "user_provided" } }, ["kind"]),
   object({ kind: { const: "web_source" }, url: { type: "string", format: "uri", pattern: "^https?://" } }, ["kind", "url"]),
 ] } }, ["value", "confirmed", "provenance"]);
-const common = " Payr does not search. Only confirmed user_provided or URL-bearing web_source proposals are accepted; saved_profile is server-owned. Publication approval is separate from Gmail sending approval. Paid requires reconciliation-derived persisted settlement, never a wallet callback.";
+const common = " Payr does not search. Only confirmed user_provided or URL-bearing web_source proposals are accepted; saved_profile is server-owned. Publish & Send queues invoice email through Payr; do not send a duplicate through Gmail. Paid requires reconciliation-derived persisted settlement, never a wallet callback.";
 const tools: Tool[] = [
+  { name: "get_account_context", description: "After connecting, discover the business receiving wallet and current invoice payout address. Requires explicit wallet:read permission. These addresses may differ. A null businessWallet means Privy onboarding is not linked yet. Read-only: no signing, spending, wallet creation, or payout authority. Never ask for a private key or Privy token.",
+    inputSchema: object({}), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
   { name: "get_sender_profile", description: "Direct Chat Setup: requires opt-in sender:read. Read sender fields, missing fields, profile id and revision before setup or updates. No payout authority. If unavailable, enable Direct Chat Setup on a new dashboard connection or complete the sender in the dashboard.",
     inputSchema: object({}), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
   { name: "save_sender_profile", description: "Direct Chat Setup: requires opt-in sender:write. Setup or update only after the user explicitly approves all business/contact/address fields, invoice prefix and default terms. Supply expectedProfileId and expectedRevision from get_sender_profile and approval:true. Repeated or stale saves conflict: read again and obtain fresh approval, never retry blindly. Payout is ALWAYS owner-signed dashboard only. Never include wallet, actor or workspace fields.",
@@ -48,8 +52,8 @@ const tools: Tool[] = [
       issueDate: { type: "string", format: "date" }, dueDate: { type: "string", format: "date" }, useDefaultTerms: { type: "boolean" },
       memo: { type: "string", maxLength: 2000 },
     }, ["idempotencyKey"]), annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
-  { name: "publish_invoice", description: "Publish only after explicit approval:true of this exact draft version, all defaults, and the client-profile diff. Retry identical input with the same idempotency key to reconstruct immutable links and the exact gmailLinkPackage. This does not send email or authorize payment." + common,
-    inputSchema: object({ draftId: uuid, expectedVersion: version, approval: { const: true }, idempotencyKey: text(128) }, ["draftId", "expectedVersion", "approval", "idempotencyKey"]),
+  { name: "publish_invoice", description: "Publish & Send only after explicit approval:true and deliveryApproval:true of this exact draft version, all defaults, client-profile diff, and email to the snapshot client.contactEmail and sender.contactEmail. One separate message per distinct address includes the frozen PDF and private invoice/PDF links. Retry unchanged input and the same idempotency key. invoiceEmail reports per-recipient states; sent means provider acceptance, not inbox delivery. Disabled email fails before a new publication write. Refresh/reimport older tool schemas before activation. This does not authorize payment." + common,
+    inputSchema: object({ draftId: uuid, expectedVersion: version, approval: { const: true }, deliveryApproval: { const: true }, idempotencyKey: text(128) }, ["draftId", "expectedVersion", "approval", "deliveryApproval", "idempotencyKey"]),
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false } },
   { name: "get_invoice_status", description: "Read the complete canonical status for an invoice in this workspace. Keep commercial state, persisted settlement, receipt readiness, and email provider acceptance separate. Recipient delivery details are private to this authenticated workspace." + common,
     inputSchema: object({ invoiceId: uuid }, ["invoiceId"]), annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
@@ -60,7 +64,7 @@ const tools: Tool[] = [
 const statusInput = z.object({ invoiceId: z.string().uuid() }).strict();
 const safeCodes = new Set(["INVALID_INPUT", "PROHIBITED_FIELD", "PAYLOAD_TOO_LARGE", "NOT_FOUND", "FORBIDDEN", "VERSION_CONFLICT", "PROFILE_CONFLICT", "REVISION_CONFLICT",
   "IDEMPOTENCY_CONFLICT", "DRAFT_NOT_EDITABLE", "PUBLICATION_IN_PROGRESS", "PUBLICATION_FAILED", "PUBLICATION_RETRYABLE", "LEASE_LOST",
-  "INVOICE_NOT_VOIDABLE", "LINK_UNAVAILABLE", "CONFIGURATION_ERROR", "DOCUMENTS_NOT_CONFIGURED"]);
+  "INVOICE_NOT_VOIDABLE", "LINK_UNAVAILABLE", "CONFIGURATION_ERROR", "DOCUMENTS_NOT_CONFIGURED", "DELIVERY_APPROVAL_REQUIRED", "INVOICE_EMAIL_DISABLED"]);
 
 export function createMcpServer(actor: InvoiceActor, services: McpServices) {
   const server = new Server(mcpServerInfo, { capabilities: { tools: {} } });
@@ -69,6 +73,9 @@ export function createMcpServer(actor: InvoiceActor, services: McpServices) {
     try {
       let result;
       switch (params.name) {
+        case "get_account_context":
+          if (!services.getAccountContext) throw new IdentityError("CONFIGURATION_ERROR", 503);
+          result = await services.getAccountContext(actor, params.arguments ?? {}); break;
         case "get_sender_profile": result = await services.getSenderProfile(actor, params.arguments ?? {}); break;
         case "save_sender_profile": result = await services.saveSenderProfile(actor, params.arguments); break;
         case "create_invoice_draft": result = await services.createDraft(actor, params.arguments); break;

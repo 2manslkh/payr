@@ -7,6 +7,7 @@ import type { IdentitySession } from "../lib/identity/contracts";
 import { consoleApi } from "./console-api";
 import { RequestError } from "./console-ui";
 import { PayrWordmark } from "./payr-wordmark";
+import { usePrivyWalletActions } from "./privy-provider";
 
 const IdentityContext = createContext<IdentitySession | null>(null);
 export function ConsoleIdentity({
@@ -42,6 +43,7 @@ const destinations = [
 ];
 
 export function AppNavigation() {
+  const privy = usePrivyWalletActions();
   const pathname = usePathname();
   const session = useConsoleIdentity();
   const [open, setOpen] = useState(false);
@@ -52,6 +54,7 @@ export function AppNavigation() {
     setError(null);
     try {
       await consoleApi<{ ok: true }>("/api/auth/logout", {});
+      await privy?.logout();
       window.location.replace("/login");
     } catch (failure) {
       setError(failure);

@@ -35,6 +35,7 @@ const identityEnvironment = {
   LINK_TOKEN_KEY_V1: process.env.PAYR_E2E_LINK_KEY,
   CRON_SECRET: process.env.PAYR_E2E_CRON_SECRET,
   PAYR_RECEIPT_EMAIL_ENABLED: "false",
+  PAYR_INVOICE_EMAIL_ENABLED: "false",
 };
 Object.assign(process.env, identityEnvironment);
 

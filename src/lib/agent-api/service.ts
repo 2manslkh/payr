@@ -87,6 +87,9 @@ export function createAgentApi(dependencies: {
         || !account.credential.scopes.includes(operationScopes[operation]!)) throw new IdentityError("AUTH_REQUIRED", 401);
       const actor = { workspaceId: account.workspaceId, ownerWallet: null, connectorId: account.credential.id };
       switch (operation) {
+        case "get_account_context":
+          if (!services.getAccountContext) throw new IdentityError("CONFIGURATION_ERROR", 503);
+          return services.getAccountContext(actor, operationSchemas.get_account_context.parse(input));
         case "get_account":
           operationSchemas.get_account.parse(input);
           return account;

@@ -57,6 +57,9 @@ export function errorMessage(error: unknown): string {
     return "Enter an assigned ISO country code, such as GB, US or SG. Use GB rather than UK; your edits are still here.";
   if (code === "PROFILE_CHANGED")
     return "Your signed-in workspace changed. Your edits were not saved. Reopen Settings for the current workspace before editing.";
+  if (code === "IDENTITY_CONFLICT") return "This identity or workspace is already linked differently. Use the original account or contact the PAYR operator. No accounts were merged.";
+  if (code === "WALLET_UNAVAILABLE") return "Wallet setup could not finish. Retry setup; PAYR will recover the existing wallet rather than create another.";
+  if (code === "WALLET_CONTROL_MISMATCH") return "The wallet ownership or policy does not match the required configuration. Contact the PAYR operator; access has been stopped for safety.";
   if (code === "REVISION_CONFLICT" || (error instanceof ConsoleError && error.status === 409))
     return "This record changed elsewhere. Review the latest saved version before applying your edits.";
   if (code === "NETWORK_ERROR")

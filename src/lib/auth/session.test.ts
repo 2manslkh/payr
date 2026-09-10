@@ -4,6 +4,13 @@ import { EncryptJWT, jwtDecrypt } from "jose";
 import { createSessionCodec } from "./session";
 import { config, identity, owner } from "./test-support";
 
+it("preserves the verified Privy identity in encrypted sessions without dropping the legacy workspace anchor", async () => {
+  const codec = createSessionCodec(config);
+  const linked = { ...identity, privyUserId: "did:privy:owner" };
+  expect(await codec.open(await codec.seal(linked))).toEqual(linked);
+  await expect(codec.seal({ ...identity, privyUserId: "attacker" })).rejects.toThrow();
+});
+
 it("round trips encrypted identity and rejects tampering and exact expiry", async () => {
   const codec = createSessionCodec({ appOrigin: "https://payrlink.xyz", chainId: 5042002, sessionKey: new Uint8Array(32).fill(7) });
   const now = new Date("2026-09-05T00:00:00.000Z");

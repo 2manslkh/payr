@@ -2,11 +2,20 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildInvoiceStatus,
+  buildInvoiceEmailStatus,
   deriveReceiptEmailState,
   redactPublicInvoiceStatus,
   type InvoiceStatusFacts,
   type InvoiceStatusResult,
 } from "./status";
+
+it("projects invoice delivery roles without private addresses, provider IDs or payloads", () => {
+  const deliveries = [{ roles: ["client" as const], state: "pending" as const, attemptCount: 0, nextAttemptAt: null,
+    normalizedRecipient: "private@example.test", providerMessageId: "private-provider-id", payload: "private-body" }];
+  expect(buildInvoiceEmailStatus(deliveries)).toEqual({ state: "queued", deliveries: [
+    { roles: ["client"], state: "pending", attemptCount: 0, nextAttemptAt: null },
+  ] });
+});
 
 describe("buildInvoiceStatus", () => {
   it("emits the exact explicit-null contract before settlement", () => {
@@ -46,6 +55,7 @@ describe("buildInvoiceStatus", () => {
         pdfContentHash: null,
       },
       receiptEmail: { state: "not_applicable", deliveries: [] },
+      invoiceEmail: { state: "not_applicable", deliveries: [] },
     });
   });
 

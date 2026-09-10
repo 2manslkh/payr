@@ -3,19 +3,18 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { expect, test } from "@playwright/test";
 import { keccak256 } from "viem";
-import { createIdentityEnv, createPublicationLinkEnv } from "../../src/config/env";
-import { createSessionCodec } from "../../src/lib/auth/session";
+import { createPublicationLinkEnv } from "../../src/config/env";
 import { createDraftRepository } from "../../src/lib/db/drafts";
 import { createPublicationRepository } from "../../src/lib/db/publication";
 import { createPrivateDocumentStorage } from "../../src/lib/documents/invoice-storage";
 import { inspectInvoicePdf } from "../../src/lib/documents/pdf-verification";
-import { SESSION_COOKIE, type ClientProfile, type SenderProfile } from "../../src/lib/identity/contracts";
+import type { ClientProfile, SenderProfile } from "../../src/lib/identity/contracts";
 import { createInvoiceDraftService } from "../../src/lib/invoices/service";
-import type { PublishedInvoiceResult } from "../../src/lib/invoices/publication-contracts";
 import { createInvoiceLifecycleService } from "../../src/lib/invoices/lifecycle";
 import { createKeyedTokenCodec } from "../../src/lib/security/keyed-token";
 import { testPublicationSnapshot } from "../../src/lib/invoices/publication.test-support";
 import { seedBrowserWorkspace } from "./workspace-fixture";
+import { publishNoSendFixture } from "./publication-fixture";
 
 test.use({ trace: "off", video: "off", screenshot: "off" });
 test.setTimeout(120_000);
@@ -54,22 +53,8 @@ async function storedInvoice(baseURL: string) {
     idempotencyKey: randomUUID(), useDefaultTerms: true, client: { id: savedClient.id },
     items: snapshot.items.map((item) => ({ description: item.description, amount: item.amountDecimal })),
   });
-  // Exercise compiled Next producers; Playwright must never transform the PDF JSX.
-  // Native fetch keeps the owner cookie and returned bearer URLs out of request artifacts.
-  const token = await createSessionCodec(createIdentityEnv()).seal(identity);
-  const response = await fetch(new URL(`/api/invoices/${draft.draftId}/publish`, app), {
-    method: "POST", redirect: "manual",
-    headers: { Cookie: `${SESSION_COOKIE}=${token}`, Origin: app.origin, Host: app.host, "Content-Type": "application/json" },
-    body: JSON.stringify({ expectedVersion: draft.version, approval: true, idempotencyKey: randomUUID() }),
-  }).catch(() => { throw new Error("Compiled publication HTTP request failed"); });
-  const body: unknown = await response.json().catch(() => { throw new Error("Compiled publication returned invalid JSON"); });
-  const artifactFailed = typeof body === "object" && body !== null && "code" in body && "failureCode" in body
-    && body.code === "PUBLICATION_FAILED" && body.failureCode === "ARTIFACT_VERIFICATION_FAILED";
-  expect(response.status, artifactFailed
-    ? "Compiled publication: PUBLICATION_FAILED / ARTIFACT_VERIFICATION_FAILED"
-    : "Compiled publication must finalize").toBe(200);
-  const published = body as PublishedInvoiceResult;
   const repository = createPublicationRepository(client);
+  const published = await publishNoSendFixture(repository, actor, draft);
   const storage = createPrivateDocumentStorage(client);
   const target = await repository.statusData(actor, draft.draftId);
   if (target?.commercialState !== "published" || target.attempt?.state !== "finalized" || !target.attempt.artifact?.qrVerified) {

@@ -5,10 +5,10 @@ import { publishInvoiceSchema } from "../invoices/publication";
 import { COMMERCIAL_STATES } from "../domain/invoice";
 
 export const ACCOUNT_SCOPES = ["invoice:draft", "invoice:publish", "invoice:status", "sender:read", "sender:write"] as const;
-export const accountScopesSchema = z.array(z.enum(ACCOUNT_SCOPES)).min(1).max(5)
+export const accountScopesSchema = z.array(z.enum([...ACCOUNT_SCOPES, "wallet:read"])).min(1).max(6)
   .refine((scopes) => scopes.includes("invoice:status") && new Set(scopes).size === scopes.length);
 export const operationNames = ["create_account_challenge", "register_account", "get_account", "revoke_current_credential",
-  "get_sender_profile", "save_sender_profile", "create_invoice_draft", "list_invoices", "get_invoice", "publish_invoice", "get_invoice_status"] as const;
+  "get_sender_profile", "save_sender_profile", "create_invoice_draft", "list_invoices", "get_invoice", "publish_invoice", "get_invoice_status", "get_account_context"] as const;
 export type AgentOperation = typeof operationNames[number];
 const empty = z.object({}).strict();
 const invoiceId = z.object({ invoiceId: z.string().uuid().transform((value) => value.toLowerCase()) }).strict();
@@ -18,6 +18,7 @@ export const operationSchemas = {
     scopes: accountScopesSchema.default([...ACCOUNT_SCOPES]), expiresInDays: z.number().int().min(1).max(7).default(1) }).strict(),
   register_account: z.object({ challengeId: z.string().uuid().transform((value) => value.toLowerCase()), signature: z.string().regex(/^0x[0-9a-fA-F]{130}$/) }).strict(),
   get_account: empty,
+  get_account_context: empty,
   revoke_current_credential: z.object({ approval: z.literal(true) }).strict(),
   get_sender_profile: empty,
   save_sender_profile: saveConnectorSenderSchema,
@@ -31,6 +32,7 @@ export const operationSchemas = {
 
 export const operationScopes: Record<AgentOperation, ConnectorScope | null> = {
   create_account_challenge: null, register_account: null, get_account: "invoice:status",
+  get_account_context: "wallet:read",
   revoke_current_credential: "invoice:status", get_sender_profile: "sender:read", save_sender_profile: "sender:write",
   create_invoice_draft: "invoice:draft", list_invoices: "invoice:status", get_invoice: "invoice:status",
   publish_invoice: "invoice:publish", get_invoice_status: "invoice:status",

@@ -6,6 +6,8 @@ import { commercialLabels } from "./invoice-ui";
 import { PublicationActions } from "./publication-actions";
 import { SettlementProof } from "./settlement-proof";
 import type { SettlementManagementView } from "../lib/invoices/lifecycle";
+import type { InvoiceEmailStatus } from "../lib/domain/status";
+import { PublishAndSend } from "./publish-and-send";
 
 const clientLabels: Record<ClientField, string> = {
   businessName: "Business name", billingAddress: "Billing address", contactName: "Contact name", contactEmail: "Contact email",
@@ -29,7 +31,10 @@ function Provenance({ value }: { value: DraftSnapshot["clientProvenance"][Client
   return <>Web source, declared confirmed: <span className="invoice-source">{value.url}</span></>;
 }
 
-export function InvoiceDocument({ detail, publication, proof = null }: { detail: InvoiceDetail; publication: PublicationView | null; proof?: SettlementManagementView | null }) {
+export function InvoiceDocument({ detail, publication, proof = null, invoiceEmail = null, emailEnabled = false }: {
+  detail: InvoiceDetail; publication: PublicationView | null; proof?: SettlementManagementView | null;
+  invoiceEmail?: InvoiceEmailStatus | null; emailEnabled?: boolean;
+}) {
   const { invoice, version, history } = detail;
   const snapshot = version?.snapshot;
   const published = invoice.commercialState !== "draft";
@@ -155,6 +160,19 @@ export function InvoiceDocument({ detail, publication, proof = null }: { detail:
           <p className="muted">{proof || invoice.paymentStatus === "paid" ? "A settlement is recorded. Commercial state remains a separate fact." : "No settlement is recorded for this invoice."}</p>
         </section>
         {proof && <SettlementProof invoiceId={invoice.id} version={invoice.version} proof={proof} />}
+        {!published && snapshot?.sender.contactEmail && publication && (publication.state === null || ["reserved", "rendering", "stored"].includes(publication.state)) && <PublishAndSend key={`${invoice.id}:${invoice.version}`}
+          invoiceId={invoice.id} version={invoice.version} clientEmail={snapshot.client.contactEmail}
+          senderEmail={snapshot.sender.contactEmail} enabled={emailEnabled} recovering={publication.state !== null} />}
+        {invoiceEmail && <section className="invoice-rail-section" aria-labelledby="invoice-email-heading">
+          <h2 id="invoice-email-heading">Invoice email</h2>
+          {invoiceEmail.state === "not_applicable" ? <p>No invoice email queued. Historical publications are not sent automatically.</p> : <>
+            <dl className="invoice-facts">{invoiceEmail.deliveries.map((delivery) => <div key={delivery.roles.join(",")}>
+              <dt>{delivery.roles.length === 2 ? "Client and sender" : delivery.roles[0] === "issuer" ? "Sender copy" : "Client"}</dt>
+              <dd>{{ pending: "Queued", sending: "Sending", retry_wait: "Retry scheduled", sent: "Accepted by email provider", failed: "Failed", manual_review: "Manual review required" }[delivery.state]}</dd>
+            </div>)}</dl>
+            <p className="muted">Provider acceptance does not confirm inbox delivery. Do not send a duplicate through Gmail.</p>
+          </>}
+        </section>}
         {publication ? (
           <PublicationActions
             invoiceId={invoice.id}

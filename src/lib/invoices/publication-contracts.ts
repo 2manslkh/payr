@@ -1,16 +1,19 @@
 import type { CommercialState } from "../domain/invoice";
-import type { DeliveryStatus, InvoiceStatusResult, ReceiptDocumentState, SettlementStatus } from "../domain/status";
+import type { DeliveryStatus, InvoiceEmailStatus, InvoiceEmailDeliveryStatus, InvoiceStatusResult, ReceiptDocumentState, SettlementStatus } from "../domain/status";
+import type { InvoiceEmailConfig } from "../email/outbox-contracts";
 import type { DraftSnapshot, InvoiceActor, InvoiceDocumentPort } from "./contracts";
 
 export type PublicationState = "reserved" | "rendering" | "stored" | "finalized" | "failed";
 export type PublicationFailure = "ARTIFACT_VERIFICATION_FAILED" | "PROFILE_CONFLICT" | "CLIENT_CONFLICT" | "AUTH_REVOKED" | "DEADLINE_EXPIRED" | "VERSION_CONFLICT";
-export type LinkMaterial = { tokenId: string; keyVersion: number; verifierHash: string; expiresAt: string; activatedAt: string | null; revokedAt: string | null };
+export type LinkMaterial = { tokenId: string; keyVersion: number; verifierHash: string; expiresAt: string; activatedAt: string | null; revokedAt: string | null; appOrigin?: string };
 export type PublicationLinkConfig = { appOrigin: string; explorerOrigin: string; keys: ReadonlyMap<number, Uint8Array> };
 export type PublicationConfig = PublicationLinkConfig & { activeKeyVersion: number; chainId: number; contractAddress: `0x${string}` };
 export type PublicationDependencies = {
   getLinkConfig(): PublicationLinkConfig;
   getReservationConfig(): PublicationConfig;
   getDocuments(): InvoiceDocumentPort;
+  getEmailConfig?(): InvoiceEmailConfig;
+  afterPublication?(attemptId: string): void;
 };
 export type PublicationArtifact = {
   pdfFilename: string; contentType: "application/pdf"; byteLength: number;
@@ -23,10 +26,11 @@ export type PublicationAttempt = {
   storageKey: string; link: LinkMaterial; leaseOwner: string | null; leaseUntil: string | null; fence: string;
   artifact: PublicationArtifact | null; failureCode: PublicationFailure | null; finalizedAt: string | null;
 };
-export type PublishInvoiceInput = { draftId: string; expectedVersion: number; approval: true; idempotencyKey: string };
+export type PublishInvoiceInput = { draftId: string; expectedVersion: number; approval: true; deliveryApproval?: true; idempotencyKey: string };
 export type PublicationReservation = PublishInvoiceInput & {
   requestFingerprint: string; attemptId: string; invoiceKey: `0x${string}`; publicationSalt: `0x${string}`;
   tokenId: string; keyVersion: number; verifierHash: string; chainId: number; contractAddress: `0x${string}`;
+  emailConfig?: InvoiceEmailConfig;
 };
 export type PublicationFence = { attemptId: string; leaseOwner: string; fence: string };
 export type VoidInvoiceInput = { invoiceId: string; expectedVersion: number; approval: true; idempotencyKey: string };
@@ -36,7 +40,8 @@ export type GmailReadyPackage = { to: string[]; subject: string; textBody: strin
 export type SharedInvoiceLinks = { invoiceUrl: string; invoicePdfUrl: string; pdfFilename: string };
 export type PublishedInvoiceResult = SharedInvoiceLinks & {
   invoiceId: string; invoiceVersion: number; invoiceNumber: string; commercialState: CommercialState;
-  pdfContentHash: `0x${string}`; documentCommitment: `0x${string}`; gmailLinkPackage: GmailReadyPackage; sendApprovalRequired: true;
+  pdfContentHash: `0x${string}`; documentCommitment: `0x${string}`; gmailLinkPackage: GmailReadyPackage; sendApprovalRequired: boolean;
+  invoiceEmail: InvoiceEmailStatus;
 };
 export type PublicationStatusData = {
   invoiceId: string; invoiceVersion: number; invoiceNumber: string | null; commercialState: CommercialState;
@@ -47,6 +52,7 @@ export type PublicationStatusData = {
     artifact: null | { pdfFilename: string; pdfContentHash: `0x${string}` };
   };
   deliveries: DeliveryStatus[];
+  invoiceDeliveries?: InvoiceEmailDeliveryStatus[];
 };
 export type PublicationRepository = {
   findReplay(actor: InvoiceActor, idempotencyKey: string, requestFingerprint: string): Promise<PublicationAttempt | null>;

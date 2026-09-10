@@ -21,7 +21,7 @@ USDC invoicing for independent developers on Arc Testnet. Connect confirmed bill
 ## One record, from start to settled
 
 1. Confirm: Save your sender profile, clients, payout wallet, and payment terms. Draft from confirmed facts. Connect Claude separately through Payr Connections; creating a credential does not connect Claude automatically.
-2. Publish: Approve the exact draft. Payr freezes the invoice, assigns its number, and creates a downloadable PDF and protected payment link.
+2. Publish & Send: Review the exact draft, defaults, client changes and both snapshot email addresses. When invoice email is enabled, approve publication and delivery together; Payr freezes the invoice and queues its PDF and private links to the client and sender. Do not send a duplicate via Gmail. Disabled email blocks fresh publication.
 3. Pay: Your client reviews the amount and payee and approves USDC payment in their own wallet. No Payr account is required. Connecting a wallet is never permission to pay.
 4. Verify: Payr matches onchain settlement to the invoice's exact amount, payee, and commitment. A transaction hash alone is not payment proof.
 5. Receipt: Verified settlement creates a linked receipt and PDF. Receipt delivery has separate progress; automatic sending remains disabled.
@@ -56,7 +56,7 @@ The connector credential is not an OAuth access token. Keep credentials, Authori
 
 Default connections authorize create_invoice_draft, publish_invoice, get_invoice_status, and void_invoice. New connections can separately opt into Direct Chat Setup: get_sender_profile requires sender:read and save_sender_profile requires sender:write. Existing connections remain invoice-only. Tool discovery is not a permission grant. Sender saves require explicit approval of all fields and the current profile id/revision; after an uncertain result or conflict, read again rather than retrying blindly. Payout changes always require an owner signature in Payr Settings.
 
-Publishing and voiding require explicit approval of the exact version. Publishing is not permission to send email or pay. Payments remain under the client's wallet control.
+Publish & Send requires explicit approval of the exact version, defaults, client changes and both snapshot email recipients, with approval:true and deliveryApproval:true. Refresh/reimport stale tool schemas before activation. Payr queues those specific invoice emails; do not send another through Gmail. Historical no-send approvals are not upgraded. Voiding has its own approval, and payments remain under the client's wallet control.
 
 Invoice and receipt links are separate, purpose-specific bearer credentials, not API registration credentials. Browser sign-out clears the local session cookie; revoke connector credentials separately.
 
@@ -77,7 +77,7 @@ Complete the human wallet and connector setup in /auth.md. Use POST /api/mcp wit
 
 The server uses stateless Streamable HTTP with POST JSON responses, no SSE stream, session resume, or request batching. Authenticated non-POST methods return 405. Admission limits and origin checks apply to both transport URLs. Never pass credentials through query parameters or session cookies.
 
-Invoice tools: create_invoice_draft, publish_invoice, get_invoice_status, void_invoice. Direct Chat Setup also offers get_sender_profile and save_sender_profile, requiring separately opted-in sender:read and sender:write scopes. Default and existing connections remain invoice-only; discover live schemas through the authenticated connector, but do not treat discovery as permission. Sender saves require explicit approval and optimistic concurrency checks. Publication and void require explicit approval of the exact version. No payment, email-sending, search, payout, or connector-management authority is granted.
+Invoice tools: create_invoice_draft, publish_invoice, get_invoice_status, void_invoice. Direct Chat Setup also offers get_sender_profile and save_sender_profile, requiring separately opted-in sender:read and sender:write scopes. Default and existing connections remain invoice-only; discovery is not permission. Sender saves require explicit approval and optimistic concurrency checks. Publish & Send requires approval:true and deliveryApproval:true of the exact reviewed version and both snapshot email recipients. It queues one message per distinct address with the frozen PDF and links. invoiceEmail tracks provider acceptance separately from receiptEmail and payment; sent is not inbox delivery. Do not send duplicate Gmail messages. No arbitrary email, payment, search, payout, or connector-management authority is granted. Void requires separate exact-version approval.
 
 The portable workflow skill is published at /.well-known/agent-skills/payr-create-invoice/SKILL.md. The experimental MCP card at /.well-known/mcp/server-card.json describes the stable endpoint and required secret header input. /.well-known/mcp.json is a legacy card for older discovery clients. Neither contains a real credential. Tool capabilities are discovered at runtime after authentication.
 

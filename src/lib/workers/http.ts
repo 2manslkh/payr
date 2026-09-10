@@ -1,10 +1,9 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createPrivateHeaders } from "../documents/private-response";
 
-export async function privateWorkerRequest(request: Request, run: () => Promise<unknown>) {
+export async function privateWorkerRequest(request: Request, run: () => Promise<unknown>, secret = process.env.CRON_SECRET) {
   const headers = createPrivateHeaders();
   try {
-    const secret = process.env.CRON_SECRET;
     if (!secret || secret.length < 32) throw new Error();
     if (!timingSafeEqual(createHash("sha256").update(`Bearer ${secret}`).digest(),
       createHash("sha256").update(request.headers.get("authorization") ?? "").digest())) {

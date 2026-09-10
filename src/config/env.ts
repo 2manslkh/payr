@@ -180,6 +180,13 @@ export function createReceiptDeliveryEnv(value: unknown = process.env) {
   return { apiKey: parsed.RESEND_API_KEY, from: parsed.RESEND_FROM_EMAIL };
 }
 
+export function createInvoiceDeliveryEnv(value: unknown = process.env) {
+  const enabled = z.object({ PAYR_INVOICE_EMAIL_ENABLED: z.enum(["true", "false"]).default("false") }).parse(value);
+  if (enabled.PAYR_INVOICE_EMAIL_ENABLED === "false") return null;
+  const parsed = z.object({ RESEND_API_KEY: z.string().trim().min(1).max(512), RESEND_FROM_EMAIL: receiptSenderSchema }).parse(value);
+  return { apiKey: parsed.RESEND_API_KEY, from: parsed.RESEND_FROM_EMAIL };
+}
+
 export function createWalletPaymentEnv(value: unknown = process.env) {
   if (!z.object({ NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().optional() }).parse(value).NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID) return null;
   const parsed = z.object({

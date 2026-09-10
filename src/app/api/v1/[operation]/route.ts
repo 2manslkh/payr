@@ -4,6 +4,7 @@ import { createAgentRuntime } from "../../../../lib/agent-api/runtime";
 import { IdentityError } from "../../../../lib/identity/contracts";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 async function handle(request: Request, { params }: { params: Promise<{ operation: string }> }): Promise<Response> {
   try {

@@ -6,7 +6,7 @@ const schema = z.object({
   expectedVersion: z.number().int().positive(), approval: z.literal(true), idempotencyKey: z.string().trim().min(1).max(128),
 }).strict();
 
-export async function readPublicationApproval(request: Request) {
+export async function readPublicationApproval(request: Request, publish = false) {
   if (!/^application\/json(?:;\s*charset=utf-8)?$/i.test(request.headers.get("content-type") ?? "")
     || (request.headers.has("content-encoding") && request.headers.get("content-encoding") !== "identity")) {
     throw new IdentityError("UNSUPPORTED_MEDIA_TYPE", 415);
@@ -35,7 +35,7 @@ export async function readPublicationApproval(request: Request) {
       text += decoder.decode(value, { stream: true });
     }
     text += decoder.decode();
-    const input = schema.parse(JSON.parse(text));
+    const input = (publish ? schema.extend({ deliveryApproval: z.literal(true) }) : schema).parse(JSON.parse(text));
     // This body is flat. Decode property names so escaped duplicates cannot alter approval or version.
     const keys = new Set<string>();
     let lastString = "";

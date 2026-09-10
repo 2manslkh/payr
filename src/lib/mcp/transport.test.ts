@@ -116,7 +116,7 @@ it("redacts unexpected tool and authentication provider exceptions", async () =>
   repository.admitConnector.mockRejectedValue(new IdentityError(token));
   const failure = await send(); expect(failure.status).toBe(503); expect(await failure.text()).not.toContain(token);
 });
-it("discovers four invoice and two opt-in sender tools without granting their scopes", async () => {
+it("discovers invoice, sender and wallet-read tools without granting their scopes", async () => {
   const authenticate = vi.fn().mockResolvedValue(actor);
   const services = { createDraft: vi.fn(), publish: vi.fn(), status: vi.fn(), void: vi.fn(), getSenderProfile: vi.fn(), saveSenderProfile: vi.fn() };
   const runtime = { authenticate, services, appOrigin: "https://example.test" };
@@ -128,7 +128,7 @@ it("discovers four invoice and two opt-in sender tools without granting their sc
   expect((await first.json()).result.serverInfo.name).toBe("Payr");
   const second = await handleMcpRequest(request({ jsonrpc: "2.0", id: 2, method: "tools/list" }), "test-secret", "127.0.0.1", runtime);
   expect((await second.json()).result.tools.map((tool: { name: string }) => tool.name)).toEqual([
-    "get_sender_profile", "save_sender_profile",
+    "get_account_context", "get_sender_profile", "save_sender_profile",
     "create_invoice_draft", "publish_invoice", "get_invoice_status", "void_invoice",
   ]);
   expect(authenticate).toHaveBeenCalledTimes(2);

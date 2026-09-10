@@ -4,7 +4,7 @@ import { dirname, relative, resolve, sep } from "node:path";
 let conflicts = 0;
 let traces = 0;
 const pdfEntries = new Set(["app/api/v1/[operation]/route.js.nft.json", "app/api/mcp/route.js.nft.json", "app/api/mcp/[token]/route.js.nft.json", "app/api/invoices/[id]/publish/route.js.nft.json", "app/api/jobs/publications/route.js.nft.json",
-  "app/api/jobs/receipts/route.js.nft.json", "app/api/jobs/outbox/route.js.nft.json", "app/receipt/[slug]/page.js.nft.json"]);
+  "app/api/jobs/receipts/route.js.nft.json", "app/api/jobs/outbox/route.js.nft.json", "app/api/jobs/invoice-outbox/route.js.nft.json", "app/receipt/[slug]/page.js.nft.json"]);
 const required = ["/pdfjs-dist/package.json", "/pdfjs-dist/legacy/build/pdf.mjs", "/pdfjs-dist/legacy/build/pdf.worker.mjs",
   "/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf", "/pdfjs-dist/standard_fonts/LiberationSans-Bold.ttf",
   "/pdfjs-dist/standard_fonts/FoxitFixed.pfb", "/jsqr/package.json", "/jsqr/dist/jsQR.js", "/@napi-rs/canvas/index.js"];

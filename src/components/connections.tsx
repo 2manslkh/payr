@@ -5,14 +5,19 @@ import Link from "next/link";
 import { CONNECTOR_SCOPES, type ConnectorMetadata } from "../lib/identity/contracts";
 import { consoleApi, useConsoleResource } from "./console-api";
 import { DateValue, Loading, PageHeading, RequestError } from "./console-ui";
+import { useConsoleIdentity } from "./app-navigation";
 
 type CreatedConnector = { connector: ConnectorMetadata; token: string; endpointUrl: string };
 
-export function Connections() {
+export function Connections({ gatewayOnly = false }: { gatewayOnly?: boolean }) {
+  const identity = useConsoleIdentity();
   const resource = useConsoleResource<{ connectors: ConnectorMetadata[] }>("/api/connectors");
   const [secret, setSecret] = useState<CreatedConnector | null>(null);
   const [days, setDays] = useState("7");
   const [senderSetup, setSenderSetup] = useState(false);
+  const [walletRead, setWalletRead] = useState(false);
+  const [gateway, setGateway] = useState(gatewayOnly);
+  const [serviceId, setServiceId] = useState("bazantic");
   const [busy, setBusy] = useState(false);
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -34,8 +39,10 @@ export function Connections() {
     setError(null);
     setStatus("");
     try {
-      const created = await consoleApi<CreatedConnector>("/api/connectors", { expiresInDays: Number(days),
-        ...(senderSetup ? { scopes: [...CONNECTOR_SCOPES, "sender:read", "sender:write"] } : {}),
+      const scopes = [...CONNECTOR_SCOPES.filter((scope) => !gateway || scope !== "invoice:void"),
+        ...(senderSetup ? ["sender:read", "sender:write"] : []), ...(walletRead ? ["wallet:read"] : [])];
+      const created = await consoleApi<CreatedConnector>(gateway ? "/api/connectors/gateway" : "/api/connectors", { expiresInDays: Number(days),
+        ...(senderSetup || walletRead || gateway ? { scopes } : {}), ...(gateway ? { serviceId } : {}),
       });
       setSecret(created);
       resource.update({ connectors: [created.connector, ...(resource.data?.connectors ?? [])] });
@@ -83,15 +90,16 @@ export function Connections() {
         Control which credentials can access invoice tools and optional sender setup.
       </PageHeading>
       <section className="notice">
-        <h2>Connect Payr to Claude</h2>
-        <ol>
+        <h2>{gatewayOnly ? "Connect your agent through the gateway" : "Connect your agent to Payr"}</h2>
+        {!gatewayOnly && <ol>
           <li>Create a short-lived credential below and copy its endpoint URL.</li>
           <li>In Claude, open Customize {">"} Connectors, choose Add custom connector, and paste the full endpoint URL. Leave optional OAuth fields blank.</li>
           <li>Start a new chat and enable Payr in the Connectors menu.</li>
-        </ol>
+        </ol>}
         <p>
-          Creating a credential does not connect Claude automatically. Publication and voiding require
-          explicit approval; payment stays in the client&apos;s wallet. Keep the endpoint URL private.
+          {gatewayOnly ? "This deployment accepts REST gateway connections only. Sign in through Privy to issue a gateway account credential."
+            : "Use a show-once MCP endpoint URL or a REST gateway account credential. Creating a credential does not connect your agent automatically."}
+          {" "}Publication and voiding require explicit approval; payment stays in the client&apos;s wallet. Keep credentials private.
         </p>
         <Link className="text-link" href="/install">View the Payr installation guide</Link>
       </section>
@@ -125,6 +133,17 @@ export function Connections() {
             </p>
           </div>
           <form onSubmit={create} aria-describedby="retention-warning">
+            {identity.privyUserId && <>
+              <label className="check-field"><input type="checkbox" checked={gateway} disabled={gatewayOnly || busy || !!secret}
+                onChange={(event) => { setGateway(event.target.checked); setDays("7"); }} /><span>REST gateway connection</span></label>
+              {gateway && <label className="field"><span>Registered gateway service</span>
+                <input value={serviceId} onChange={(event) => setServiceId(event.target.value)} required pattern="[a-z][a-z0-9_-]{0,63}" disabled={busy || !!secret} />
+              </label>}
+              <p className="field-help">Gateway credentials expire within seven days and require a separately managed service key. No owner-wallet signing is delegated to the agent.</p>
+            </>}
+            <label className="check-field"><input type="checkbox" checked={walletRead} disabled={busy || !!secret}
+              onChange={(event) => setWalletRead(event.target.checked)} /><span>Wallet address discovery</span></label>
+            <p className="field-help">Grants wallet:read. Ask your agent to call get_account_context after connecting. It can read the business wallet and invoice payout addresses, but cannot sign or spend. Existing credentials are unchanged.</p>
             <label className="check-field" htmlFor="connection-sender-setup">
               <input id="connection-sender-setup" type="checkbox" checked={senderSetup}
                 onChange={(event) => setSenderSetup(event.target.checked)} disabled={busy || !!secret}
@@ -144,7 +163,7 @@ export function Connections() {
                   id="connection-days"
                   type="number"
                   min="1"
-                  max="30"
+                  max={gateway ? "7" : "30"}
                   step="1"
                   required
                   value={days}
@@ -152,7 +171,7 @@ export function Connections() {
                   disabled={busy || !!secret}
                 />
               </label>
-              <button className="button" disabled={busy || resource.loading || !!secret || !resource.data}>
+              <button className="button" disabled={busy || resource.loading || !!secret || !resource.data || (gatewayOnly && !identity.privyUserId)}>
                 {busy ? "Working..." : "Create credential"}
               </button>
             </div>
@@ -183,7 +202,7 @@ export function Connections() {
             <button className="button secondary" onClick={() => copy(secret.token, "Credential")}>
               Copy credential
             </button>
-            <label className="field" htmlFor="connector-endpoint">
+            {secret.endpointUrl && <><label className="field" htmlFor="connector-endpoint">
               <span>Endpoint URL</span>
               <textarea
                 id="connector-endpoint"
@@ -193,11 +212,11 @@ export function Connections() {
                 spellCheck={false}
                 autoComplete="off"
               />
-            </label>
+            </label></>}
             <div className="actions">
-              <button className="button secondary" onClick={() => copy(secret.endpointUrl, "Endpoint URL")}>
+              {secret.endpointUrl && <button className="button secondary" onClick={() => copy(secret.endpointUrl, "Endpoint URL")}>
                 Copy endpoint URL
-              </button>
+              </button>}
               <button
                 className="button"
                 onClick={() => {

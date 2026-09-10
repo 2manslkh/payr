@@ -9,6 +9,10 @@ export type EmailContent = {
 };
 
 export type InvoiceEmailInput = {
+  audience?: "client" | "issuer" | "both";
+  clientBusinessName?: string;
+  network?: "Arc" | "Arc Testnet";
+  attachmentIncluded?: boolean;
   invoiceNumber: string;
   businessName: string;
   amountDecimal: string;
@@ -39,6 +43,7 @@ function renderEmail(input: {
   rows: [string, string][]; action: [string, string]; secondary?: [string, string];
   logoOrigin?: string;
   network?: "Arc" | "Arc Testnet";
+  networkText?: string;
 }): EmailContent {
   const { subject, previewText, heading, introduction, amountDecimal, amountLabel, settled, rows, action, secondary } = input;
   const network = input.network ?? "Arc";
@@ -70,7 +75,7 @@ ${payrEmailLogo(input.logoOrigin ?? action[1])}
 <p style="margin:0 0 28px">${escapeHtml(introduction)}</p>
 <p style="margin:0 0 4px;color:#606A76;font-size:14px">${escapeHtml(amountLabel)}</p>
 <p style="margin:0 0 4px;color:#071B3B;font-size:32px;line-height:1.25;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;word-break:break-word">${escapeHtml(amountDecimal)} USDC</p>
-<p style="margin:0 0 28px;color:#606A76;font-size:14px">${settled ? `Settlement verified on ${network}` : `Pay with USDC on ${network}`}</p>
+<p style="margin:0 0 28px;color:#606A76;font-size:14px">${escapeHtml(input.networkText ?? (settled ? `Settlement verified on ${network}` : `Pay with USDC on ${network}`))}</p>
 <table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;border-collapse:collapse;font-size:14px">
 ${rows.map(([label, value]) => `<tr><th scope="row" align="left" valign="top" width="35%" style="padding:12px 8px 12px 0;border-top:1px solid #DDE2E6;color:#606A76;font-weight:400">${escapeHtml(label)}</th><td align="right" style="padding:12px 0;border-top:1px solid #DDE2E6;overflow-wrap:anywhere;word-break:break-word;${label === "Transaction" ? "font-family:Consolas,monospace;" : ""}">${escapeHtml(value)}</td></tr>`).join("\n")}
 </table>
@@ -83,15 +88,22 @@ ${secondary ? `<p style="margin:0 0 8px;font-size:14px">${link(secondary)}</p>` 
 }
 
 export function buildInvoiceEmail(input: InvoiceEmailInput, logoOrigin?: string): EmailContent {
+  const issuer = input.audience === "issuer";
+  const both = input.audience === "both";
   return renderEmail({
     logoOrigin,
-    subject: `Invoice ${input.invoiceNumber} from ${input.businessName}`,
-    previewText: `${input.amountDecimal} USDC due ${input.dueDate}. View your invoice and payment details.`,
-    heading: `Invoice from ${input.businessName}`,
-    introduction: "Your invoice is ready to review. Open the invoice to check the details and make a payment.",
-    amountDecimal: input.amountDecimal, amountLabel: "Amount due", settled: false,
-    rows: [["Invoice", input.invoiceNumber], ["From", input.businessName], ["Due", input.dueDate]],
-    action: ["View and Pay Invoice", input.invoiceUrl], secondary: ["Invoice PDF", input.invoicePdfUrl],
+    network: input.network,
+    networkText: issuer ? `Invoice currency: USDC on ${input.network ?? "Arc"}` : undefined,
+    subject: issuer ? `Invoice Issued: ${input.invoiceNumber} / Your copy` : `Invoice ${input.invoiceNumber} from ${input.businessName}`,
+    previewText: `${input.amountDecimal} USDC due ${input.dueDate}. ${issuer ? "Your copy of the issued invoice." : both ? "Your issuer copy and client payment details." : "View your invoice and payment details."} ${input.attachmentIncluded ? "PDF attached." : "PDF available at the link below."}`,
+    heading: issuer ? "Invoice Issued" : `Invoice from ${input.businessName}`,
+    introduction: `${issuer ? "Your copy of the issued invoice is ready for your records. Open the invoice to review the details."
+      : both ? "This email address is listed for both the issuer and the client. This message includes your issuer copy and the client's payment details. Open the invoice to review the details and make a payment if needed."
+      : "Your invoice is ready to review. Open the invoice to check the details and make a payment."} ${input.attachmentIncluded ? "The invoice PDF is attached and is also available at the link below." : "The invoice PDF is available at the link below."}`,
+    amountDecimal: input.amountDecimal, amountLabel: issuer ? "Invoice amount" : "Amount due", settled: false,
+    rows: [["Invoice", input.invoiceNumber], ["From", input.businessName],
+      ...(input.clientBusinessName ? [["Billed to", input.clientBusinessName] as [string, string]] : []), ["Due", input.dueDate]],
+    action: [issuer ? "View Invoice" : "View and Pay Invoice", input.invoiceUrl], secondary: ["Invoice PDF", input.invoicePdfUrl],
   });
 }
 

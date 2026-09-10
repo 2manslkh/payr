@@ -1,18 +1,18 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { expect, test as base } from "@playwright/test";
-import { createPublicationEnv, createPublicationLinkEnv } from "../../src/config/env";
+import { createPublicationEnv } from "../../src/config/env";
 import { createSessionCodec } from "../../src/lib/auth/session";
 import { createPublicationRepository } from "../../src/lib/db/publication";
 import { createDraftRepository } from "../../src/lib/db/drafts";
 import { SESSION_COOKIE, type ClientProfile, type SenderProfile } from "../../src/lib/identity/contracts";
 import type { DraftVersion } from "../../src/lib/invoices/contracts";
-import { createPublicationService } from "../../src/lib/invoices/publication";
 import { createInvoiceDraftService } from "../../src/lib/invoices/service";
-import type { PublishedInvoiceResult, SharedInvoiceLinks } from "../../src/lib/invoices/publication-contracts";
+import type { SharedInvoiceLinks } from "../../src/lib/invoices/publication-contracts";
 import { createTestDocumentPort, testPublicationSnapshot } from "../../src/lib/invoices/publication.test-support";
 import { seedBrowserWorkspace } from "./workspace-fixture";
 import { fixtureDatabaseContainer } from "../../scripts/local-test-config.mjs";
+import { publishNoSendFixture } from "./publication-fixture";
 
 function publicationFixture() {
   fixtureDatabaseContainer();
@@ -50,14 +50,9 @@ function publicationFixture() {
       items: snapshot.items.map((item) => ({ description: item.description, amount: item.amountDecimal })),
     });
   }
-  async function publish(version: Pick<DraftVersion, "draftId" | "version">) {
+  async function publish(version: Pick<DraftVersion, "draftId" | "version">, compiled = false) {
     // Only this test process injects deterministic documents. No application route or runtime override.
-    const service = createPublicationService(repository, {
-      getLinkConfig: () => createPublicationLinkEnv(),
-      getReservationConfig: () => ({ ...createPublicationLinkEnv(), activeKeyVersion: 1, chainId: 5042002, contractAddress: `0x${"3".repeat(40)}` }),
-      getDocuments: () => createTestDocumentPort(),
-    });
-    return service.publish(actor, { draftId: version.draftId, expectedVersion: version.version, approval: true, idempotencyKey: randomUUID() });
+    return publishNoSendFixture(repository, actor, version, compiled ? undefined : createTestDocumentPort());
   }
   return { identity, actor, repository, draft, publish };
 }
@@ -77,7 +72,7 @@ const test = base.extend<{ workspace: ReturnType<typeof publicationFixture> & { 
 });
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
-test("real publication route finalizes with the test-only contract binding and compiled document producers", async ({ page, workspace, baseURL }) => {
+test("disabled Publish & Send rejects fresh writes while the no-send worker still renders compiled documents", async ({ page, workspace, baseURL }) => {
   test.setTimeout(60_000);
   createPublicationEnv();
   const draft = await workspace.draft();
@@ -89,15 +84,13 @@ test("real publication route finalizes with the test-only contract binding and c
   const response = await fetch(new URL(`/api/invoices/${draft.draftId}/publish`, app), {
     method: "POST", redirect: "manual",
     headers: { Cookie: `${SESSION_COOKIE}=${workspace.sessionToken}`, Origin: app.origin, Host: app.host, "Content-Type": "application/json" },
-    body: JSON.stringify({ expectedVersion: draft.version, approval: true, idempotencyKey: randomUUID() }),
+    body: JSON.stringify({ expectedVersion: draft.version, approval: true, deliveryApproval: true, idempotencyKey: randomUUID() }),
   }).catch(() => { throw new Error("Compiled publication HTTP request failed"); });
-  const body: unknown = await response.json().catch(() => { throw new Error("Compiled publication returned invalid JSON"); });
-  const artifactFailed = typeof body === "object" && body !== null && "code" in body && "failureCode" in body
-    && body.code === "PUBLICATION_FAILED" && body.failureCode === "ARTIFACT_VERIFICATION_FAILED";
-  expect(response.status, artifactFailed
-    ? "Compiled publication: PUBLICATION_FAILED / ARTIFACT_VERIFICATION_FAILED"
-    : "Compiled publication must finalize").toBe(200);
-  const published = body as PublishedInvoiceResult;
+  expect(response.status).toBe(503);
+  expect(await response.json()).toEqual({ code: "INVOICE_EMAIL_DISABLED" });
+  expect((await workspace.repository.statusData(workspace.actor, draft.draftId))?.attempt).toBeNull();
+  const published = await workspace.publish(draft, true);
+  expect(published.invoiceEmail.state).toBe("not_applicable");
   const data = await workspace.repository.statusData(workspace.actor, draft.draftId);
   expect(data?.commercialState).toBe("published");
   expect(data?.invoiceNumber).toMatch(/^INV-\d{4}-\d{6,}$/);

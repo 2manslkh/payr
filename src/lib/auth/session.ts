@@ -8,7 +8,8 @@ export type SessionCodec = Readonly<{
   open(token: string, now?: Date): Promise<IdentitySession | null>;
 }>;
 
-const identitySchema = z.object({ workspaceId: z.string().uuid(), ownerWallet: walletSchema }).strict();
+const identitySchema = z.object({ workspaceId: z.string().uuid(), ownerWallet: walletSchema,
+  privyUserId: z.string().regex(/^did:privy:[a-zA-Z0-9_-]+$/).max(200).optional() }).strict();
 
 export function createSessionCodec(config: Pick<IdentityConfig, "appOrigin" | "chainId" | "sessionKey">): SessionCodec {
   if (config.sessionKey.byteLength !== 32) throw new IdentityError("CONFIGURATION_ERROR", 503);
@@ -37,7 +38,8 @@ export function createSessionCodec(config: Pick<IdentityConfig, "appOrigin" | "c
           || !Number.isSafeInteger(payload.iat) || !Number.isSafeInteger(payload.exp)
           || payload.iat! > Math.floor(now.getTime() / 1000)
           || payload.exp! - payload.iat! !== SESSION_LIFETIME_SECONDS) return null;
-        const identity = identitySchema.safeParse({ workspaceId: payload.workspaceId, ownerWallet: payload.ownerWallet });
+        const identity = identitySchema.safeParse({ workspaceId: payload.workspaceId, ownerWallet: payload.ownerWallet,
+          ...(payload.privyUserId === undefined ? {} : { privyUserId: payload.privyUserId }) });
         if (!identity.success || identity.data.ownerWallet !== payload.ownerWallet) return null;
         return identity.data;
       } catch {

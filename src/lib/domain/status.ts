@@ -58,6 +58,13 @@ export type DeliveryStatus = Readonly<{
   attemptCount: number;
   nextAttemptAt: string | null;
 }>;
+export type InvoiceEmailDeliveryStatus = Pick<DeliveryStatus, "roles" | "state" | "attemptCount" | "nextAttemptAt">;
+export type InvoiceEmailStatus = Readonly<{ state: ReceiptEmailState; deliveries: InvoiceEmailDeliveryStatus[] }>;
+export function buildInvoiceEmailStatus(deliveries: readonly InvoiceEmailDeliveryStatus[] = []): InvoiceEmailStatus {
+  return { state: deriveReceiptEmailState(deliveries.length > 0, deliveries), deliveries: deliveries.map((d) => ({
+    roles: d.roles.filter((role) => role === "issuer" || role === "client"), state: d.state, attemptCount: d.attemptCount, nextAttemptAt: d.nextAttemptAt,
+  })) };
+}
 
 export type InvoiceStatusResult = Readonly<{
   schemaVersion: "payr.invoice-status.v1";
@@ -73,6 +80,7 @@ export type InvoiceStatusResult = Readonly<{
   settledAfterVoid: boolean;
   invoiceDocument: ReadyInvoiceDocument | null;
   receipt: ReceiptStatus;
+  invoiceEmail?: InvoiceEmailStatus;
   receiptEmail: Readonly<{
     state: ReceiptEmailState;
     deliveries: DeliveryStatus[];
@@ -117,6 +125,7 @@ export type InvoiceStatusFacts = Readonly<{
   invoiceDocument: ReadyInvoiceDocument | null;
   receiptDocument: ReceiptDocumentFacts | null;
   deliveries: DeliveryStatus[];
+  invoiceDeliveries?: InvoiceEmailDeliveryStatus[];
 }>;
 
 export function deriveReceiptEmailState(
@@ -186,6 +195,7 @@ export function buildInvoiceStatus(facts: InvoiceStatusFacts): InvoiceStatusResu
       settlementFacts === null ? false : deriveSettledAfterVoid(facts.voidedAt, settlementFacts),
     invoiceDocument: facts.invoiceDocument,
     receipt,
+    invoiceEmail: buildInvoiceEmailStatus(facts.invoiceDeliveries),
     receiptEmail: {
       state: deriveReceiptEmailState(hasSettlement, facts.deliveries),
       deliveries: hasSettlement ? facts.deliveries : [],

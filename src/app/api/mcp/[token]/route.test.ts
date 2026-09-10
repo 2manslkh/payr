@@ -15,7 +15,7 @@ it("runs actual SDK discovery through the endpoint, trusting only Vercel's forwa
   const response = await POST(new Request("https://example.test/api/mcp/synthetic-secret", { method: "POST", headers: {
     "Content-Type": "application/json", Accept: "application/json, text/event-stream", "x-vercel-forwarded-for": "192.0.2.1", "x-forwarded-for": "198.51.100.1",
   }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) }), context);
-  expect((await response.json()).result.tools).toHaveLength(6);
+  expect((await response.json()).result.tools).toHaveLength(7);
   expect(mocks.authenticate).toHaveBeenCalledWith({ token: "synthetic-secret", ip: "192.0.2.1", action: "invoice:status" });
   expect(response.headers.get("cache-control")).toContain("no-store"); expect(response.headers.has("mcp-session-id")).toBe(false);
 });

@@ -26,6 +26,7 @@ const actions: Record<string, string> = {
   "settlement.recorded": "Payment settlement recorded",
   "receipt.generate": "Receipt generation",
   "receipt.deliver": "Receipt email request",
+  "invoice.deliver": "Invoice email request",
 };
 const outcomes: Record<string, string> = {
   succeeded: "Completed",

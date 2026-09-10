@@ -198,7 +198,7 @@ it("reconstructs identical publication links and exact Gmail package on a new se
 
 it("returns the canonical complete status with separate receipt and delivery, and explicitly voids", async () => {
   const { call, authenticate } = fixture(); const result = (await call("get_invoice_status", { invoiceId: id })).structuredContent;
-  expect(Object.keys(result).sort()).toEqual(["schemaVersion", "invoiceId", "invoiceVersion", "invoiceNumber", "commercialState", "paymentStatus", "displayStatus", "payableUntil", "settlement", "explorer", "settledAfterVoid", "invoiceDocument", "receipt", "receiptEmail"].sort());
+  expect(Object.keys(result).sort()).toEqual(["schemaVersion", "invoiceId", "invoiceVersion", "invoiceNumber", "commercialState", "paymentStatus", "displayStatus", "payableUntil", "settlement", "explorer", "settledAfterVoid", "invoiceDocument", "invoiceEmail", "receipt", "receiptEmail"].sort());
   expect(result).toMatchObject({ schemaVersion: "payr.invoice-status.v1", paymentStatus: "unpaid", settlement: null, receiptEmail: { state: "not_applicable", deliveries: [] } });
   expect((await call("get_invoice_status", { invoiceId: id, secret: "extra" })).structuredContent.code).toBe("INVALID_INPUT");
   expect((await call("void_invoice", { invoiceId: id, expectedVersion: 1, approval: true, idempotencyKey: "void" })).structuredContent.commercialState).toBe("voided");

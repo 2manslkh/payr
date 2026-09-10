@@ -77,6 +77,7 @@ it("returns the exact default DTO with explicit nulls and no document or email b
     settlement: null, explorer: null, settledAfterVoid: false, invoiceDocument: null,
     receipt: { state: "not_applicable", pageUrl: null, pdfUrl: null, pdfFilename: null, pdfContentHash: null },
     receiptEmail: { state: "not_applicable", deliveries: [] },
+    invoiceEmail: { state: "not_applicable", deliveries: [] },
   });
   expect(repository.statusData).toHaveBeenCalledExactlyOnceWith(actor, id);
 });

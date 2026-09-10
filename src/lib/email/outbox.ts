@@ -3,17 +3,18 @@ import { canonicalJson } from "../domain/canonical-json";
 import { DocumentVerificationError } from "../documents/contracts";
 import type { DeliveryResult, DeliveryWork, OutboxRepository, ReceiptEmailPayload, ReceiptEmailProvider } from "./outbox-contracts";
 
-export function createOutboxWorker(repository: OutboxRepository, prepare: (work: DeliveryWork) => Promise<ReceiptEmailPayload>, provider: ReceiptEmailProvider) {
+export function createOutboxWorker<T extends DeliveryWork>(repository: OutboxRepository<T>, prepare: (work: T) => Promise<ReceiptEmailPayload>, provider: ReceiptEmailProvider) {
   return { async run(id?: string) {
     const work = await repository.claim(id);
     if (!work) return { outcome: "idle" as const };
     if (work.state !== "sending") return { outcome: work.state, id: work.id };
     let payload: ReceiptEmailPayload;
     try {
-      if (work.receipt.state !== "ready" || !work.receipt.artifact) throw new DocumentVerificationError();
+      const document = work.messageKind === "receipt" ? work.receipt : work.publication;
+      if (!(document.state === "ready" || document.state === "finalized") || !document.artifact) throw new DocumentVerificationError();
       payload = await prepare(work);
       if (payload.to.length !== 1 || payload.to[0] !== work.normalizedRecipient
-        || payload.attachments.length !== 1 || payload.attachments[0].filename !== work.receipt.artifact.pdfFilename) throw new DocumentVerificationError();
+        || payload.attachments.length !== 1 || payload.attachments[0].filename !== document.artifact.pdfFilename) throw new DocumentVerificationError();
     } catch (error) {
       const result: DeliveryResult = error instanceof DocumentVerificationError
         ? { kind: "failed", code: "DOCUMENT_INVALID" } : { kind: "retry", code: "DOCUMENT_UNAVAILABLE" };

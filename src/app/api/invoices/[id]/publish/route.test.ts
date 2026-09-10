@@ -102,6 +102,18 @@ it("preserves the dashboard mutation session actor and canonical publication ser
   privateHeaders(response);
 });
 
+it.each(["session", "bearer"])("denies fresh %s publication without delivery approval before all writes", async (auth) => {
+  const body = { ...input, deliveryApproval: undefined };
+  const response = await post(auth === "bearer" ? machineRequest(body) : request(body));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ code: "DELIVERY_APPROVAL_REQUIRED" });
+  expect(repository.reserve).not.toHaveBeenCalled();
+  expect(repository.claim).not.toHaveBeenCalled();
+  expect(getPublicationEmailConfig).not.toHaveBeenCalled();
+  expect(getPublicationDocumentPort).not.toHaveBeenCalled();
+  expect(afterPublication).not.toHaveBeenCalled();
+});
+
 it("admits bearer publication with its actual scope and connector actor, never an owner cookie", async () => {
   const req = machineRequest();
   req.headers.set("cookie", "__Host-payr-session=ignored-owner-session");
@@ -357,7 +369,10 @@ it.each(["stalled", "trickling"])("bounds %s bearer approval streams by an absol
   unopened();
 });
 
-it.each(["session", "bearer"])("returns the finalized canonical %s result without republishing or implicit send approval", async (auth) => {
+it.each(["session", "bearer", "legacy-session", "legacy-bearer"])("returns the finalized canonical %s result without republishing or implicit send approval", async (auth) => {
+  const legacy = auth.startsWith("legacy-");
+  const body = { ...input, deliveryApproval: legacy ? undefined : true };
+  const deliveries = legacy ? [] : [{ roles: ["client" as const], state: "pending" as const, attemptCount: 0, nextAttemptAt: null }];
   const token = createKeyedTokenCodec(config.keys).derive(invoiceId, "invoice-bearer", 1);
   const attempt: PublicationAttempt = {
     id: invoiceId, workspaceId: identity.workspaceId, invoiceId, invoiceVersionId: invoiceId, invoiceVersion: 1,
@@ -372,23 +387,36 @@ it.each(["session", "bearer"])("returns the finalized canonical %s result withou
   vi.mocked(repository.findReplay).mockResolvedValue(attempt);
   vi.mocked(getPublicationConfig).mockImplementation(() => { throw new PublicationError("CONFIGURATION_ERROR", 503); });
   vi.mocked(getPublicationDocumentPort).mockImplementation(() => { throw new PublicationError("DOCUMENTS_NOT_CONFIGURED", 503); });
+  vi.mocked(getPublicationEmailConfig).mockImplementation(() => { throw new PublicationError("INVOICE_EMAIL_DISABLED", 503); });
   vi.mocked(repository.statusData).mockResolvedValue({ invoiceId, invoiceVersion: 1, invoiceNumber: attempt.invoiceNumber,
     commercialState: "expired", payableUntil: attempt.snapshot.payableUntil, voidedAt: null, snapshot: attempt.snapshot, attempt,
-    settlement: null, receipt: null, deliveries: [], invoiceDeliveries: [{ roles: ["client"], state: "pending", attemptCount: 0, nextAttemptAt: null }] });
-  const response = await post(auth === "bearer" ? machineRequest() : request());
+    settlement: null, receipt: null, deliveries: [], invoiceDeliveries: deliveries });
+  const replay = () => post(auth.endsWith("bearer") ? machineRequest(body) : request(body));
+  const response = await replay();
   expect(response.status).toBe(200);
   const result = await response.json();
   expect(result).toEqual({ invoiceId, invoiceVersion: 1, invoiceNumber: attempt.invoiceNumber, commercialState: "expired",
     invoiceUrl: `${config.appOrigin}/invoice/${token.slug}`, invoicePdfUrl: `${config.appOrigin}/invoice/${token.slug}/pdf`,
     pdfFilename: attempt.artifact!.pdfFilename, pdfContentHash: attempt.artifact!.pdfContentHash, documentCommitment: attempt.artifact!.documentCommitment,
     gmailLinkPackage: { to: ["client@example.test"], subject: attempt.invoiceNumber, textBody: "Gmail seam", htmlBody: "Gmail seam",
-      paymentUrl: `${config.appOrigin}/invoice/${token.slug}`, invoicePdfUrl: `${config.appOrigin}/invoice/${token.slug}/pdf` }, sendApprovalRequired: false,
-    invoiceEmail: { state: "queued", deliveries: [{ roles: ["client"], state: "pending", attemptCount: 0, nextAttemptAt: null }] } });
-  expect(afterPublication).toHaveBeenCalledExactlyOnceWith(attempt.id);
+      paymentUrl: `${config.appOrigin}/invoice/${token.slug}`, invoicePdfUrl: `${config.appOrigin}/invoice/${token.slug}/pdf` }, sendApprovalRequired: legacy,
+    invoiceEmail: { state: legacy ? "not_applicable" : "queued", deliveries } });
+  if (legacy) {
+    for (const state of ["reserved", "rendering", "stored", "failed"] as const) {
+      vi.mocked(repository.findReplay).mockResolvedValueOnce({ ...attempt, state });
+      const denied = await replay();
+      expect(denied.status).toBe(400);
+      expect(await denied.json()).toEqual({ code: "DELIVERY_APPROVAL_REQUIRED" });
+    }
+    expect(afterPublication).not.toHaveBeenCalled();
+  } else expect(afterPublication).toHaveBeenCalledExactlyOnceWith(attempt.id);
+  expect(repository.reserve).not.toHaveBeenCalled();
+  expect(repository.finalize).not.toHaveBeenCalled();
   expect(repository.claim).not.toHaveBeenCalled();
   expect(createOrRead).not.toHaveBeenCalled();
   expect(JSON.stringify(result)).not.toContain(attempt.publicationSalt);
   expect(getPublicationConfig).not.toHaveBeenCalled();
+  expect(getPublicationEmailConfig).not.toHaveBeenCalled();
   expect(getPublicationDocumentPort).not.toHaveBeenCalled();
   privateHeaders(response);
 });

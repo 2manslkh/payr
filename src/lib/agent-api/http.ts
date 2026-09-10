@@ -1,4 +1,5 @@
 import { ZodError } from "zod";
+import { parseJson } from "../domain/parse-json";
 import { IdentityError } from "../identity/contracts";
 import { DraftError } from "../invoices/errors";
 import { PublicationError } from "../invoices/publication-contracts";
@@ -62,35 +63,6 @@ export function agentErrorResponse(error: unknown, accountBearer = false): Respo
     response.headers.set("Retry-After", String(Math.min(error.retryAfterSeconds!, 3600)));
   }
   return response;
-}
-
-function parseJson(text: string): unknown {
-  const value: unknown = JSON.parse(text);
-  // JSON.parse validates syntax; this iterative token scan additionally rejects decoded duplicate
-  // names at every depth without recursion or mistaking punctuation inside strings for structure.
-  const stack: (Set<string> | null)[] = [];
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    if (char === "{") stack.push(new Set());
-    else if (char === "[") stack.push(null);
-    else if (char === "}" || char === "]") stack.pop();
-    else if (char === '"') {
-      const start = i++;
-      while (text[i] !== '"') {
-        if (text[i] === "\\") i++;
-        i++;
-      }
-      let next = i + 1;
-      while (/[\t\r\n ]/.test(text[next] ?? "")) next++;
-      if (text[next] === ":") {
-        const key: string = JSON.parse(text.slice(start, i + 1));
-        const keys = stack[stack.length - 1]!;
-        if (keys.has(key)) throw new IdentityError("INVALID_INPUT");
-        keys.add(key);
-      }
-    }
-  }
-  return value;
 }
 
 async function readEnvelope(request: Request): Promise<Record<string, unknown>> {

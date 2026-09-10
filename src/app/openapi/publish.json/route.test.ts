@@ -32,7 +32,9 @@ it("documents the canonical approval contract, response, and retry boundaries", 
   const result = operation.responses["200"].content["application/json"].schema;
   expect(result.required).toContain("invoiceUrl");
   expect(result.required).toContain("invoicePdfUrl");
-  expect(result.properties.sendApprovalRequired.const).toBe(false);
+  expect(result.properties.sendApprovalRequired.type).toBe("boolean");
+  expect(result.properties.sendApprovalRequired).not.toHaveProperty("const");
+  expect(result.properties.sendApprovalRequired.description).toContain("finalized v1 no-send replay");
   expect(result.required).toContain("invoiceEmail");
   for (const status of [400, 401, 403, 404, 409, 413, 415, 429, 500, 503]) {
     expect(operation.responses[String(status)].content["application/json"].schema.oneOf).toHaveLength(2);

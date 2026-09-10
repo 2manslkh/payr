@@ -46,7 +46,7 @@ export function GET() {
               to: { type: "array", items: { type: "string" } }, subject: { type: "string" }, textBody: { type: "string" }, htmlBody: { type: "string" },
               paymentUrl: { type: "string", format: "uri" }, invoicePdfUrl: { type: "string", format: "uri" },
             } },
-            sendApprovalRequired: { type: "boolean", const: false, description: "Legacy field. Publish & Send already includes email approval; never request a separate Gmail send." },
+            sendApprovalRequired: { type: "boolean", description: "Legacy field. False for Publish & Send, which already includes email approval; never request a separate Gmail send. True only for authorized finalized v1 no-send replay, which never queues email." },
             invoiceEmail: { type: "object", required: ["state", "deliveries"], properties: {
               state: { type: "string", enum: ["not_applicable", "queued", "sending", "sent", "failed", "manual_review"] },
               deliveries: { type: "array", maxItems: 2, items: { type: "object", required: ["roles", "state", "attemptCount", "nextAttemptAt"], properties: {

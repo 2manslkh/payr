@@ -9,6 +9,21 @@ const request = (body: unknown) => new Request("https://example.test/api/mcp/tes
   method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" }, body: JSON.stringify(body),
 });
 
+it.each([
+  '"approval":false,"approval":true,"deliveryApproval":true',
+  '"approval":true,"deliveryApproval":false,"delivery\\u0041pproval":true',
+])("rejects ambiguous publication approvals before tool dispatch (%s)", async (approvals) => {
+  const { send, services } = authFixture();
+  const req = new Request("https://example.test/api/mcp/test-secret", {
+    method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+    body: `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"publish_invoice","arguments":{${approvals}}}}`,
+  });
+  const response = await send(req);
+  expect(response.status).toBe(400);
+  expect((await response.json()).error).toEqual({ code: -32700, message: "Parse error" });
+  expect(services.publish).not.toHaveBeenCalled();
+});
+
 it.each([true, false])("cancels an unfinished request body within the deadline (valid credential: %s)", async (valid) => {
   vi.useFakeTimers();
   try {
@@ -26,6 +41,23 @@ it.each([true, false])("cancels an unfinished request body within the deadline (
     await pending;
     expect(cancel).toHaveBeenCalledOnce();
     expect(services.createDraft).not.toHaveBeenCalled();
+  } finally { vi.useRealTimers(); }
+});
+
+it("rejects a body read past the deadline even before the timer callback runs", async () => {
+  vi.useFakeTimers();
+  try {
+    const { send, services } = authFixture();
+    const req = new Request("https://example.test/api/mcp/test-secret", {
+      method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+      body: new ReadableStream({ pull(controller) {
+        vi.setSystemTime(Date.now() + 5_000);
+        controller.enqueue(new TextEncoder().encode('{"jsonrpc":"2.0","id":1,"method":"tools/list"}'));
+        controller.close();
+      } }), duplex: "half",
+    } as RequestInit);
+    expect((await send(req)).status).toBe(408);
+    expect(services.publish).not.toHaveBeenCalled();
   } finally { vi.useRealTimers(); }
 });
 

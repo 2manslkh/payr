@@ -35,7 +35,8 @@ export async function readPublicationApproval(request: Request, publish = false)
       text += decoder.decode(value, { stream: true });
     }
     text += decoder.decode();
-    const input = (publish ? schema.extend({ deliveryApproval: z.literal(true) }) : schema).parse(JSON.parse(text));
+    // Only the canonical service may admit an omitted delivery approval as finalized legacy replay.
+    const input = (publish ? schema.extend({ deliveryApproval: z.literal(true).optional() }) : schema).parse(JSON.parse(text));
     // This body is flat. Decode property names so escaped duplicates cannot alter approval or version.
     const keys = new Set<string>();
     let lastString = "";

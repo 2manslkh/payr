@@ -1,4 +1,5 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { parseJson } from "../domain/parse-json";
 import { IdentityError } from "../identity/contracts";
 import type { createConnectorAuthenticator } from "../connectors/auth";
 import { createMcpServer, toolActions, type McpServices } from "./server";
@@ -18,6 +19,7 @@ export async function handleMcpRequest(request: Request, token: string, ip: stri
     try {
       if (!reader) throw new Error();
       // Bound total read time, not just bytes or the interval between chunks.
+      const expires = Date.now() + 5_000;
       const deadline = new Promise<never>((_, reject) => {
         timer = setTimeout(() => { timedOut = true; reject(new Error()); }, 5000);
       });
@@ -25,12 +27,13 @@ export async function handleMcpRequest(request: Request, token: string, ip: stri
       const decoder = new TextDecoder("utf-8", { fatal: true });
       for (;;) {
         const { done, value } = await Promise.race([reader.read(), deadline]);
+        if (Date.now() >= expires) { timedOut = true; throw new Error(); }
         if (done) break;
         size += value.byteLength;
         if (size > 68 * 1024) { oversized = true; void reader.cancel().catch(() => {}); throw new Error(); }
         text += decoder.decode(value, { stream: true });
       }
-      body = JSON.parse(text + decoder.decode());
+      body = parseJson(text + decoder.decode());
     } catch { bodyError = true; void reader?.cancel().catch(() => {}); }
     finally { clearTimeout(timer); reader?.releaseLock(); }
   }

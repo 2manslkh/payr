@@ -196,6 +196,22 @@ it("reconstructs identical publication links and exact Gmail package on a new se
   expect(result.gmailLinkPackage.textBody).toContain(result.invoicePdfUrl); expect(result.sendApprovalRequired).toBe(true);
 });
 
+it.each([null, "reserved", "rendering", "stored", "failed"] as const)("rejects legacy publication input with a %s attempt without resuming it", async (state) => {
+  const { call, publications, data } = fixture();
+  publications.findReplay.mockResolvedValueOnce(state ? { ...data.attempt!, state } : null);
+  const result = await call("publish_invoice", { draftId: id, expectedVersion: 1, approval: true, idempotencyKey: "legacy" });
+  expect(result.isError).toBe(true);
+  expect(result.structuredContent).toEqual({ code: "DELIVERY_APPROVAL_REQUIRED" });
+  expect(publications.statusData).not.toHaveBeenCalled();
+});
+
+it.each([false, "true", null])("rejects nonliteral delivery approval %s even for a finalized replay", async (deliveryApproval) => {
+  const { call, publications } = fixture();
+  const result = await call("publish_invoice", { draftId: id, expectedVersion: 1, approval: true, deliveryApproval, idempotencyKey: "legacy" });
+  expect(result.structuredContent).toEqual({ code: "INVALID_INPUT" });
+  expect(publications.findReplay).not.toHaveBeenCalled();
+});
+
 it("returns the canonical complete status with separate receipt and delivery, and explicitly voids", async () => {
   const { call, authenticate } = fixture(); const result = (await call("get_invoice_status", { invoiceId: id })).structuredContent;
   expect(Object.keys(result).sort()).toEqual(["schemaVersion", "invoiceId", "invoiceVersion", "invoiceNumber", "commercialState", "paymentStatus", "displayStatus", "payableUntil", "settlement", "explorer", "settledAfterVoid", "invoiceDocument", "invoiceEmail", "receipt", "receiptEmail"].sort());

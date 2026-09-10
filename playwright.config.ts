@@ -50,6 +50,8 @@ export default defineConfig({
   },
   webServer: {
     command: `pnpm build && pnpm start --hostname localhost --port ${port}`,
+    // Cold CI builds share this budget with server startup; keep test timeouts unchanged.
+    timeout: 180_000,
     url: baseURL,
     reuseExistingServer: false,
     env: identityEnvironment,

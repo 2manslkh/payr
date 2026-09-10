@@ -66,7 +66,8 @@ export type PublicationRepository = {
   expire(limit: number): Promise<{ expired: number }>;
 };
 export type PublicationWorkerResult = { outcome: "idle" | "busy" | "finalized" | "failed" | "retryable" | "lease_lost"; attemptId?: string };
-export type PublicationView = { state: PublicationState | null; failureCode: PublicationFailure | null; canShare: boolean; canVoid: boolean };
+export type PublicationView = { state: PublicationState | null; failureCode: PublicationFailure | null; canShare: boolean; canVoid: boolean;
+  attempt?: Pick<PublicationAttempt, "id" | "invoiceVersion"> };
 export type PublicationService = { publish(actor: InvoiceActor, input: unknown): Promise<PublishedInvoiceResult> };
 export type InvoiceLifecycleService = {
   status(actor: InvoiceActor, invoiceId: string): Promise<InvoiceStatusResult>;

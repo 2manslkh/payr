@@ -39,6 +39,20 @@ it("does not offer an enabled send action when mail is disabled", () => {
   expect(screen.getByText(/Invoice email is disabled/)).toBeTruthy();
 });
 
+it("does not retire a corrected revision's uncertain request because an older revision failed", async () => {
+  const saved = { invoiceId: props.invoiceId, expectedVersion: 2, approval: true, deliveryApproval: true,
+    idempotencyKey: "00000000-0000-4000-8000-000000000002" };
+  const storageKey = `payr:publish-and-send:${props.invoiceId}:2`;
+  sessionStorage.setItem(storageKey, JSON.stringify(saved));
+  const fetch = vi.fn().mockRejectedValue(new Error("network loss")); vi.stubGlobal("fetch", fetch);
+  render(<PublishAndSend {...props} failedAttempt={{ id: "00000000-0000-4000-8000-000000000003", invoiceVersion: 1 }} />);
+  expect(screen.queryByRole("checkbox")).toBeNull();
+  expect(JSON.parse(sessionStorage.getItem(storageKey)!)).toEqual(saved);
+  fireEvent.click(screen.getByRole("button", { name: "Resume Publish & Send" }));
+  await screen.findByRole("alert");
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ expectedVersion: 2, approval: true, deliveryApproval: true, idempotencyKey: saved.idempotencyKey });
+});
+
 it("persists only an explicitly clicked request and resumes identical consent/key after remount and status refresh", async () => {
   const fetch = vi.fn().mockResolvedValue(Response.json({ code: "PUBLICATION_RETRYABLE" }, { status: 503 }));
   vi.stubGlobal("fetch", fetch);

@@ -143,7 +143,7 @@ it.each(["reserved", "rendering", "stored", "failed"] as const)("never exposes a
   value.attempt!.link.keyVersion = 999;
   value.attempt!.failureCode = state === "failed" ? "ARTIFACT_VERIFICATION_FAILED" : null;
   expect((await setup(value).service.status(actor, id)).invoiceDocument).toBeNull();
-  expect(publicationView(value, now)).toEqual({ state, failureCode: value.attempt!.failureCode, canShare: false, canVoid: true });
+  expect(publicationView(value, now)).toEqual({ state, failureCode: value.attempt!.failureCode, canShare: false, canVoid: true, attempt: { id, invoiceVersion: 1 } });
 });
 
 it.each(["artifact", "finalizedAt"] as const)("requires finalized artifact facts (%s) before regenerating an invoice URL", async (field) => {
@@ -261,7 +261,7 @@ it("shares a finalized artifact after commercial expiry while its independent be
   value.payableUntil = now.toISOString();
   const { service } = setup(value);
   expect(await service.share(actor, id)).toEqual({ invoiceUrl, invoicePdfUrl: `${invoiceUrl}/pdf`, pdfFilename: "INV-2030-000001.pdf" });
-  expect(publicationView(value, now)).toEqual({ state: "finalized", failureCode: null, canShare: true, canVoid: false });
+  expect(publicationView(value, now)).toEqual({ state: "finalized", failureCode: null, canShare: true, canVoid: false, attempt: { id, invoiceVersion: 1 } });
 });
 
 it.each(["reserved", "rendering", "stored", "failed", "artifact", "finalizedAt", "inactive", "futureActivation", "revoked", "expired"])("refuses explicit share for %s", async (reason) => {
@@ -282,10 +282,19 @@ it("does not expose private data in default SSR props, including null and failed
   expect(publicationView(null, now)).toEqual({ state: null, failureCode: null, canShare: false, canVoid: false });
   expect(publicationView(data(), now)).toEqual({ state: null, failureCode: null, canShare: false, canVoid: false });
   const value = published();
-  expect(publicationView(value, now)).toEqual({ state: "finalized", failureCode: null, canShare: true, canVoid: true });
+  expect(publicationView(value, now)).toEqual({ state: "finalized", failureCode: null, canShare: true, canVoid: true, attempt: { id, invoiceVersion: 1 } });
   value.attempt!.state = "failed";
   value.attempt!.failureCode = "AUTH_REVOKED";
-  expect(publicationView(value, now)).toEqual({ state: "failed", failureCode: "AUTH_REVOKED", canShare: false, canVoid: true });
+  expect(publicationView(value, now)).toEqual({ state: "failed", failureCode: "AUTH_REVOKED", canShare: false, canVoid: true, attempt: { id, invoiceVersion: 1 } });
+});
+
+it.each([1, 2])("retains the terminal attempt identity/version after invoice revision %s", (invoiceVersion) => {
+  const attempt = { ...published().attempt!, state: "failed" as const, finalizedAt: null,
+    failureCode: "ARTIFACT_VERIFICATION_FAILED" as const };
+  const view = publicationView(data({ invoiceVersion, attempt }), now);
+  expect(view).toEqual({ state: "failed", failureCode: "ARTIFACT_VERIFICATION_FAILED", canShare: false, canVoid: false,
+    attempt: { id, invoiceVersion: 1 } });
+  expect(JSON.stringify(view)).not.toMatch(/private\/storage|publicationSalt|verifierHash/);
 });
 
 it.each(COMMERCIAL_STATES)("offers void only for effectively published unpaid invoices (%s)", (commercialState) => {

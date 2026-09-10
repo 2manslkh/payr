@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { PublishedInvoiceResult } from "../lib/invoices/publication-contracts";
+import type { PublicationView, PublishedInvoiceResult } from "../lib/invoices/publication-contracts";
 import { ConsoleError, consoleApi } from "./console-api";
 
-export function PublishAndSend({ invoiceId, version, clientEmail, senderEmail, enabled, recovering = false }: {
+export function PublishAndSend({ invoiceId, version, clientEmail, senderEmail, enabled, recovering = false, failedAttempt }: {
   invoiceId: string; version: number; clientEmail: string; senderEmail: string; enabled: boolean;
   recovering?: boolean;
+  failedAttempt?: PublicationView["attempt"];
 }) {
   const router = useRouter();
   const [approved, setApproved] = useState(false);
@@ -25,15 +26,32 @@ export function PublishAndSend({ invoiceId, version, clientEmail, senderEmail, e
   }, () => {
     try { return sessionStorage.getItem(storageKey); } catch { return null; }
   }, () => null);
-  let saved: { invoiceId: string; expectedVersion: number; approval: true; deliveryApproval: true; idempotencyKey: string } | null = null;
+  const failedId = failedAttempt?.id;
+  const failedVersion = failedAttempt?.invoiceVersion;
+  let saved: { invoiceId: string; expectedVersion: number; approval: true; deliveryApproval: true; idempotencyKey: string; afterFailedAttemptId?: string } | null = null;
   try {
     const value = JSON.parse(stored ?? "null");
     if (value?.invoiceId === invoiceId && value.expectedVersion === version && value.approval === true && value.deliveryApproval === true
       && typeof value.idempotencyKey === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value.idempotencyKey)
-      && Object.keys(value).length === 5) saved = value;
+      && (value.afterFailedAttemptId === undefined ? Object.keys(value).length === 5
+        : typeof value.afterFailedAttemptId === "string" && Object.keys(value).length === 6)
+      && (failedVersion !== version || value.afterFailedAttemptId === failedId)) saved = value;
   } catch { /* Invalid or differently scoped browser data never supplies consent. */ }
   const resumable = saved !== null || attempted;
   useEffect(() => () => request.current?.abort(), []);
+  useEffect(() => {
+    if (!failedId || failedVersion === undefined) return;
+    // Only retire consent for the confirmed failed revision. A replacement approved
+    // after this failure must survive remounts while the server still shows old status.
+    const failedStorageKey = `payr:publish-and-send:${invoiceId}:${failedVersion}`;
+    try {
+      const value = sessionStorage.getItem(failedStorageKey);
+      if (value !== null && JSON.parse(value)?.afterFailedAttemptId !== failedId) {
+        sessionStorage.removeItem(failedStorageKey);
+        window.dispatchEvent(new Event("storage"));
+      }
+    } catch { /* Unreadable storage never supplies consent. */ }
+  }, [invoiceId, failedId, failedVersion]);
 
   async function publish() {
     if ((!approved && !resumable) || (recovering && !resumable) || !enabled || request.current || refreshing || completed) return;
@@ -41,7 +59,9 @@ export function PublishAndSend({ invoiceId, version, clientEmail, senderEmail, e
     // Persist only after the user's explicit send/resume click, before an uncertain HTTP write.
     // No email addresses, invoice contents, bearer URLs or credentials belong in browser storage.
     try {
-      sessionStorage.setItem(storageKey, JSON.stringify({ invoiceId, expectedVersion: version, approval: true, deliveryApproval: true, idempotencyKey: key.current }));
+      sessionStorage.setItem(storageKey, JSON.stringify({ invoiceId, expectedVersion: version, approval: true, deliveryApproval: true, idempotencyKey: key.current,
+        ...((saved?.afterFailedAttemptId ?? failedId) ? { afterFailedAttemptId: saved?.afterFailedAttemptId ?? failedId } : {}),
+      }));
       window.dispatchEvent(new Event("storage"));
     } catch {
       setError("This browser cannot retain the approved retry request. Enable session storage before publishing. No request was sent.");
@@ -74,6 +94,7 @@ export function PublishAndSend({ invoiceId, version, clientEmail, senderEmail, e
 
   return <section className="invoice-rail-section publication-actions" aria-labelledby="publish-send-heading">
     <h2 id="publish-send-heading">Publish &amp; Send</h2>
+    {failedAttempt && <p>The previous publication attempt for version {failedAttempt.invoiceVersion} failed and remains in history. A fresh approval uses a new request key and invoice number.</p>}
     <p>Version {version} becomes an immutable invoice. Payr emails the PDF and private invoice links to:</p>
     <dl className="invoice-facts"><dt>Client</dt><dd className="invoice-source">{clientEmail}</dd>
       <dt>Sender copy</dt><dd className="invoice-source">{senderEmail}</dd></dl>

@@ -38,6 +38,8 @@ export function InvoiceDocument({ detail, publication, proof = null, invoiceEmai
   const { invoice, version, history } = detail;
   const snapshot = version?.snapshot;
   const published = invoice.commercialState !== "draft";
+  const failedAttempt = publication?.state === "failed" ? publication.attempt : undefined;
+  const recovering = publication?.state !== null && ["reserved", "rendering", "stored"].includes(publication?.state ?? "");
   return (
     <div className="invoice-detail-layout">
       <article className="invoice-document" aria-label="Immutable invoice record">
@@ -160,9 +162,11 @@ export function InvoiceDocument({ detail, publication, proof = null, invoiceEmai
           <p className="muted">{proof || invoice.paymentStatus === "paid" ? "A settlement is recorded. Commercial state remains a separate fact." : "No settlement is recorded for this invoice."}</p>
         </section>
         {proof && <SettlementProof invoiceId={invoice.id} version={invoice.version} proof={proof} />}
-        {!published && snapshot?.sender.contactEmail && publication && (publication.state === null || ["reserved", "rendering", "stored"].includes(publication.state)) && <PublishAndSend key={`${invoice.id}:${invoice.version}`}
+        {!published && snapshot?.sender.contactEmail && publication && (publication.state === null
+          || failedAttempt && failedAttempt.invoiceVersion <= invoice.version
+          || recovering && publication.attempt?.invoiceVersion === invoice.version) && <PublishAndSend key={`${invoice.id}:${invoice.version}:${failedAttempt?.id ?? ""}`}
           invoiceId={invoice.id} version={invoice.version} clientEmail={snapshot.client.contactEmail}
-          senderEmail={snapshot.sender.contactEmail} enabled={emailEnabled} recovering={publication.state !== null} />}
+          senderEmail={snapshot.sender.contactEmail} enabled={emailEnabled} recovering={recovering} failedAttempt={failedAttempt} />}
         {invoiceEmail && <section className="invoice-rail-section" aria-labelledby="invoice-email-heading">
           <h2 id="invoice-email-heading">Invoice email</h2>
           {invoiceEmail.state === "not_applicable" ? <p>No invoice email queued. Historical publications are not sent automatically.</p> : <>

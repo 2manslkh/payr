@@ -48,6 +48,27 @@ it("records only chain-derived matching facts and atomically enqueues pending re
       { messageKind: "receipt", normalizedRecipient: "owner@example.test", roles: ["issuer"] }] }));
 });
 
+it.each(["recorded", "replayed"])("kicks scoped receipt processing after a %s settlement", async (outcome) => {
+  const { chain, repository, config, hash } = setup();
+  const receiptId = "00000000-0000-4000-8000-000000000002";
+  repository.recordSettlement.mockResolvedValue({ outcome, settlementId: receiptId, receiptDocumentId: receiptId });
+  const afterSettlement = vi.fn();
+  expect(await createReconciler(chain, repository, config, afterSettlement).transaction(hash)).toEqual({ outcome: "verified" });
+  expect(afterSettlement).toHaveBeenCalledWith(receiptId);
+  expect(repository.recordSettlement.mock.invocationCallOrder[0]).toBeLessThan(afterSettlement.mock.invocationCallOrder[0]);
+});
+
+it("keeps payment verified when receipt scheduling fails, but never schedules failed persistence", async () => {
+  const { chain, repository, config, hash } = setup();
+  const afterSettlement = vi.fn(() => { throw new Error("scheduler unavailable"); });
+  const service = createReconciler(chain, repository, config, afterSettlement);
+  expect(await service.transaction(hash)).toEqual({ outcome: "verified" });
+  afterSettlement.mockClear();
+  repository.recordSettlement.mockRejectedValue(new Error("database unavailable"));
+  await expect(service.transaction(hash)).rejects.toThrow("RECONCILIATION_UNAVAILABLE");
+  expect(afterSettlement).not.toHaveBeenCalled();
+});
+
 it.each(["chain", "block", "value", "payee", "commitment", "logHash", "removed", "expired"])("rejects mismatched %s without settlement", async (kind) => {
   const { service, repository, chain, block, target, receipt, hash } = setup();
   if (kind === "chain") chain.chainId.mockResolvedValue(1);

@@ -7,7 +7,7 @@ import { ReconciliationError, type ChainEventRef, type ReconciliationConfig, typ
 
 const topic = toEventSelector("InvoicePaid(bytes32,bytes32,address,address,uint256)");
 
-export function createReconciler(chain: SettlementChain, repository: ReconciliationRepository, config: ReconciliationConfig) {
+export function createReconciler(chain: SettlementChain, repository: ReconciliationRepository, config: ReconciliationConfig, afterSettlement?: (receiptDocumentId: string) => void) {
   async function transaction(hash: Hex, expected?: ChainEventRef, deadline = Date.now() + 240_000): Promise<{ outcome: "pending" | "invalid" | "verified"; reason?: "reverted" }> {
     try {
       if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new ReconciliationError("INVALID_TRANSACTION");
@@ -56,13 +56,15 @@ export function createReconciler(chain: SettlementChain, repository: Reconciliat
         const tokenId = randomUUID();
         const receiptToken = createKeyedTokenCodec(config.keys).derive(tokenId, "receipt-bearer", config.activeKeyVersion);
         const deliveries = receiptRecipients(target.snapshot.sender.contactEmail!, target.snapshot.client.contactEmail);
-        await repository.recordSettlement({ workspaceId: target.workspaceId, chainId: config.chainId, contractAddress: address,
+        const settlement = await repository.recordSettlement({ workspaceId: target.workspaceId, chainId: config.chainId, contractAddress: address,
           invoiceKey: args.invoiceKey, transactionHash: hash.toLowerCase() as Hex, logIndex: log.logIndex,
           blockNumber: block.number.toString(), blockTime: new Date(Number(block.timestamp) * 1000).toISOString(),
           documentCommitment: args.documentCommitment, payer: args.payer.toLowerCase() as Hex, payee: args.payee.toLowerCase() as Hex,
           amountAtomic: args.amount.toString(), receiptTokenId: tokenId, receiptKeyVersion: config.activeKeyVersion,
           receiptVerifierHash: receiptToken.verifierHash, receiptExpiresAt: new Date(Date.now() + 365 * 86400_000).toISOString(), deliveries });
         verified = true;
+        // Scheduling cannot undo settlement; durable workers recover missed or interrupted kicks.
+        try { afterSettlement?.(settlement.receiptDocumentId); } catch { /* Keep the committed payment verified. */ }
       }
       return { outcome: verified ? "verified" : "invalid" };
     } catch (error) {

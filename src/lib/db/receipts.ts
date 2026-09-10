@@ -46,7 +46,7 @@ export function createReceiptRepository(client: RpcClient): ReceiptRepository {
     }
   }
   return {
-    claim: (id) => call("payr_claim_receipt_v1", { p_id: id === undefined ? null : uuid.parse(id) },
+    claim: (id) => call(id === undefined ? "payr_claim_next_automatic_receipt_v1" : "payr_claim_receipt_v1", id === undefined ? {} : { p_id: uuid.parse(id) },
       receiptWorkSchema.refine((row) => id === undefined || row.id === id).nullable()),
     complete: (id, claimedFence, artifact) => call("payr_complete_receipt_v1",
       { p_id: uuid.parse(id), p_fence: fence.parse(claimedFence), p_artifact: receiptArtifactSchema.parse(artifact) }, z.boolean()),

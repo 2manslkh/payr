@@ -70,16 +70,20 @@ export function createInvoiceOutboxRepository(client: RpcClient, publicationAtte
   };
 }
 
-export function createOutboxRepository(client: RpcClient): OutboxRepository {
+export function createOutboxRepository(client: RpcClient, automatic?: { receiptDocumentId?: string }): OutboxRepository {
+  const scope = automatic?.receiptDocumentId === undefined ? null : uuid.parse(automatic.receiptDocumentId);
   async function call(name: string, input: Record<string, unknown>, id?: string, fence?: string) {
     try {
       const result = await client.rpc(name, input);
       if (result.error) throw new Error();
-      return deliveryWorkSchema.refine((row) => (id === undefined || row.id === id) && (fence === undefined || row.fence === fence)).nullable().parse(result.data);
+      return deliveryWorkSchema.refine((row) => (id === undefined || row.id === id) && (fence === undefined || row.fence === fence)
+        && (scope === null || row.receiptDocumentId === scope)).nullable().parse(result.data);
     } catch { throw new Error("DELIVERY_UNAVAILABLE"); }
   }
   return {
-    claim: (id) => call("payr_claim_delivery_v1", { p_id: id === undefined ? null : uuid.parse(id) }, id),
+    claim: (id) => automatic === undefined
+      ? call("payr_claim_delivery_v1", { p_id: id === undefined ? null : uuid.parse(id) }, id)
+      : call("payr_claim_automatic_receipt_delivery_v1", { p_id: id === undefined ? null : uuid.parse(id), p_receipt_document_id: scope }, id),
     begin: (id, fence, payloadHash) => call("payr_begin_delivery_v1", { p_id: uuid.parse(id), p_fence: receiptWorkSchema.shape.fence.parse(fence), p_payload_hash: hash.parse(payloadHash) }, id, fence),
     finish: (id, fence, result) => call("payr_finish_delivery_v1", { p_id: uuid.parse(id), p_fence: receiptWorkSchema.shape.fence.parse(fence), p_result: resultSchema.parse(result) }, id, fence),
   };

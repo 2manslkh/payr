@@ -1,6 +1,9 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { settledFixture, sql } from "./settlement.test-support";
 import { createIdentityRepository } from "./identity";
+import { createOutboxRepository } from "./outbox";
+import { createOutboxWorker } from "../email/outbox";
+import type { ReceiptDeliveryWork, ReceiptEmailPayload, ReceiptEmailProvider } from "../email/outbox-contracts";
 
 it("injects retry jitter samples at both bounds, caps the delay, and rejects invalid samples", () => {
   for (const attempt of [0, 1, 5, 6, 2147483647]) {
@@ -21,8 +24,8 @@ it("injects retry jitter samples at both bounds, caps the delay, and rejects inv
     has_function_privilege('service_role','public.payr_worker_retry_sample_v1(timestamptz,integer,double precision)','execute');`)).toBe("f|f|f");
 });
 
-async function fixture(ready = true) {
-  const value = await settledFixture();
+async function fixture(ready = true, blockTime?: string) {
+  const value = await settledFixture(false, undefined, 1, undefined, blockTime);
   const { db, receiptDocumentId, actor, target } = value;
   if (ready) {
     await db.rpc("payr_claim_receipt_v1", { p_id: receiptDocumentId });
@@ -48,6 +51,139 @@ it("does not claim before receipt readiness and grants one concurrent sender a f
   expect(claimed).toHaveLength(1);
   expect(claimed[0]).toMatchObject({ id: deliveryId, state: "sending", fence: "1", attemptCount: 1,
     firstProviderAttemptAt: null, providerRequestStartedAt: null, ambiguousSince: null, payloadHash: null, receipt: { state: "ready" } });
+});
+
+it("recovers future receipts fairly without generating the historical queue", async () => {
+  const old = await fixture(false);
+  const activation = sql("select activated_at from public.receipt_email_activation;");
+  try {
+    sql("update public.receipt_email_activation set activated_at=clock_timestamp();");
+    const late = await fixture(false, new Date(Date.parse(activation) - 60_000).toISOString());
+    const first = await fixture(false);
+    const next = await fixture(false);
+    const claimed = await first.db.rpc("payr_claim_next_automatic_receipt_v1");
+    expect(claimed.error).toBeNull(); expect(claimed.data).toMatchObject({ id: first.receiptDocumentId, state: "rendering", fence: "1" });
+    const failed = await first.db.rpc("payr_fail_receipt_v1", { p_id: first.receiptDocumentId, p_fence: "1", p_code: "DOCUMENT_UNAVAILABLE" });
+    expect(failed.error).toBeNull(); expect(failed.data).toBe(true);
+    sql(`update public.receipt_documents set next_attempt_at=clock_timestamp()-interval '1 second' where id='${first.receiptDocumentId}';`);
+    const rotated = await first.db.rpc("payr_claim_next_automatic_receipt_v1");
+    expect(rotated.error).toBeNull(); expect(rotated.data).toMatchObject({ id: next.receiptDocumentId, state: "rendering" });
+    const retried = await first.db.rpc("payr_claim_next_automatic_receipt_v1");
+    expect(retried.error).toBeNull(); expect(retried.data).toMatchObject({ id: first.receiptDocumentId, fence: "2" });
+    const empty = await first.db.rpc("payr_claim_next_automatic_receipt_v1");
+    expect(empty.error).toBeNull(); expect(empty.data).toBeNull();
+    expect(sql(`select bool_and(state='pending' and fence=0) from public.receipt_documents where id in ('${old.receiptDocumentId}','${late.receiptDocumentId}');`)).toBe("t");
+  } finally {
+    sql(`update public.receipt_email_activation set activated_at='${activation}'::timestamptz;`);
+  }
+  expect(sql(`select has_function_privilege('anon','public.payr_claim_next_automatic_receipt_v1()','execute'),
+    has_function_privilege('authenticated','public.payr_claim_next_automatic_receipt_v1()','execute'),
+    has_function_privilege('service_role','public.payr_claim_next_automatic_receipt_v1()','execute');`)).toBe("f|f|t");
+});
+
+it("restricts automatic delivery to post-cutover payments and the requested receipt, retaining fenced claims", async () => {
+  const old = await fixture();
+  // Simulate installation after an existing queue, without changing immutable settlement facts.
+  const activation = sql("select activated_at from public.receipt_email_activation;");
+  try {
+    sql("update public.receipt_email_activation set activated_at=clock_timestamp();");
+    const late = await fixture(true, new Date(Date.parse(activation) - 60_000).toISOString());
+    const fresh = await fixture();
+    const other = await fixture();
+    const args = { p_id: null, p_receipt_document_id: fresh.receiptDocumentId };
+    const denied = await old.db.rpc("payr_claim_automatic_receipt_delivery_v1", { p_id: old.deliveryId, p_receipt_document_id: null });
+    expect(denied.error).toBeNull(); expect(denied.data).toBeNull();
+    const lateDenied = await late.db.rpc("payr_claim_automatic_receipt_delivery_v1", { p_id: null, p_receipt_document_id: late.receiptDocumentId });
+    expect(lateDenied.error).toBeNull(); expect(lateDenied.data).toBeNull();
+    const mismatch = await fresh.db.rpc("payr_claim_automatic_receipt_delivery_v1", { ...args, p_id: other.deliveryId });
+    expect(mismatch.error).toBeNull(); expect(mismatch.data).toBeNull();
+    const claims = await Promise.all([1, 2, 3].map(() => fresh.db.rpc("payr_claim_automatic_receipt_delivery_v1", args)));
+    for (const result of claims) expect(result.error).toBeNull();
+    const claimed = claims.map((result) => result.data).filter(Boolean);
+    expect(claimed).toHaveLength(2);
+    expect(new Set(claimed.map((row) => row.id)).size).toBe(2);
+    for (const row of claimed) expect(row).toMatchObject({ receiptDocumentId: fresh.receiptDocumentId, fence: "1", state: "sending" });
+    const recovered = await fresh.db.rpc("payr_claim_automatic_receipt_delivery_v1", { p_id: null, p_receipt_document_id: null });
+    expect(recovered.error).toBeNull(); expect(recovered.data).toMatchObject({ receiptDocumentId: other.receiptDocumentId });
+    const second = await fresh.db.rpc("payr_claim_automatic_receipt_delivery_v1", { p_id: null, p_receipt_document_id: null });
+    expect(second.error).toBeNull(); expect(second.data).toMatchObject({ receiptDocumentId: other.receiptDocumentId });
+    const exhausted = await fresh.db.rpc("payr_claim_automatic_receipt_delivery_v1", { p_id: null, p_receipt_document_id: null });
+    expect(exhausted.error).toBeNull(); expect(exhausted.data).toBeNull();
+    expect(sql(`select bool_and(state='pending' and fence=0) from public.email_deliveries where settlement_id='${old.settlementId}';`)).toBe("t");
+    expect(sql(`select bool_and(state='pending' and fence=0) from public.email_deliveries where settlement_id='${late.settlementId}';`)).toBe("t");
+  } finally {
+    sql(`update public.receipt_email_activation set activated_at='${activation}'::timestamptz;`);
+  }
+  expect(sql(`select has_function_privilege('anon','public.payr_claim_automatic_receipt_delivery_v1(uuid,uuid)','execute'),
+    has_function_privilege('authenticated','public.payr_claim_automatic_receipt_delivery_v1(uuid,uuid)','execute'),
+    has_function_privilege('service_role','public.payr_claim_automatic_receipt_delivery_v1(uuid,uuid)','execute'),
+    has_table_privilege('service_role','public.receipt_email_activation','update');`)).toBe("f|f|t|f");
+});
+
+// Protocol-only payload: real PDF preparation and stored-byte verification live in receipt-workers.integration.test.ts.
+async function prepareAutomaticEmail(work: ReceiptDeliveryWork): Promise<ReceiptEmailPayload> {
+  return { from: "Payr <sender@example.test>", to: [work.normalizedRecipient], subject: "Receipt",
+    html: "<p>Paid</p>", text: "Paid", attachments: [{ filename: work.receipt.artifact!.pdfFilename, content: "cGRm" }] };
+}
+
+it.each(["retry_wait", "expired_lease"] as const)("runs scoped automatic delivery through %s recovery with identical provider key and payload", async (recovery) => {
+  const unrelated = await fixture();
+  const { db, receiptDocumentId, deliveryId: id, settlementId } = await fixture();
+  const repository = createOutboxRepository(db, { receiptDocumentId });
+  const prepare = vi.fn(prepareAutomaticEmail);
+  const send = vi.fn<ReceiptEmailProvider["send"]>()
+    .mockImplementationOnce(async () => {
+      // Expire after begin has persisted the request marker, simulating an escaped request and lost sender.
+      if (recovery === "expired_lease") {
+        sql(`update public.email_deliveries set lease_until=clock_timestamp()-interval '1 second' where id='${id}';`);
+        return { kind: "sent", providerMessageId: "lost-sender" };
+      }
+      return { kind: "retry", code: "PROVIDER_RATE_LIMITED" };
+    })
+    .mockResolvedValue({ kind: "sent", providerMessageId: "recovered-sender" });
+  const worker = createOutboxWorker(repository, prepare, { send });
+  expect(await worker.run(id)).toEqual({ outcome: recovery === "retry_wait" ? "retry_wait" : "lease_lost", id });
+  const before = sql(`select provider_idempotency_key,provider_payload_hash,first_provider_attempt_at from public.email_deliveries where id='${id}';`);
+  expect(sql(`select state,fence,attempt_count,provider_request_started_at is not null,provider_payload_hash is not null
+    from public.email_deliveries where id='${id}';`)).toBe(`${recovery === "retry_wait" ? "retry_wait|1|1|f" : "sending|1|1|t"}|t`);
+  if (recovery === "retry_wait") {
+    expect(await worker.run(id)).toEqual({ outcome: "idle" });
+    sql(`update public.email_deliveries set next_attempt_at=clock_timestamp()-interval '1 second' where id='${id}';`);
+  }
+  expect(await worker.run(id)).toEqual({ outcome: "sent", id });
+  expect(prepare.mock.calls[1][0]).toMatchObject({ id, receiptDocumentId, fence: "2", attemptCount: 2, providerRequestStartedAt: null });
+  expect(prepare.mock.calls[1][0].ambiguousSince !== null).toBe(recovery === "expired_lease");
+  expect(send).toHaveBeenCalledTimes(2);
+  expect(send.mock.calls[1][0]).toEqual(send.mock.calls[0][0]);
+  expect(send.mock.calls[1][1]).toBe(send.mock.calls[0][1]);
+  expect(sql(`select provider_idempotency_key,provider_payload_hash,first_provider_attempt_at from public.email_deliveries where id='${id}';`)).toBe(before);
+  expect(sql(`select state,fence,attempt_count,provider_message_id from public.email_deliveries where id='${id}';`)).toBe("sent|2|2|recovered-sender");
+  expect(await repository.finish(id, "1", { kind: "sent", providerMessageId: "stale-sender" })).toBeNull();
+  expect(await worker.run(id)).toEqual({ outcome: "idle" });
+  const sibling = sql(`select id from public.email_deliveries where settlement_id='${settlementId}' and id<>'${id}';`);
+  expect(await worker.run()).toEqual({ outcome: "sent", id: sibling });
+  expect(await worker.run()).toEqual({ outcome: "idle" });
+  expect(await worker.run(unrelated.deliveryId)).toEqual({ outcome: "idle" });
+  expect(send).toHaveBeenCalledTimes(3);
+  expect(prepare.mock.calls.every(([work]) => work.receiptDocumentId === receiptDocumentId)).toBe(true);
+  expect(sql(`select bool_and(state='pending' and fence=0 and attempt_count=0 and provider_request_started_at is null)
+    from public.email_deliveries where settlement_id='${unrelated.settlementId}';`)).toBe("t");
+});
+
+it("rotates an eligible automatic retry behind untouched due deliveries, then rotates the next retry", async () => {
+  const { db, receiptDocumentId, settlementId } = await fixture();
+  const ids = sql(`select id from public.email_deliveries where settlement_id='${settlementId}' order by created_at,id;`).split("\n");
+  expect(ids).toHaveLength(2);
+  const send = vi.fn<ReceiptEmailProvider["send"]>().mockResolvedValue({ kind: "retry", code: "PROVIDER_RATE_LIMITED" });
+  const worker = createOutboxWorker(createOutboxRepository(db, { receiptDocumentId }), prepareAutomaticEmail, { send });
+  expect(await worker.run(ids[0])).toEqual({ outcome: "retry_wait", id: ids[0] });
+  sql(`update public.email_deliveries set next_attempt_at=clock_timestamp()-interval '1 second' where id='${ids[0]}';`);
+  // Both rows are eligible; retry scheduling must not let the oldest creation monopolize the queue.
+  expect(await worker.run()).toEqual({ outcome: "retry_wait", id: ids[1] });
+  sql(`update public.email_deliveries set next_attempt_at=clock_timestamp()-interval '1 second' where id='${ids[1]}';`);
+  expect(await worker.run()).toEqual({ outcome: "retry_wait", id: ids[0] });
+  expect(send).toHaveBeenCalledTimes(3);
+  expect(sql(`select attempt_count from public.email_deliveries where settlement_id='${settlementId}' order by created_at,id;`)).toBe("2\n1");
 });
 
 it("persists the provider request marker and payload hash before accepting a fenced sent result", async () => {

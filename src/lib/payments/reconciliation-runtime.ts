@@ -4,8 +4,18 @@ import { arcTestnet } from "../chain/arc";
 import { createSupabaseAdminClient } from "../db/admin";
 import { createReconciliationRepository } from "../db/reconciliation";
 import { createReconciler } from "./reconcile";
+import { after } from "next/server";
+
+export function afterSettlement(receiptDocumentId: string, deadline: number) {
+  after(async () => {
+    const { processReceipt } = await import("../email/runtime");
+    await processReceipt(receiptDocumentId, deadline);
+  });
+}
 
 export function createReconciliationRuntime() {
+  const deadline = performance.now() + 280_000;
+  const scheduled = new Set<string>();
   const config = createReconciliationEnv();
   const database = createSupabaseAdminClient();
   const client = createPublicClient({ chain: arcTestnet, transport: http(config.rpcUrl, { retryCount: 0, timeout: 10_000 }) });
@@ -29,5 +39,10 @@ export function createReconciliationRuntime() {
         return { address: log.address, transactionHash: log.transactionHash, blockHash: log.blockHash, blockNumber: log.blockNumber, logIndex: log.logIndex };
       });
     },
-  }, createReconciliationRepository({ rpc: (name, args) => database.rpc(name, args).abortSignal(AbortSignal.timeout(10_000)) }), config);
+  }, createReconciliationRepository({ rpc: (name, args) => database.rpc(name, args).abortSignal(AbortSignal.timeout(10_000)) }), config, (id) => {
+    // Bound backfill fanout; cron remains the recovery path for the rest.
+    if (scheduled.has(id) || scheduled.size >= 2) return;
+    afterSettlement(id, deadline);
+    scheduled.add(id);
+  });
 }

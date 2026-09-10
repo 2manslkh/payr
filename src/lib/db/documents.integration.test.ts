@@ -84,7 +84,11 @@ it("exposes candidate metadata only and reads the exact finalized live invoice w
   expect(await documents.readTarget(a.link.tokenId)).toBeNull();
   const finalized = await finalize(a);
   expect(await documents.storageState(a.storageKey)).toBe("finalized");
-  expect(await documents.readTarget(a.link.tokenId)).toEqual(await publication.statusData(actor, a.invoiceId));
+  const { invoiceDeliveries, ...sharedStatus } = (await publication.statusData(actor, a.invoiceId))!;
+  expect(invoiceDeliveries).toEqual([]);
+  const recipientStatus = await documents.readTarget(a.link.tokenId);
+  expect(recipientStatus).toEqual(sharedStatus);
+  expect(recipientStatus).not.toHaveProperty("invoiceDeliveries");
   expect((await documents.readTarget(a.link.tokenId))!.attempt).toEqual(finalized);
   expect(await documents.findCandidate(randomUUID())).toBeNull();
   expect(await documents.readTarget(randomUUID())).toBeNull();
@@ -190,7 +194,10 @@ it("allows commercial expiry, pins payment/receipt/delivery facts, and rejects r
   expect(await documents.readTarget(a.link.tokenId)).toMatchObject({ commercialState: "expired", settlement: null, receipt: null, deliveries: [] });
   const receiptToken = await settle(a);
   const target = (await documents.readTarget(a.link.tokenId))!;
-  expect(target).toEqual(await publication.statusData(actor, a.invoiceId));
+  const { invoiceDeliveries, ...sharedStatus } = (await publication.statusData(actor, a.invoiceId))!;
+  expect(invoiceDeliveries).toEqual([]);
+  expect(target).toEqual(sharedStatus);
+  expect(target).not.toHaveProperty("invoiceDeliveries");
   expect(target.settlement).toMatchObject({ blockNumber: "9007199254740993", documentCommitment: a.artifact!.documentCommitment });
   expect(target.receipt).toMatchObject({ state: "pending", link: { tokenId: receiptToken }, artifact: null });
   expect(target.deliveries).toHaveLength(2);
@@ -201,7 +208,10 @@ it("allows commercial expiry, pins payment/receipt/delivery facts, and rejects r
     where token_id = '${receiptToken}';
     update public.email_deliveries set state = 'sent',provider_message_id = 'local-test-message',attempt_count = 1;`);
   const ready = await documents.readTarget(a.link.tokenId);
-  expect(ready).toEqual(await publication.statusData(actor, a.invoiceId));
+  const { invoiceDeliveries: readyInvoiceDeliveries, ...readySharedStatus } = (await publication.statusData(actor, a.invoiceId))!;
+  expect(readyInvoiceDeliveries).toEqual([]);
+  expect(ready).toEqual(readySharedStatus);
+  expect(ready).not.toHaveProperty("invoiceDeliveries");
   expect(ready).toMatchObject({ receipt: { state: "ready", artifact: { pdfFilename: "receipt.pdf" } },
     deliveries: [{ state: "sent" }, { state: "sent" }] });
 });

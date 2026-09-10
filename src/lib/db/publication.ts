@@ -81,7 +81,10 @@ const filename = z.string().max(200).regex(/^[A-Za-z0-9_-]+\.pdf$/);
 const artifact = z.object({ pdfFilename: filename, contentType: z.literal("application/pdf"), byteLength: z.number().int().min(1).max(10485760),
   invoiceDataHash: hash, pdfContentHash: hash, documentCommitment: hash, qrVerified: z.literal(true) }).strict();
 const link = z.object({ tokenId: uuid, keyVersion: revision, verifierHash: fingerprint, expiresAt: timestamp,
-  activatedAt: timestamp.nullable(), revokedAt: timestamp.nullable() }).strict();
+  activatedAt: timestamp.nullable(), revokedAt: timestamp.nullable(),
+  appOrigin: z.url().refine((value) => { const url = new URL(value); return value === url.origin && !url.username && !url.password
+    && (url.protocol === "https:" || url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)); }).optional(),
+}).strict();
 const attempt = z.object({ id: uuid, workspaceId: uuid, invoiceId: uuid, invoiceVersionId: uuid, invoiceVersion: revision,
   invoiceNumber: z.string().regex(/^[A-Z0-9][A-Z0-9-]{0,31}-[2-9][0-9]{3}-[0-9]{6,19}$/), state: z.enum(["reserved", "rendering", "stored", "finalized", "failed"]),
   snapshot, chainId: chain, contractAddress: addressHex.refine((value) => value !== `0x${"0".repeat(40)}`), invoiceKey: hash,
@@ -99,9 +102,11 @@ const attempt = z.object({ id: uuid, workspaceId: uuid, invoiceId: uuid, invoice
   && (value.state !== "failed" || value.link.revokedAt !== null));
 const actorSchema = z.object({ workspaceId: uuid, ownerWallet: addressHex.nullable(), connectorId: uuid.nullable() }).strict()
   .refine((value) => (value.ownerWallet === null) !== (value.connectorId === null));
-const write = z.object({ draftId: uuid, expectedVersion: revision, approval: z.literal(true), idempotencyKey: text(128),
+const write = z.object({ draftId: uuid, expectedVersion: revision, approval: z.literal(true), deliveryApproval: z.literal(true).optional(), idempotencyKey: text(128),
+  emailConfig: z.object({ from: text(320), appOrigin: z.url(), templateVersion: z.literal("invoice-issued-v1"), network: z.literal("Arc Testnet") }).strict().optional(),
   requestFingerprint: fingerprint, attemptId: uuid, invoiceKey: hash, publicationSalt: hash, tokenId: uuid, keyVersion: revision,
-  verifierHash: fingerprint, chainId: chain, contractAddress: addressHex }).strict();
+  verifierHash: fingerprint, chainId: chain, contractAddress: addressHex }).strict()
+  .refine((value) => (value.deliveryApproval !== undefined) === (value.emailConfig !== undefined));
 const fence = z.object({ attemptId: uuid, leaseOwner: uuid, fence: bigintText }).strict();
 const voidWrite = z.object({ invoiceId: uuid, expectedVersion: revision, approval: z.literal(true), idempotencyKey: text(128), requestFingerprint: fingerprint }).strict();
 const voidResult = z.object({ invoiceId: uuid, invoiceVersion: revision, commercialState: z.literal("voided"), voidedAt: timestamp }).strict();
@@ -118,6 +123,7 @@ const statusData = z.object({ invoiceId: uuid, invoiceVersion: revision, invoice
   receipt: z.object({ state: z.enum(["pending", "rendering", "retry_wait", "ready", "failed"]), link,
     artifact: z.object({ pdfFilename: filename, pdfContentHash: hash }).strict().nullable() }).strict()
     .refine((value) => value.state !== "ready" || value.artifact !== null).nullable(), deliveries: z.array(delivery),
+  invoiceDeliveries: z.array(delivery.omit({ normalizedRecipient: true, providerMessageId: true })).optional(),
 }).strict().refine((value) => (!value.attempt || value.attempt.invoiceId === value.invoiceId)
   && (value.commercialState === "draft" ? value.invoiceNumber === null && value.payableUntil === null
     : value.invoiceNumber !== null && value.payableUntil !== null)
@@ -135,7 +141,7 @@ const errorCodes: Readonly<Record<string, string>> = {
   PUBLICATION_CONFIGURATION_REQUIRED: "CONFIGURATION_ERROR", PUBLICATION_CONFLICT: "PUBLICATION_RETRYABLE",
 };
 
-export function createPublicationRepository(client: RpcClient): PublicationRepository {
+export function createPublicationRepository(client: RpcClient, { invoiceEmailOnly = false }: { invoiceEmailOnly?: boolean } = {}): PublicationRepository {
   function parse<T>(schema: z.ZodType<T>, value: unknown, output = false): T {
     const result = schema.safeParse(value);
     if (!result.success) throw new PublicationError(output ? "INVALID_DATABASE_RESPONSE" : "INVALID_INPUT", output ? 500 : 400);
@@ -175,17 +181,17 @@ export function createPublicationRepository(client: RpcClient): PublicationRepos
       const parameters = scope(actor);
       const key = parse(z.string().trim().min(1).max(128), idempotencyKey);
       const fingerprint = parse(z.string().regex(/^[0-9a-f]{64}$/), requestFingerprint);
-      return call("payr_find_publication_replay_v1", { ...parameters, p_idempotency_key: key, p_request_fingerprint: fingerprint },
+      return call("payr_find_publication_replay_v2", { ...parameters, p_idempotency_key: key, p_request_fingerprint: fingerprint },
         attempt.refine((value) => value.workspaceId === actor.workspaceId).nullable());
     },
     async reserve(actor, input) {
       const parameters = scope(actor), value = parse(write, input);
-      return call("payr_reserve_publication_v1", { ...parameters, p_input: value }, attempt.refine((a) =>
+      return call(value.deliveryApproval ? "payr_reserve_publication_v2" : "payr_reserve_publication_v1", { ...parameters, p_input: value }, attempt.refine((a) =>
         a.workspaceId === actor.workspaceId && a.invoiceId === value.draftId && a.invoiceVersion === value.expectedVersion));
     },
     async claim(attemptId, leaseOwner) {
       const id = parse(uuid.nullable(), attemptId), owner = parse(uuid, leaseOwner);
-      return call("payr_claim_publication_v1", { p_attempt_id: id, p_lease_owner: owner }, attempt.refine((a) =>
+      return call(invoiceEmailOnly ? "payr_claim_invoice_publication_v1" : "payr_claim_publication_v2", { p_attempt_id: id, p_lease_owner: owner }, attempt.refine((a) =>
         (id === null || a.id === id) && a.leaseOwner === owner && ["rendering", "stored"].includes(a.state)).nullable());
     },
     async store(input) {
@@ -207,7 +213,7 @@ export function createPublicationRepository(client: RpcClient): PublicationRepos
     },
     async statusData(actor, invoiceId) {
       const parameters = scope(actor), id = parse(uuid, invoiceId);
-      return call("payr_publication_status_v1", { ...parameters, p_invoice_id: id }, statusData.refine((s) =>
+      return call("payr_publication_status_v2", { ...parameters, p_invoice_id: id }, statusData.refine((s) =>
         s.invoiceId === id && (!s.attempt || s.attempt.workspaceId === actor.workspaceId)).nullable());
     },
     async voidInvoice(actor, input) {

@@ -1,7 +1,9 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { canonicalJson } from "../domain/canonical-json";
+import { ARC_TESTNET_CHAIN_ID } from "../chain/arc";
 import { deriveEffectiveCommercialState } from "../domain/invoice";
+import { buildInvoiceEmailStatus } from "../domain/status";
 import { IdentityError, walletSchema } from "../identity/contracts";
 import { createKeyedTokenCodec } from "../security/keyed-token";
 import { buildGmailPackage } from "./gmail-package";
@@ -11,7 +13,7 @@ import { createPublicationWorker } from "./publication-worker";
 
 export const publishInvoiceSchema = z.object({
   draftId: z.string().uuid().transform((value) => value.toLowerCase()),
-  expectedVersion: z.number().int().positive(), approval: z.literal(true), idempotencyKey: z.string().trim().min(1).max(128),
+  expectedVersion: z.number().int().positive(), approval: z.literal(true), deliveryApproval: z.literal(true), idempotencyKey: z.string().trim().min(1).max(128),
 }).strict();
 const actorSchema = z.object({
   workspaceId: z.string().uuid().transform((value) => value.toLowerCase()), ownerWallet: walletSchema.nullable(),
@@ -20,7 +22,8 @@ const actorSchema = z.object({
 
 export function createPublicationService(repository: PublicationRepository, dependencies: PublicationDependencies): PublicationService {
   return { async publish(actor, rawInput) {
-    const parsed = publishInvoiceSchema.safeParse(rawInput);
+    // Shipped v1 requests may only read their finalized result, never reserve or resume work.
+    const parsed = publishInvoiceSchema.omit({ deliveryApproval: true }).extend({ deliveryApproval: z.literal(true).optional() }).safeParse(rawInput);
     if (!parsed.success) throw new PublicationError("INVALID_INPUT", 400);
     const parsedActor = actorSchema.safeParse(actor);
     if (!parsedActor.success) throw new IdentityError("FORBIDDEN", 403);
@@ -28,25 +31,28 @@ export function createPublicationService(repository: PublicationRepository, depe
     const input = parsed.data;
     const requestFingerprint = createHash("sha256").update(canonicalJson({
       operation: "publish_invoice", workspaceId: actor.workspaceId, draftId: input.draftId,
-      expectedVersion: input.expectedVersion, approval: true,
+       expectedVersion: input.expectedVersion, approval: true, ...(input.deliveryApproval ? { deliveryApproval: true } : {}),
     })).digest("hex");
     // Resolve authorized replay before touching current deployment binding or an unavailable provider.
     let reserved = await repository.findReplay(actor, input.idempotencyKey, requestFingerprint);
+    if (!input.deliveryApproval && reserved?.state !== "finalized") throw new PublicationError("DELIVERY_APPROVAL_REQUIRED", 400);
     let documents: InvoiceDocumentPort | undefined;
     if (!reserved) {
       try {
+        const emailConfig = dependencies.getEmailConfig?.();
+        if (!emailConfig) throw new PublicationError("INVOICE_EMAIL_DISABLED", 503);
         documents = dependencies.getDocuments();
         const config = dependencies.getReservationConfig();
         const tokenId = randomUUID();
         let verifierHash: string;
         try {
-          if (!Number.isSafeInteger(config.chainId) || config.chainId <= 0
+          if (config.chainId !== ARC_TESTNET_CHAIN_ID
             || !/^0x[0-9a-fA-F]{40}$/.test(config.contractAddress) || /^0x0{40}$/.test(config.contractAddress)
             || !Number.isSafeInteger(config.activeKeyVersion) || config.activeKeyVersion < 1 || config.activeKeyVersion > 2147483647) throw new Error();
           verifierHash = createKeyedTokenCodec(config.keys).derive(tokenId, "invoice-bearer", config.activeKeyVersion).verifierHash;
         } catch { throw new PublicationError("CONFIGURATION_ERROR", 503); }
         reserved = await repository.reserve(actor, {
-          ...input, requestFingerprint, attemptId: randomUUID(), invoiceKey: `0x${randomBytes(32).toString("hex")}`,
+          ...input, emailConfig, requestFingerprint, attemptId: randomUUID(), invoiceKey: `0x${randomBytes(32).toString("hex")}`,
           publicationSalt: `0x${randomBytes(32).toString("hex")}`, tokenId, keyVersion: config.activeKeyVersion,
           verifierHash, chainId: config.chainId, contractAddress: config.contractAddress.toLowerCase() as `0x${string}`,
         });
@@ -82,13 +88,19 @@ export function createPublicationService(repository: PublicationRepository, depe
     }
     const invoiceUrl = publicationLink(attempt.link, "invoice-bearer", dependencies.getLinkConfig());
     const invoicePdfUrl = `${invoiceUrl}/pdf`;
+    const invoiceEmail = buildInvoiceEmailStatus(data.invoiceDeliveries);
+    if (input.deliveryApproval && invoiceEmail.state === "not_applicable") throw new PublicationError("PUBLICATION_RETRYABLE", 503);
+    if (input.deliveryApproval && invoiceEmail.deliveries.some((d) => ["pending", "retry_wait", "sending"].includes(d.state))) {
+      // Scheduling failure does not undo the committed publication; durable cron owns recovery.
+      try { dependencies.afterPublication?.(attempt.id); } catch { /* The durable queue remains pending. */ }
+    }
     return {
       invoiceId: attempt.invoiceId, invoiceVersion: attempt.invoiceVersion, invoiceNumber: attempt.invoiceNumber,
       commercialState: deriveEffectiveCommercialState(data.commercialState, new Date(), new Date(data.payableUntil)),
       invoiceUrl, invoicePdfUrl, pdfFilename: attempt.artifact.pdfFilename, pdfContentHash: attempt.artifact.pdfContentHash,
       documentCommitment: attempt.artifact.documentCommitment,
       gmailLinkPackage: buildGmailPackage({ snapshot: attempt.snapshot, invoiceNumber: attempt.invoiceNumber, invoiceUrl, invoicePdfUrl }),
-      sendApprovalRequired: true,
+      sendApprovalRequired: !input.deliveryApproval, invoiceEmail,
     };
   } };
 }

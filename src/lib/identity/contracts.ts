@@ -3,9 +3,9 @@ import { isCountryCode } from "../domain/country";
 
 export const CONNECTOR_SCOPES = ["invoice:draft", "invoice:publish", "invoice:status", "invoice:void"] as const;
 // Shipped/default credentials remain invoice-only. Never use supported scopes as defaults.
-export const SUPPORTED_CONNECTOR_SCOPES = [...CONNECTOR_SCOPES, "sender:read", "sender:write"] as const;
+export const SUPPORTED_CONNECTOR_SCOPES = [...CONNECTOR_SCOPES, "sender:read", "sender:write", "wallet:read"] as const;
 export type ConnectorScope = typeof SUPPORTED_CONNECTOR_SCOPES[number];
-export const connectorScopesSchema = z.array(z.enum(SUPPORTED_CONNECTOR_SCOPES)).min(1).max(6)
+export const connectorScopesSchema = z.array(z.enum(SUPPORTED_CONNECTOR_SCOPES)).min(1).max(7)
   .refine((scopes) => new Set(scopes).size === scopes.length)
   .refine((scopes) => scopes.includes("invoice:status"), "Scopes must include invoice:status for MCP initialization and tool discovery");
 export const SESSION_COOKIE = "__Host-payr-session";
@@ -82,7 +82,7 @@ export const verifyRequestSchema = z.object({
 export type VerifyRequest = z.infer<typeof verifyRequestSchema>;
 export const createConnectorSchema = z.object({ expiresInDays: z.number().int().min(1).max(30), scopes: connectorScopesSchema.optional() }).strict();
 
-export type IdentitySession = Readonly<{ workspaceId: string; ownerWallet: string }>;
+export type IdentitySession = Readonly<{ workspaceId: string; ownerWallet: string; privyUserId?: string }>;
 export type IdentityConfig = Readonly<{
   appOrigin: string;
   chainId: number;

@@ -13,7 +13,7 @@ export function GET() {
     openapi: "3.1.0",
     info: {
       title: "Payr Invoice Publication API", version: "1.0.0",
-      description: "Publish an existing, explicitly approved Payr invoice draft. Create and review the draft in Payr or its existing MCP first; supply its ID and exact version. This API does not create drafts, send email, authorize wallet spending, or settle invoices. Returned document links are private bearer capabilities.",
+      description: "Publish & Send an explicitly reviewed Payr invoice draft. Supply its ID and exact version, approval:true and deliveryApproval:true. Queues invoice email through Resend to the frozen client and sender, with PDF attached and private links. Does not authorize wallet spending or settle invoices. Refresh/reimport older clients before activation.",
     },
     servers: [{ url: discoveryOrigin() }],
     security: [{ connectorBearer: [] }],
@@ -23,19 +23,20 @@ export function GET() {
     } } },
     paths: { "/api/invoices/{id}/publish": { post: {
       operationId: "publish_invoice", summary: "Publish an approved invoice draft",
-      description: "Obtain explicit user approval of this exact draft version before calling. Publishes the frozen invoice and returns its payment link, verified PDF link, and a Gmail-ready package (not a sent email). Use the same idempotencyKey and unchanged input when retrying a timeout, PUBLICATION_IN_PROGRESS, or PUBLICATION_RETRYABLE. Do not silently adopt a newer version after VERSION_CONFLICT; review and obtain approval again. Replaying a completed request returns the invoice's current commercial state, which may no longer be payable. Server-to-server callers should omit Origin; if supplied it must match the Payr API origin.",
+      description: "Approve this exact draft version, defaults, client-profile diff, and email to snapshot client.contactEmail and sender.contactEmail. One message per distinct address, equal addresses combine roles. Do not send a duplicate via Gmail. Use the same idempotencyKey and unchanged input on retry. Version/profile conflicts need fresh review. Email disabled rejects fresh publication before writing. Historical requests never enqueue email. Provider failure never undoes publication; sent means provider acceptance, not inbox delivery. Server-to-server callers should omit Origin; if supplied it must match the Payr API origin.",
       parameters: [{ name: "id", in: "path", required: true, description: "Existing draft ID in the credential's workspace", schema: { type: "string", format: "uuid" } }],
       requestBody: { required: true, content: { "application/json": { schema: {
-        type: "object", additionalProperties: false, required: ["expectedVersion", "approval", "idempotencyKey"],
+        type: "object", additionalProperties: false, required: ["expectedVersion", "approval", "deliveryApproval", "idempotencyKey"],
         properties: {
           expectedVersion: { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER, description: "Exact version the user reviewed and approved" },
           approval: { type: "boolean", const: true, description: "Explicit user approval of this invoice version; never infer approval" },
+          deliveryApproval: { type: "boolean", const: true, description: "Explicit approval to email both frozen snapshot recipients through Payr" },
           idempotencyKey: { type: "string", minLength: 1, maxLength: 128, pattern: "\\S", description: "Nonblank key, trimmed before use. Preserve it and the request input for retries." },
         },
-      }, example: { expectedVersion: 1, approval: true, idempotencyKey: "publish-approved-draft-1" } } } },
+      }, example: { expectedVersion: 1, approval: true, deliveryApproval: true, idempotencyKey: "publish-approved-draft-1" } } } },
       responses: {
-        "200": { description: "Finalized publication or authorized replay. No email was sent and no funds were moved.", content: { "application/json": { schema: {
-          type: "object", required: ["invoiceId", "invoiceVersion", "invoiceNumber", "commercialState", "invoiceUrl", "invoicePdfUrl", "pdfFilename", "pdfContentHash", "documentCommitment", "gmailLinkPackage", "sendApprovalRequired"],
+        "200": { description: "Finalized publication with durable invoiceEmail states, or authorized replay. No funds moved. Provider acceptance is not inbox delivery.", content: { "application/json": { schema: {
+          type: "object", required: ["invoiceId", "invoiceVersion", "invoiceNumber", "commercialState", "invoiceUrl", "invoicePdfUrl", "pdfFilename", "pdfContentHash", "documentCommitment", "gmailLinkPackage", "sendApprovalRequired", "invoiceEmail"],
           properties: {
             invoiceId: { type: "string", format: "uuid" }, invoiceVersion: { type: "integer", minimum: 1 }, invoiceNumber: { type: "string" },
             commercialState: { type: "string", enum: ["draft", "published", "voided", "expired"] },
@@ -45,7 +46,14 @@ export function GET() {
               to: { type: "array", items: { type: "string" } }, subject: { type: "string" }, textBody: { type: "string" }, htmlBody: { type: "string" },
               paymentUrl: { type: "string", format: "uri" }, invoicePdfUrl: { type: "string", format: "uri" },
             } },
-            sendApprovalRequired: { type: "boolean", const: true },
+            sendApprovalRequired: { type: "boolean", description: "Legacy field. False for Publish & Send, which already includes email approval; never request a separate Gmail send. True only for authorized finalized v1 no-send replay, which never queues email." },
+            invoiceEmail: { type: "object", required: ["state", "deliveries"], properties: {
+              state: { type: "string", enum: ["not_applicable", "queued", "sending", "sent", "failed", "manual_review"] },
+              deliveries: { type: "array", maxItems: 2, items: { type: "object", required: ["roles", "state", "attemptCount", "nextAttemptAt"], properties: {
+                roles: { type: "array", items: { type: "string", enum: ["issuer", "client"] } }, state: { type: "string", enum: ["pending", "sending", "retry_wait", "sent", "failed", "manual_review"] },
+                attemptCount: { type: "integer", minimum: 0 }, nextAttemptAt: { type: ["string", "null"] },
+              } } },
+            } },
           },
         } } } },
         ...Object.fromEntries(Object.entries({

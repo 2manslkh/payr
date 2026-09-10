@@ -51,8 +51,8 @@ for (const owner of ["document", "navigator"] as const) {
     expect(JSON.stringify(results)).toContain("Arc Testnet");
     expect(JSON.stringify(results)).toContain("Authorization: Bearer");
     expect(requests).toEqual([]);
-    await page.getByRole("link", { name: "Sign in to Payr", exact: true }).click();
-    await expect(page).toHaveURL(/\/login$/);
+    await page.getByRole("link", { name: "Go To Dashboard", exact: true }).first().click();
+    await expect(page).toHaveURL(/\/app$/);
     await expect.poll(() => page.evaluate(() => (window as unknown as { __payrPublicTools: Map<string, unknown> }).__payrPublicTools.size)).toBe(0);
   });
 }

@@ -1,5 +1,15 @@
 # Bazantic: Invoice Publication Only
 
+**10 September current scope:** "publication only" describes this older spec's
+one-operation catalog, not publish-without-email behavior. The candidate keeps
+the newer Publish & Send recipe below: both approvals, frozen PDF/private links
+and client/issuer recipients; disabled email blocks fresh publication. Authorized
+finalized legacy no-send replay is read-only and never backfills. The older root
+donor's no-send recipe does not supersede this contract. The full agent catalog
+and preserved 9 September HTTP evidence are in `bazantic-agent-api.md`; current
+generated-MCP private authentication remains unverified in `mcp-onboarding.md`.
+No release, reimport, deployment or live send is authorized by this reconciliation.
+
 This integration exposes one operation: publish an existing Payr invoice draft.
 Draft creation and review stay in Payr or the existing MCP. It does not expose
 client/profile administration, draft creation, status tools, voiding, payment
@@ -42,19 +52,20 @@ credentials; if Bazantic offers neither, stop before activation.
 
 1. Have the owner create and review a draft through Payr or its existing MCP.
 2. Supply the existing draft ID and exact reviewed version to the agent.
-3. Obtain explicit approval to publish that version. Do not infer approval from a request to prepare a draft.
+3. Obtain explicit Publish & Send approval of that version, all defaults/client changes and both snapshot email recipients. Do not infer it from drafting or an older no-send approval. Refresh/reimport clients whose body schema lacks `deliveryApproval` before activation.
 4. Call `publish_invoice` with the ID and the following JSON body:
 
 ```json
 {
   "expectedVersion": 1,
   "approval": true,
+  "deliveryApproval": true,
   "idempotencyKey": "publish-approved-draft-1"
 }
 ```
 
-5. Present the returned invoice and PDF links to the authorized user. Treat the links and Gmail package as private.
-6. Explain that publication did not send email or move funds. Sending requires separate approval; the payer controls settlement.
+5. Present the private invoice/PDF links and `invoiceEmail` per-recipient states. One distinct-address Resend message each contains the frozen PDF and links; equal client/sender addresses combine roles.
+6. Do not send a duplicate through Gmail. The retained legacy Gmail package is not a sending instruction. `sent` means provider acceptance, not inbox delivery. Publication does not move funds. Disabled invoice email blocks fresh publication; historical no-send publications never backfill.
 
 Reuse the same key and unchanged input after a timeout, `PUBLICATION_IN_PROGRESS`,
 or `PUBLICATION_RETRYABLE`. Back off between retries and honor `Retry-After` on

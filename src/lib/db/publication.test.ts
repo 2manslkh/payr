@@ -25,6 +25,18 @@ function attempt(): PublicationAttempt {
 function repository(data: unknown, error: Awaited<ReturnType<RpcClient["rpc"]>>["error"] = null) {
   return createPublicationRepository({ rpc: () => Promise.resolve({ data, error }) });
 }
+
+it.each(["https://approved.test", "http://localhost:3000"])("preserves a valid approval-pinned origin on replay (%s)", async (origin) => {
+  const value = attempt(); value.link.appOrigin = origin;
+  expect((await repository(value).findReplay(actor, input.idempotencyKey, input.requestFingerprint))?.link.appOrigin).toBe(origin);
+});
+
+it.each(["https://approved.test/path", "https://user:secret@approved.test", "http://remote.test", "javascript:alert(1)"])(
+  "rejects invalid pinned origins instead of silently using current config (%s)", async (origin) => {
+    const value = attempt(); value.link.appOrigin = origin;
+    await expect(repository(value).findReplay(actor, input.idempotencyKey, input.requestFingerprint)).rejects.toMatchObject({ code: "INVALID_DATABASE_RESPONSE" });
+  },
+);
 function altered(value: unknown, path: string, replacement: unknown, remove = false): unknown {
   const result = structuredClone(value);
   const keys = path.split("."); let target = result as object;
@@ -39,7 +51,20 @@ it("claims with platform worker identity rather than a fabricated owner", async 
     calls.push({ name, parameters }); return Promise.resolve({ data: null, error: null });
   } });
   await expect(repository.claim(null, "00000000-0000-4000-8000-000000000001")).resolves.toBeNull();
-  expect(calls).toEqual([{ name: "payr_claim_publication_v1", parameters: { p_attempt_id: null, p_lease_owner: "00000000-0000-4000-8000-000000000001" } }]);
+  expect(calls).toEqual([{ name: "payr_claim_publication_v2", parameters: { p_attempt_id: null, p_lease_owner: "00000000-0000-4000-8000-000000000001" } }]);
+});
+
+it("uses only the approval-filtered claim RPC in invoice-email recovery mode", async () => {
+  const calls: unknown[] = [];
+  const repository = createPublicationRepository({ rpc(name, parameters) {
+    calls.push({ name, parameters }); return Promise.resolve({ data: null, error: null });
+  } }, { invoiceEmailOnly: true });
+  expect(await repository.claim(null, worker)).toBeNull();
+  expect(await repository.claim(id, worker)).toBeNull();
+  expect(calls).toEqual([
+    { name: "payr_claim_invoice_publication_v1", parameters: { p_attempt_id: null, p_lease_owner: worker } },
+    { name: "payr_claim_invoice_publication_v1", parameters: { p_attempt_id: id, p_lease_owner: worker } },
+  ]);
 });
 
 it("pins all nine RPC names, actor fields, JSON arguments and text fences", async () => {
@@ -65,13 +90,13 @@ it("pins all nine RPC names, actor fields, JSON arguments and text fences", asyn
   const scope = { p_workspace_id: id, p_owner_wallet: wallet, p_connector_id: null };
   const args = { p_attempt_id: id, p_lease_owner: worker, p_fence: fence.fence };
   expect(calls).toEqual([
-    { name: "payr_find_publication_replay_v1", parameters: { ...scope, p_idempotency_key: input.idempotencyKey, p_request_fingerprint: input.requestFingerprint } },
+    { name: "payr_find_publication_replay_v2", parameters: { ...scope, p_idempotency_key: input.idempotencyKey, p_request_fingerprint: input.requestFingerprint } },
     { name: "payr_reserve_publication_v1", parameters: { ...scope, p_input: input } },
-    { name: "payr_claim_publication_v1", parameters: { p_attempt_id: null, p_lease_owner: worker } },
+    { name: "payr_claim_publication_v2", parameters: { p_attempt_id: null, p_lease_owner: worker } },
     { name: "payr_store_publication_v1", parameters: { ...args, p_artifact: artifact } },
     { name: "payr_finalize_publication_v1", parameters: args },
     { name: "payr_fail_publication_v1", parameters: { ...args, p_failure_code: "PROFILE_CONFLICT" } },
-    { name: "payr_publication_status_v1", parameters: { ...scope, p_invoice_id: id } },
+    { name: "payr_publication_status_v2", parameters: { ...scope, p_invoice_id: id } },
     { name: "payr_void_invoice_v1", parameters: { ...scope, p_input: voidWrite } },
     { name: "payr_expire_invoices_v1", parameters: { p_limit: 3 } },
   ]);

@@ -47,6 +47,14 @@ it("never sends an invalid recipient, unsafe attachment, or absent idempotency k
   expect(request).not.toHaveBeenCalled();
 });
 
+it.each(["\n", "\r", "\r\n"])("still rejects an unprepared subject containing %j before fetch", async (lineBreak) => {
+  const request = vi.fn();
+  const provider = createResendReceiptProvider("test-key", request);
+  expect(await provider.send({ ...payload, subject: `Invoice${lineBreak}Bcc: other@example.test` }, "stable-key", performance.now() + 10000))
+    .toEqual({ kind: "failed", code: "PROVIDER_REJECTED" });
+  expect(request).not.toHaveBeenCalled();
+});
+
 it("does not dispatch after the worker's monotonic send deadline", async () => {
   const request = vi.fn();
   expect(await createResendReceiptProvider("test-key", request).send(payload, "stable-key", performance.now() - 1))

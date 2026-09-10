@@ -6,6 +6,11 @@ const secretHandling = "Keep service keys and account credentials out of prompts
 const registrationAuth = "X-Payr-Service-Key is required even for registration. Authorization and accountCredential are forbidden; send only the required JSON envelope {input:{...}}.";
 
 const catalog: Record<AgentOperation, { summary: string; description: string; example: object; result: string }> = {
+  get_account_context: {
+    summary: "Discover the business wallet and invoice payout address",
+    description: "Call after connecting with explicit wallet:read permission. Read the wallet linked during Privy onboarding and the independently configured invoice payout address. These may differ. No signing, spending, export, provisioning, or payout changes are available. Never request a private key or Privy access token.",
+    example: {}, result: "workspaceId, nullable businessWallet (address, network, chainId, agentControl:false), and invoicePayoutAddress.",
+  },
   create_account_challenge: {
     summary: "Request a wallet-bound account registration challenge",
     description: "With the wallet owner's approval, request a short-lived, single-use registration challenge. The owner must review the exact message and sign locally with their EOA wallet; never request a private key, seed phrase, or remote signing custody. The challenge binds registration purpose, wallet, service, domain/URI, chain, scopes and credential lifetime. Choose the minimum scopes needed; invoice:status is mandatory, scopes must be unique, and expiresInDays is an integer from 1 to 7 (default 1). This does not register the account or authorize spending.",
@@ -65,10 +70,10 @@ const catalog: Record<AgentOperation, { summary: string; description: string; ex
     result: "InvoiceDetail: invoice (InvoiceSummary), version (DraftVersion or null, not an integer), and history entries containing id, version and createdAt.",
   },
   publish_invoice: {
-    summary: "Publish the exact invoice draft the user approved",
-    description: "Obtain explicit user approval of this exact draftId and expectedVersion, every resolved fact/default and the proposed client-profile diff before sending approval:true. Draft preparation is not publication approval. Retry a timeout, PUBLICATION_IN_PROGRESS or PUBLICATION_RETRYABLE with the same idempotencyKey and unchanged input; back off and honor Retry-After on 429. Never change the key to bypass a failure. Version/profile conflicts require a fresh review and approval, not silently adopting newer facts. Publication returns invoice/PDF links and gmailLinkPackage, but does not send email or authorize spending; sending needs separate approval. Links and customer data are private. A completed replay returns current commercial state and need not be currently payable. Paid status requires reconciliation-derived persisted settlement, never a wallet callback or transaction hash alone.",
-    example: { draftId: "00000000-0000-4000-8000-000000000003", expectedVersion: 1, approval: true, idempotencyKey: "example-publish-1" },
-    result: "Canonical publication result: invoiceId, invoiceVersion, invoiceNumber, commercialState, invoiceUrl, invoicePdfUrl, pdfFilename, pdfContentHash, documentCommitment, gmailLinkPackage and sendApprovalRequired:true. gmailLinkPackage is an object with to (array), subject, textBody, htmlBody, paymentUrl and invoicePdfUrl, not a string or sent email.",
+    summary: "Publish & Send the exact reviewed invoice",
+    description: "Obtain explicit approval of this exact draftId and expectedVersion, all resolved facts/defaults, proposed client-profile diff, and email to snapshot client.contactEmail and sender.contactEmail. Both approval:true and deliveryApproval:true are required. Publish & Send atomically queues one distinct-address message each through Resend (equal addresses combine roles), with frozen PDF attached and private invoice/PDF links. Do not send a duplicate via Gmail. Retry timeouts or PUBLICATION_IN_PROGRESS/PUBLICATION_RETRYABLE with the same idempotencyKey and unchanged input; honor Retry-After. Version/profile conflicts need fresh review. INVOICE_EMAIL_DISABLED means fresh publication is unavailable, not silent no-send success. Historical publications are never backfilled. This does not authorize spending. A completed replay returns current commercial state, which may no longer be payable. Refresh clients and reimport this changed body schema before activation.",
+    example: { draftId: "00000000-0000-4000-8000-000000000003", expectedVersion: 1, approval: true, deliveryApproval: true, idempotencyKey: "example-publish-1" },
+    result: "Canonical publication result: invoice identity/version/number, commercialState, invoiceUrl, invoicePdfUrl, pdfFilename, pdfContentHash, documentCommitment and invoiceEmail {state,deliveries:[{roles,state,attemptCount,nextAttemptAt}]}. Initial invoiceEmail state is queued; sent is Resend acceptance, never inbox delivery. Legacy gmailLinkPackage is retained for shipped consumers, not an instruction to send. sendApprovalRequired is false for Publish & Send; true only describes historical no-send v1 replay semantics.",
   },
   get_invoice_status: {
     summary: "Read canonical settlement, document and delivery status",
@@ -87,7 +92,7 @@ export function buildAgentOpenApi(origin: string) {
       properties: {
         id: { type: "string" }, createdAt: { type: "string" }, expiresAt: { type: "string" },
         revokedAt: { type: ["string", "null"] }, lastUsedAt: { type: ["string", "null"] },
-        scopes: { type: "array", items: { type: "string", enum: [...ACCOUNT_SCOPES] } },
+        scopes: { type: "array", items: { type: "string", enum: [...ACCOUNT_SCOPES, "wallet:read"] } },
       },
       description: "Current credential metadata only; never the raw account secret.",
     },
@@ -97,7 +102,7 @@ export function buildAgentOpenApi(origin: string) {
     openapi: "3.1.0",
     info: {
       title: "Payr Agent API", version: "1.0.0",
-      description: `Eleven initially free gateway operations for wallet-approved account registration, sender setup and invoicing. No verified paid x402 integration is claimed. Every upstream operation requires the private Bazantic service key, including registration. Account operations additionally require their own scoped account credential. ${secretHandling} Request schemas derive from canonical Zod input schemas; runtime refinements (including dates, amounts, country codes and provenance URLs) remain authoritative. Response descriptions follow canonical services; open response schemas deliberately do not invent nested DTO types.`,
+      description: `Twelve initially free gateway operations for wallet-approved account registration, sender setup, invoicing and read-only wallet discovery. No verified paid x402 integration is claimed. Every upstream operation requires the private Bazantic service key, including registration. Account operations additionally require their own scoped account credential. ${secretHandling} Request schemas derive from canonical Zod input schemas; runtime refinements (including dates, amounts, country codes and provenance URLs) remain authoritative. Response descriptions follow canonical services; open response schemas deliberately do not invent nested DTO types.`,
     },
     servers: [{ url: origin }],
     security: [{ serviceKey: [] }],

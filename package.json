@@ -1,6 +1,6 @@
 {
   "name": "payr",
-  "version": "1.8.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.19.0",
@@ -42,6 +42,8 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
     "@napi-rs/canvas": "1.0.8",
+    "@privy-io/node": "0.34.0",
+    "@privy-io/react-auth": "3.40.0",
     "@react-pdf/renderer": "4.9.0",
     "@supabase/supabase-js": "2.115.0",
     "@tanstack/react-query": "5.102.8",

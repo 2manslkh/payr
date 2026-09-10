@@ -1,6 +1,7 @@
 import { z } from "zod";
-import type { OutboxRepository } from "../email/outbox-contracts";
-import { receiptRecipients } from "../email/address";
+import type { InvoiceDeliveryWork, OutboxRepository } from "../email/outbox-contracts";
+import { receiptRecipients, receiptSenderSchema } from "../email/address";
+import { publicationAttemptSchema } from "./publication";
 import { receiptWorkSchema } from "./receipts";
 import type { RpcClient } from "./repositories";
 
@@ -34,6 +35,40 @@ const resultSchema = z.union([
     "DOCUMENT_UNAVAILABLE", "DOCUMENT_INVALID", "PROVIDER_RATE_LIMITED", "PROVIDER_REJECTED", "PROVIDER_AMBIGUOUS", "PROVIDER_CONFLICT",
   ]) }).strict(),
 ]);
+
+export const invoiceEmailConfigSchema = z.object({ from: receiptSenderSchema,
+  appOrigin: z.url().refine((value) => { const url = new URL(value); return url.origin === value && !url.username && !url.password
+    && (url.protocol === "https:" || url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)); }),
+  templateVersion: z.literal("invoice-issued-v1"), network: z.literal("Arc Testnet"),
+}).strict();
+export const invoiceDeliveryWorkSchema = z.object(deliveryWorkSchema.shape).omit({ settlementId: true, receiptDocumentId: true, receipt: true, messageKind: true })
+  .extend({ messageKind: z.literal("invoice_issued"), publicationAttemptId: uuid, publication: publicationAttemptSchema, emailConfig: invoiceEmailConfigSchema })
+  .refine((d) => {
+    if (d.publication.state !== "finalized" || !d.publication.artifact || d.publication.id !== d.publicationAttemptId
+      || d.publication.workspaceId !== d.workspaceId || (d.state === "sending") !== (d.leaseUntil !== null)
+      || (d.state === "sent") !== (d.providerMessageId !== null)
+      || d.providerRequestStartedAt !== null && (d.firstProviderAttemptAt === null || d.payloadHash === null)) return false;
+    const expected = receiptRecipients(d.publication.snapshot.sender.contactEmail!, d.publication.snapshot.client.contactEmail)
+      .find((entry) => entry.normalizedRecipient === d.normalizedRecipient);
+    return expected?.roles.join(",") === d.roles.join(",") && (d.state !== "sending" || d.fence !== "0" && d.attemptCount > 0);
+  });
+
+export function createInvoiceOutboxRepository(client: RpcClient, publicationAttemptId?: string): OutboxRepository<InvoiceDeliveryWork> {
+  const scope = publicationAttemptId === undefined ? null : uuid.parse(publicationAttemptId);
+  async function call(name: string, args: Record<string, unknown>, id?: string, fence?: string) {
+    try {
+      const result = await client.rpc(name, args);
+      if (result.error) throw new Error();
+      return invoiceDeliveryWorkSchema.refine((row) => (id === undefined || row.id === id) && (fence === undefined || row.fence === fence)
+        && (scope === null || row.publicationAttemptId === scope)).nullable().parse(result.data);
+    } catch { throw new Error("DELIVERY_UNAVAILABLE"); }
+  }
+  return {
+    claim: (id) => call("payr_claim_invoice_delivery_v1", { p_id: id === undefined ? null : uuid.parse(id), p_publication_attempt_id: scope }, id),
+    begin: (id, fence, payloadHash) => call("payr_begin_invoice_delivery_v1", { p_id: uuid.parse(id), p_fence: receiptWorkSchema.shape.fence.parse(fence), p_payload_hash: hash.parse(payloadHash) }, id, fence),
+    finish: (id, fence, result) => call("payr_finish_delivery_v1", { p_id: uuid.parse(id), p_fence: receiptWorkSchema.shape.fence.parse(fence), p_result: resultSchema.parse(result) }, id, fence),
+  };
+}
 
 export function createOutboxRepository(client: RpcClient): OutboxRepository {
   async function call(name: string, input: Record<string, unknown>, id?: string, fence?: string) {

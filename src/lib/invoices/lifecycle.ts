@@ -61,6 +61,7 @@ export function createInvoiceLifecycleService(repository: PublicationRepository,
         },
         explorer: settlement === null ? null : { transactionUrl: new URL(`/tx/${settlement.transactionHash}`, getConfig().explorerOrigin).href },
         invoiceDocument, receiptDocument,
+        invoiceDeliveries: data.invoiceDeliveries,
         deliveries: data.deliveries.map((delivery) => ({
           roles: delivery.roles.filter((role) => role === "issuer" || role === "client"),
           normalizedRecipient: delivery.normalizedRecipient, state: delivery.state,
@@ -122,6 +123,7 @@ export function publicationView(data: PublicationStatusData | null, now: Date = 
   const attempt = data?.attempt;
   return {
     state: attempt?.state ?? null, failureCode: attempt?.failureCode ?? null,
+    ...(attempt ? { attempt: { id: attempt.id, invoiceVersion: attempt.invoiceVersion } } : {}),
     canShare: Boolean(attempt?.state === "finalized" && attempt.finalizedAt !== null && attempt.artifact
       && attempt.link.activatedAt !== null && new Date(attempt.link.activatedAt).getTime() <= now.getTime()
       && attempt.link.revokedAt === null && now.getTime() < new Date(attempt.link.expiresAt).getTime()),

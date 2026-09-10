@@ -28,7 +28,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ slug: 
       const json = canonicalPublicationJson(attempt);
       if (!artifact || keccak256(toHex(json)) !== artifact.invoiceDataHash) throw new Error();
       const document = parseCanonicalInvoiceDocument(json);
-      const invoiceUrl = new URL(`/invoice/${slug}`, runtime.config.appOrigin).href;
+      const invoiceUrl = new URL(`/invoice/${slug}`, attempt.link.appOrigin ?? runtime.config.appOrigin).href;
       const view = buildPublishedInvoiceView(document, invoiceUrl);
       const qrDataUrl = await invoiceQrDataUrl(invoiceUrl);
       const receipt = target.receipt;

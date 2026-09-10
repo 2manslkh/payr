@@ -211,10 +211,10 @@ describe("F3 publication RPC transactions", () => {
     const publisher = createPublicationService(repository, { getLinkConfig: () => config, getReservationConfig: () => config, getDocuments: () => ({ async createOrRead(value) {
       fixture(`begin; set local lock_timeout = '500ms'; select 1 from public.invoices where id = '${input.draftId}' for update; rollback;`);
       return documents.createOrRead(value);
-    } }) });
-    const approved = { draftId: input.draftId, expectedVersion: 1, approval: true as const, idempotencyKey: input.idempotencyKey };
+    } }), getEmailConfig: () => ({ from: "sender@example.test", appOrigin: config.appOrigin, templateVersion: "invoice-issued-v1", network: "Arc Testnet" }) });
+    const approved = { draftId: input.draftId, expectedVersion: 1, approval: true as const, deliveryApproval: true as const, idempotencyKey: input.idempotencyKey };
     const published = await publisher.publish(actor, approved);
-    expect(published).toMatchObject({ invoiceId: input.draftId, invoiceVersion: 1, commercialState: "published", sendApprovalRequired: true,
+    expect(published).toMatchObject({ invoiceId: input.draftId, invoiceVersion: 1, commercialState: "published", sendApprovalRequired: false,
       gmailLinkPackage: { to: ["client@example.test"], paymentUrl: published.invoiceUrl, invoicePdfUrl: published.invoicePdfUrl } });
     const lifecycle = createInvoiceLifecycleService(repository, () => config);
     expect(await lifecycle.status(actor, input.draftId)).toMatchObject({ displayStatus: "Published", paymentStatus: "unpaid",
@@ -242,9 +242,10 @@ describe("F3 publication RPC transactions", () => {
     const input = await reservation();
     const config = { appOrigin: "https://payr.example.test", explorerOrigin: "https://explorer.example.test", activeKeyVersion: 1,
       keys: new Map([[1, new Uint8Array(32).fill(1)]]), chainId: input.chainId, contractAddress: input.contractAddress };
-    const approved = { draftId: input.draftId, expectedVersion: 1, approval: true as const, idempotencyKey: input.idempotencyKey };
+    const approved = { draftId: input.draftId, expectedVersion: 1, approval: true as const, deliveryApproval: true as const, idempotencyKey: input.idempotencyKey };
     const interrupted = createPublicationService(repository, { getLinkConfig: () => config, getReservationConfig: () => config,
       getDocuments: () => ({ async createOrRead() { throw new Error("Temporary I/O failure"); } }),
+      getEmailConfig: () => ({ from: "sender@example.test", appOrigin: config.appOrigin, templateVersion: "invoice-issued-v1", network: "Arc Testnet" }),
     });
     await expect(interrupted.publish(actor, approved)).rejects.toMatchObject({ code: "PUBLICATION_RETRYABLE" });
     const pending = (await repository.statusData(actor, input.draftId))!.attempt!;

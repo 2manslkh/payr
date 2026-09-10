@@ -124,7 +124,7 @@ function draftResult(version: DraftVersion): DraftResult {
   return {
     code: "DRAFT_READY", draftCreated: true, draftId: version.draftId, version: version.version,
     preview: snapshot, previewText, canonicalInvoiceJson,
-    approvalInstruction: `Before publication, explicitly approve draft ${version.draftId} version ${version.version}, all resolved facts and defaults, and the pending client-profile diff: ${canonicalJson(snapshot.proposedClientChanges)}. No invoice number, artifact, access link, or client-profile save has been created.`,
+    approvalInstruction: `Before Publish & Send, explicitly approve draft ${version.draftId} version ${version.version}, all resolved facts and defaults, the pending client-profile diff: ${canonicalJson(snapshot.proposedClientChanges)}, and invoice email to client ${snapshot.client.contactEmail} and sender ${snapshot.sender.contactEmail}. Set approval:true and deliveryApproval:true only after this review. Payr queues one message per distinct address with the frozen PDF and private links; do not send a duplicate through Gmail. No invoice number, artifact, access link, client-profile save, or email has been created by this draft.`,
   };
 }
 

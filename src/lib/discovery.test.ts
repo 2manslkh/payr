@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { createHash } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
-import { apiMarkdown, authMarkdown, discoveryOrigin } from "./discovery";
+import { apiMarkdown, authMarkdown, discoveryOrigin, homepageMarkdown } from "./discovery";
 import { GET as robots } from "../app/robots.txt/route";
 import sitemap from "../app/sitemap";
 import { GET as discovery, OPTIONS as discoveryOptions } from "../app/.well-known/[...discovery]/route";
@@ -32,6 +32,24 @@ it("allows public card browser preflights without credentials", () => {
   expect(response.headers.has("access-control-allow-credentials")).toBe(false);
 });
 
+it("distinguishes the source gateway catalog from live discovery and private authentication", () => {
+  for (const text of [apiMarkdown, authMarkdown]) {
+    expect(text).toContain("https://api.payrlink.xyz/mcp");
+    expect(text).toContain("/install");
+    expect(text).toContain("private credential");
+    expect(text).toContain("currently imported gateway catalog lacks get_account_context");
+    expect(text).toContain("wallet:read");
+    expect(text).toContain("approval:true and deliveryApproval:true");
+    expect(text).toContain("invoice-only");
+  }
+  expect(authMarkdown).toContain("Never paste credentials into chat or model-visible tool arguments");
+  expect(authMarkdown).toContain("select Login to sign in through Privy");
+  expect(authMarkdown).toContain("optional plugin is archived");
+  expect(apiMarkdown).toContain("12 operations");
+  expect(homepageMarkdown).toContain("[Go To Dashboard](/app)");
+  expect(homepageMarkdown).toContain("Publish & Send");
+});
+
 const get = (resource: string) => discovery(new Request(`https://untrusted.test/.well-known/${resource}`), {
   params: Promise.resolve({ discovery: resource.split("/") }),
 });
@@ -45,7 +63,7 @@ it("publishes an explicit Markdown alternate with truthful product limitations",
 
 it("uses only a validated canonical origin and a public sitemap allowlist", () => {
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://canonical.test/");
-  expect(sitemap()).toEqual([{ url: "https://canonical.test/" }]);
+  expect(sitemap()).toEqual([{ url: "https://canonical.test/" }, { url: "https://canonical.test/install" }]);
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://canonical.test/private?secret=yes");
   expect(discoveryOrigin).toThrow();
 });

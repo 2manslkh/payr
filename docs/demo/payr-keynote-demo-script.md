@@ -1,5 +1,7 @@
 # PayR keynote demo script
 
+> Preserved main narrative. Before recording, apply [Current Recording Scope](README.md#current-recording-scope-10-september): mandatory both-approval Publish & Send replaces older separate-send or link-only fallback scenes. This script is not live acceptance evidence.
+
 **Target runtime:** 3 minutes 20 seconds
 
 **Format:** Screen-led product keynote

@@ -25,18 +25,22 @@ it("documents the canonical approval contract, response, and retry boundaries", 
   expect(operation.operationId).toBe("publish_invoice");
   const body = operation.requestBody.content["application/json"];
   expect(body.schema.additionalProperties).toBe(false);
-  expect(body.schema.required).toEqual(["expectedVersion", "approval", "idempotencyKey"]);
+  expect(body.schema.required).toEqual(["expectedVersion", "approval", "deliveryApproval", "idempotencyKey"]);
+  expect(body.schema.properties.deliveryApproval.const).toBe(true);
   expect(body.schema.properties.approval.const).toBe(true);
   expect(publishInvoiceSchema.safeParse({ draftId: "00000000-0000-4000-8000-000000000001", ...body.example }).success).toBe(true);
   const result = operation.responses["200"].content["application/json"].schema;
   expect(result.required).toContain("invoiceUrl");
   expect(result.required).toContain("invoicePdfUrl");
-  expect(result.properties.sendApprovalRequired.const).toBe(true);
+  expect(result.properties.sendApprovalRequired.type).toBe("boolean");
+  expect(result.properties.sendApprovalRequired).not.toHaveProperty("const");
+  expect(result.properties.sendApprovalRequired.description).toContain("finalized v1 no-send replay");
+  expect(result.required).toContain("invoiceEmail");
   for (const status of [400, 401, 403, 404, 409, 413, 415, 429, 500, 503]) {
     expect(operation.responses[String(status)].content["application/json"].schema.oneOf).toHaveLength(2);
   }
   expect(operation.responses["429"].headers["Retry-After"]).toBeDefined();
   expect(operation.description).toContain("unchanged input");
-  expect(operation.description).toContain("explicit user approval");
-  expect(spec.info.description).toContain("does not create drafts");
+  expect(operation.description).toContain("snapshot client.contactEmail and sender.contactEmail");
+  expect(spec.info.description).toContain("Refresh/reimport");
 });

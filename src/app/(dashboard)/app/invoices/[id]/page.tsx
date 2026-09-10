@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { DashboardLogin } from "../../../../../components/dashboard-login";
 import { PageHeading } from "../../../../../components/console-ui";
 import { InvoiceDocument } from "../../../../../components/invoice-document";
 import { InvoiceReadError, invoiceTitle, InvoiceWorkflow, OpenClaude } from "../../../../../components/invoice-ui";
@@ -8,14 +9,15 @@ import { DraftError } from "../../../../../lib/invoices/errors";
 import { invoiceId, ownerActor } from "../../../../../lib/invoices/projections";
 import { getDraftRepository } from "../../../../../lib/invoices/runtime";
 import { publicationView, settlementManagementView } from "../../../../../lib/invoices/lifecycle";
-import { getPublicationLinkConfig, getPublicationRepository } from "../../../../../lib/invoices/publication-runtime";
+import { getPublicationEmailConfig, getPublicationLinkConfig, getPublicationRepository } from "../../../../../lib/invoices/publication-runtime";
+import { buildInvoiceEmailStatus, type InvoiceEmailStatus } from "../../../../../lib/domain/status";
 import type { PublicationView } from "../../../../../lib/invoices/publication-contracts";
 
 export const metadata = { title: "Invoice | Payr" };
 
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getDashboardSession();
-  if (!session) redirect("/login");
+  if (!session) return <DashboardLogin />;
   let id;
   try {
     id = invoiceId((await params).id);
@@ -32,11 +34,15 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   if (!detail) notFound();
   let publication: PublicationView | null = null;
   let proof: ReturnType<typeof settlementManagementView> = null;
+  let invoiceEmail: InvoiceEmailStatus | null = null;
+  let emailEnabled = false;
+  try { emailEnabled = Boolean(getPublicationEmailConfig()); } catch { /* Remain visibly disabled. */ }
   try {
     const data = await getPublicationRepository().statusData(ownerActor(session), id);
     if (data && data.invoiceId === id && data.invoiceVersion === detail.invoice.version) {
       proof = data.settlement ? settlementManagementView(data, getPublicationLinkConfig().explorerOrigin) : null;
       publication = publicationView(data);
+      invoiceEmail = buildInvoiceEmailStatus(data.invoiceDeliveries);
     }
   } catch {
     // A failed status read must never become a ready/shareable fallback.
@@ -47,7 +53,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
       <PageHeading title={invoiceTitle(detail.invoice)} action={<OpenClaude />}>
         Current version {detail.invoice.version}. Read-only facts saved with this version, not live profile data.
       </PageHeading>
-      <InvoiceDocument detail={detail} publication={publication} proof={proof} />
+      <InvoiceDocument detail={detail} publication={publication} proof={proof} invoiceEmail={invoiceEmail} emailEnabled={emailEnabled} />
       <InvoiceWorkflow />
     </div>
   );

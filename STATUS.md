@@ -1,8 +1,38 @@
 # Status
 
-Last updated: 2026-09-09
+Last updated: 2026-09-10
 
-## Stage
+## Current Reconciliation
+
+The user approved consolidation onto released main `cbcf7e28b9882d7ea3ee93599d2398381fe7938e`
+(`v1.8.0`), with planned breaking `v2.0.0` scope: Privy onboarding/business-wallet
+discovery, newer dashboard login/MCP guide and mandatory Publish & Send. The docs
+lane starts at combined-source checkpoint `e76807a952b291dca0747977338b7f33d3bdca5e`.
+Package/version changes and final gates belong to the coordinator; see
+`docs/ops/reconciliation-v2.md`. The optional direct-MCP plugin is archive-only.
+
+- New publication requires `approval:true` and `deliveryApproval:true` for the exact version and frozen client/issuer addresses. Disabled invoice email blocks fresh publication before reservation. Legacy finalized no-send replay is read-only, without backfill. Initial email uses the frozen PDF and private links; receipt delivery remains separately gated.
+- Production is documented as base main `cbcf7e2` plus an uncommitted Privy snapshot, deployment `dpl_GLDNXmDkssP7DFaFJWBNcNYs9zXV`, not main alone or this candidate. `docs/ops/privy-onboarding.md` preserves the snapshot digest and 10 September evidence. Health identifies only the base commit.
+- No real onboarding credentials were submitted in that verification. Live wallet ownership, existing-workspace linking with preserved bindings and genuine policy denial remain unproven. The guarded local-testnet payment attestor remains separate from the Privy receiving wallet.
+- The recorded public gateway has eleven Payr operations without `get_account_context` or `void_invoice`; local upstream has twelve including context. Public discovery/missing-account denial and the earlier HTTP-body-credential smoke do not verify private per-user authentication in generated MCP or authenticated Claude/Cowork use. Never supply secrets in chat; see `docs/ops/mcp-onboarding.md`.
+- Core acceptance still needs both-approval initial-email proof, a separately approved fresh payment, verified settlement/receipt artifacts and independently approved receipt-delivery evidence. Provider acceptance is not inbox delivery; same-address proof does not prove two inboxes. Do not repay or resend retained evidence.
+- Fresh combined-source CI, isolated DB/browser gates and standards/spec/security review remain required. All counts below and in donor runbooks are dated source evidence, not candidate results. Migration/deployment, gateway reimport, Cron/Vault configuration and email activation require separate operator approval; consolidation grants no live writes.
+- Preserve the dirty root/donor snapshots, root-only demo scripts v2/v3/v4, user diagrams/artwork, newer operational evidence, ignored secrets and retained data. The documented invoice-outbox credential is `PAYR_INVOICE_CRON_SECRET` with `CRON_SECRET` fallback only when absent; an explicit empty dedicated value fails closed.
+
+Current objective: finish integrated reconciliation gates without replacing the
+recorded production snapshot, then obtain the missing live acceptance and complete
+the diagram/video/submission work within the existing calendar. No release,
+deployment, new automated tests or new live checks are claimed by this docs update.
+
+## Historical Status: 9 September 2026
+
+Everything below retains the earlier checkpoint, including its then-current base,
+"Now", readiness and next-review statements. The 10 September section above
+supersedes those current-scope claims, especially plugin readiness, Privy's role,
+publication/email behavior and production identity; it does not rewrite observed
+R07/R08/R09 results or authorize reuse of consumed approvals.
+
+## Stage (Historical)
 
 The clean root-updates release candidate is based on `v1.6.0` at `aebcd15` ([PR #16](https://github.com/2manslkh/payr/pull/16)). It retains main's opt-in sender tools and public discovery. User-approved replay on `integration/root-updates-v1.7.0` preserves `integration/root-updates` without rewriting history. See `docs/ops/root-release-manifest.md` for current execution and gates; release/deployment are not implied by source integration.
 

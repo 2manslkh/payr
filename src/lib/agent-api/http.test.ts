@@ -43,9 +43,9 @@ function privateHeaders(response: Response) {
   expect(response.headers.has("access-control-allow-credentials")).toBe(false);
 }
 
-it("exposes exactly the eleven frozen operations, with no void operation", () => {
+it("exposes the invoice operations and read-only wallet discovery, with no void or signing operation", () => {
   expect([...operationNames]).toEqual(["create_account_challenge", "register_account", "get_account", "revoke_current_credential",
-    "get_sender_profile", "save_sender_profile", "create_invoice_draft", "list_invoices", "get_invoice", "publish_invoice", "get_invoice_status"]);
+    "get_sender_profile", "save_sender_profile", "create_invoice_draft", "list_invoices", "get_invoice", "publish_invoice", "get_invoice_status", "get_account_context"]);
 });
 
 it.each(operationNames)("dispatches %s with only its input, exact context and required scope", async (op) => {

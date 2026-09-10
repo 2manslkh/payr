@@ -54,16 +54,19 @@ async function noOverflow(page: Page) {
   }
 }
 
-test("login: missing wallet, product link, keyboard focus, and responsive layout", async ({
+test("login: dashboard shell, keyboard focus, and responsive layout without private children", async ({
   page,
 }, testInfo) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "Sign in to Payr" }).click();
-  await expect(page.getByRole("heading", { name: "Your wallet. Your workspace." })).toBeVisible();
-  await page.getByRole("button", { name: "Connect wallet" }).click();
-  await expect(page.getByRole("alert", { name: "Request failed" })).toContainText("No Ethereum wallet");
+  await page.getByRole("link", { name: "Go To Dashboard" }).first().click();
+  await expect(page.getByRole("heading", { name: "Login to connect to your Payr dashboard" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Account", exact: true })).toHaveCount(0);
+  await expect(page.getByTestId("receivables")).toHaveCount(0);
+  await page.getByRole("link", { name: "Skip to content" }).focus();
+  await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("main")).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("link", { name: "Back to Payr" })).toBeFocused();
   await noOverflow(page);
   await testInfo.attach("login", {
     body: await page.screenshot({ fullPage: true, path: testInfo.outputPath("login.png") }),
@@ -71,94 +74,14 @@ test("login: missing wallet, product link, keyboard focus, and responsive layout
   });
 });
 
-test("login: exact server-message hex, signing progress, denial and retry", async ({ page }) => {
-  const message = "Payr login\nExact server message for this request";
-  await page.addInitScript(
-    ({ wallet }) => {
-      Object.assign(window, {
-        ethereum: {
-          request: async ({ method, params }: { method: string; params?: unknown[] }) => {
-            if (method === "eth_requestAccounts") return [wallet];
-            Object.assign(window, { signedParams: params });
-            await new Promise((resolve) => setTimeout(resolve, 400));
-            throw { code: 4001 };
-          },
-        },
-      });
-    },
-    { wallet: identity.ownerWallet },
-  );
-  await page.route("**/api/auth/nonce", async (route) => {
-    expect(route.request().postDataJSON()).toEqual({
-      purpose: "payr-login-v1",
-      wallet: identity.ownerWallet,
-    });
-    await route.fulfill({
-      json: { nonceId: identity.workspaceId, message, expiresAt: "2099-01-01T12:00:00Z" },
-    });
+for (const [query, destination] of [["", "/app"], ["?link=1", "/app?link=1"], ["?link=https://example.com", "/app"]]) {
+  test(`legacy login redirects ${query || "without a query"} into the dashboard`, async ({ page, baseURL }) => {
+    await page.goto(`/login${query}`);
+    await expect(page).toHaveURL(new URL(destination, baseURL!).href);
+    await expect(page.getByRole("heading", { name: "Login to connect to your Payr dashboard" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Connect wallet", exact: true })).toHaveCount(0);
   });
-  await page.goto("/login");
-  await page.getByRole("button", { name: "Connect wallet" }).click();
-  await expect(page.getByRole("button", { name: "Waiting for signature..." })).toBeDisabled();
-  await expect(page.getByRole("alert", { name: "Request failed" })).toContainText("declined");
-  expect(await page.evaluate(() => (window as Window & { signedParams?: unknown[] }).signedParams)).toEqual([
-    stringToHex(message),
-    identity.ownerWallet,
-  ]);
-  await page.getByRole("button", { name: "Try again" }).click();
-  await expect(page.getByRole("alert", { name: "Request failed" })).toContainText("declined");
-});
-
-test("login: unavailable configuration does not expose credential errors", async ({ page }) => {
-  await page.addInitScript((wallet) => {
-    Object.assign(window, { ethereum: { request: async () => [wallet] } });
-  }, identity.ownerWallet);
-  await page.route("**/api/auth/nonce", (route) =>
-    route.fulfill({
-      status: 503,
-      json: { error: { code: "CONFIGURATION_ERROR" }, details: "PRIVATE_SERVER_CREDENTIAL" },
-    }),
-  );
-  await page.goto("/login");
-  await page.getByRole("button", { name: "Connect wallet" }).click();
-  await expect(page.getByRole("alert", { name: "Request failed" })).toContainText("not configured");
-  await expect(page.locator("body")).not.toContainText("PRIVATE_SERVER_CREDENTIAL");
-});
-
-test("login: verification sends only nonce and signature and recovers from expiry", async ({ page }) => {
-  const signature = `0x${"12".repeat(65)}`;
-  await page.addInitScript(
-    ({ wallet, signature }) => {
-      Object.assign(window, {
-        ethereum: {
-          request: async ({ method }: { method: string }) =>
-            method === "eth_requestAccounts" ? [wallet] : signature,
-        },
-      });
-    },
-    { wallet: identity.ownerWallet, signature },
-  );
-  await page.route("**/api/auth/nonce", (route) =>
-    route.fulfill({
-      json: {
-        nonceId: identity.workspaceId,
-        message: "Exact server login message",
-        expiresAt: "2099-01-01T12:00:00Z",
-      },
-    }),
-  );
-  await page.route("**/api/auth/verify", async (route) => {
-    expect(route.request().postDataJSON()).toEqual({ nonceId: identity.workspaceId, signature });
-    await route.fulfill({ status: 400, json: { error: { code: "NONCE_INVALID_OR_USED" } } });
-  });
-  await page.goto("/login");
-  await page.getByRole("button", { name: "Connect wallet" }).click();
-  await expect(page.getByRole("alert", { name: "Request failed" })).toContainText(
-    "expired or was already used",
-  );
-  await expect(page.getByRole("button", { name: "Try again" })).toBeEnabled();
-  await expect(page).toHaveURL(/\/login$/);
-});
+}
 
 test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", () => {
   test.beforeEach(async ({ context, baseURL }) => {
@@ -198,47 +121,18 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
   test("server guard rejects a missing session", async ({ page, context }) => {
     await context.clearCookies();
     await page.goto("/app/settings");
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole("heading", { name: "Login to connect to your Payr dashboard" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Business name" })).toHaveCount(0);
   });
 
-  test("successful wallet login navigates using a real signed session cookie", async ({ page, context }) => {
-    const cookie = (await context.cookies()).find((item) => item.name === SESSION_COOKIE)!;
-    await context.clearCookies();
-    const signature = `0x${"12".repeat(65)}`;
-    await page.addInitScript(
-      ({ wallet, signature }) => {
-        Object.assign(window, {
-          ethereum: {
-            request: async ({ method }: { method: string }) =>
-              method === "eth_requestAccounts" ? [wallet] : signature,
-          },
-        });
-      },
-      { wallet: identity.ownerWallet, signature },
-    );
-    await page.route("**/api/auth/nonce", (route) =>
-      route.fulfill({
-        json: {
-          nonceId: identity.workspaceId,
-          message: "Exact server login message",
-          expiresAt: "2099-01-01T12:00:00Z",
-        },
-      }),
-    );
-    await page.route("**/api/auth/verify", async (route) => {
-      expect(route.request().postDataJSON()).toEqual({ nonceId: identity.workspaceId, signature });
-      await route.fulfill({
-        json: { session: identity },
-        headers: {
-          "Set-Cookie": `${SESSION_COOKIE}=${cookie.value}; Secure; HttpOnly; SameSite=Lax; Path=/`,
-          "Cache-Control": "private, no-store",
-        },
-      });
-    });
+  test("legacy login preserves a real existing session and explicit linking intent", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("button", { name: "Connect wallet" }).click();
     await expect(page).toHaveURL(/\/app$/);
     await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+    await page.goto("/login?link=1");
+    await expect(page).toHaveURL(/\/app\?link=1$/);
+    await expect(page.getByRole("heading", { name: "Login to connect to your Payr dashboard" })).toBeVisible();
+    await expect(page.getByTestId("receivables")).toHaveCount(0);
   });
 
   test("honest overview, mobile account destinations, invoices, and actual logout", async ({
@@ -282,10 +176,11 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
     ).toBeVisible();
     // Do not mock logout: this gate verifies the integrated route's actual cookie deletion.
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(/\/app$/);
+    await expect(page.getByRole("heading", { name: "Login to connect to your Payr dashboard" })).toBeVisible();
     expect((await context.cookies()).some((cookie) => cookie.name === SESSION_COOKIE)).toBe(false);
     await page.goto("/app");
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole("heading", { name: "Login to connect to your Payr dashboard" })).toBeVisible();
   });
 
   test("profile revision conflict preserves edits and payout uses the exact signed flow", async ({
@@ -457,7 +352,7 @@ test.describe("authenticated console (real encrypted cookie, mocked UI APIs)", (
       }),
     );
     await page.goto("/app/connections");
-    await expect(page.getByRole("heading", { name: "Connect Payr to Claude" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connect your agent to Payr" })).toBeVisible();
     await expect(page.getByRole("checkbox", { name: "Direct Chat Setup" })).not.toBeChecked();
     await expect(page.getByText(/Platform access logs, CDN logs/)).toBeVisible();
     await page.getByLabel("Expires in (days)", { exact: true }).fill("1");

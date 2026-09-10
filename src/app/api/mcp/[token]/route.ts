@@ -1,6 +1,7 @@
 import { serveMcpRequest } from "../../../../lib/mcp/http";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 async function handle(request: Request, { params }: { params: Promise<{ token: string }> }) {

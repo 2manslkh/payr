@@ -153,7 +153,7 @@ function PublicationControls({ invoiceId, version, state, failureCode, canShare,
         <button ref={shareButton} className="button" type="button" disabled={blocked || confirming} onClick={() => perform("share")}>{busy === "share" ? "Getting links..." : error?.action === "share" ? "Retry share" : "Share links"}</button>
       </div>}
       {links && <div className="publication-links">
-        <p>These links grant access to invoice information. Share only with the intended recipient. Nothing is sent automatically.</p>
+        <p>These links grant access to invoice information. Share only with the intended recipient. Revealing links does not send another email.</p>
         <dl>
           <dt>Payment link</dt><dd>{links.invoiceUrl}</dd>
           <dt>Invoice PDF link</dt><dd>{links.invoicePdfUrl}</dd>

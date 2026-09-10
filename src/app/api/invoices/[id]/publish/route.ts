@@ -6,9 +6,10 @@ import { IdentityError } from "../../../../../lib/identity/contracts";
 import type { InvoiceActor } from "../../../../../lib/invoices/contracts";
 import { createPublicationService } from "../../../../../lib/invoices/publication";
 import { publicationErrorResponse } from "../../../../../lib/invoices/publication-http";
-import { getPublicationConfig, getPublicationDocumentPort, getPublicationLinkConfig, getPublicationRepository } from "../../../../../lib/invoices/publication-runtime";
+import { afterPublication, getPublicationEmailConfig, getPublicationConfig, getPublicationDocumentPort, getPublicationLinkConfig, getPublicationRepository } from "../../../../../lib/invoices/publication-runtime";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -31,9 +32,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       actor = { workspaceId: identity.workspaceId, ownerWallet: identity.ownerWallet, connectorId: null };
     }
     const draftId = z.string().uuid().parse((await params).id);
-    const body = await readPublicationApproval(request);
+    const body = await readPublicationApproval(request, true);
     const service = createPublicationService(getPublicationRepository(), {
       getReservationConfig: getPublicationConfig, getLinkConfig: getPublicationLinkConfig, getDocuments: getPublicationDocumentPort,
+      getEmailConfig: getPublicationEmailConfig, afterPublication,
     });
     return privateJson(await service.publish(actor, { ...body, draftId }));
   } catch (error) {

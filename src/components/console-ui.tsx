@@ -34,7 +34,7 @@ export function RequestError({ error, retry }: { error: unknown; retry?: () => v
           </button>
         )}
         {error instanceof ConsoleError && error.status === 401 && (
-          <Link className="button secondary" href="/login">
+          <Link className="button secondary" href="/app">
             Sign in again
           </Link>
         )}

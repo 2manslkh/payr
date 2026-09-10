@@ -2,9 +2,31 @@
 
 Status: Approved implementation baseline
 Date: 2026-09-04
-Last revised: 2026-09-06
+Baseline revised: 2026-09-06; current-scope amendments through 2026-09-10
 Owner: Lim Keng Hin (product and engineering)
 Presentation and submission: Chanita Inthathong
+
+## 2026-09-10 Current-Scope Amendment
+
+The approved 10 September `DECISIONS.md` entry and reconciled `PROJECT.md` govern
+the planned breaking `v2.0.0` candidate. This amendment supersedes the older
+initial-email non-goal, separate Gmail approval/send instructions, link-only
+acceptance/fallback, wallet-login-only setup and Privy-as-optional-attestor framing
+wherever they appear below, including the journey, architecture, risks, demo,
+enhancements and pre-implementation checklist. Those passages retain the original
+design rationale, not executable requirements for fresh candidate publication.
+
+- New publication requires literal `approval:true` and `deliveryApproval:true` for the exact version, defaults, proposed client changes and both frozen client/issuer email addresses. Finalization queues one message per distinct normalized address with the frozen PDF and private invoice/PDF links; equal addresses retain both roles. See `docs/ops/invoice-email-contract.md` for the current contract.
+- Email-disabled or missing mail configuration blocks fresh publication before reservation. Authorized finalized legacy no-send replay is read-only, cannot reserve/resume and never backfills mail. The retained Gmail package is compatibility data, not a separate send instruction. Provider acceptance is not inbox delivery or exactly-once transport; receipt email remains independently gated.
+- Privy onboarding and user-owned receiving-wallet discovery are selected core scope. Preserve existing workspace/owner/profile/payout/invoice/credential bindings on linking, with no automatic scope expansion. `wallet:read` gates context; the gateway service key also needs explicit context permission. The guarded local-testnet payment signer remains separate from Privy; no agent spending, signing or withdrawals are added.
+- Preserve the newer dashboard login and `/install` MCP guide. Dashboard Publish & Send reviews an agent-created draft, not browser draft authoring. The recorded public gateway catalog has eleven Payr operations without context/void; local upstream has twelve including context, not void. Direct MCP retains void and opt-in sender/context tools. Use discovered schemas rather than an exactly-four-tools assumption.
+- Private per-user account-credential injection into generated MCP is unverified; adding a URL or listing tools is not workspace authentication. Secrets stay out of chat. The optional direct-MCP plugin is archive-only, not a credential solution or active packaging deliverable. See `docs/ops/mcp-onboarding.md`.
+- Production evidence is the documented `cbcf7e2` plus uncommitted Privy snapshot in `docs/ops/privy-onboarding.md`, not this candidate. No real onboarding credentials were submitted; ownership/linking/genuine policy denial are still live gates. Dated test counts and HTTP gateway proof do not satisfy fresh combined CI, authenticated MCP, initial-email, payment or receipt acceptance. Consolidation authorizes no live writes.
+
+Acceptance rows below are amended where necessary, with AC-45/AC-46 added for
+Privy onboarding and initial email. Neither is passed by this amendment. Keep
+verified payment/receipt proof and separately enabled receipt email in the core
+journey. Release gates are in `docs/ops/reconciliation-v2.md`.
 
 ## 2026-09-09 Direct Chat Setup Amendment
 
@@ -14,7 +36,7 @@ The user-approved dated entry in `DECISIONS.md` supersedes this baseline's dashb
 
 Build Payr: an agent-native invoicing service for independent developers that turns a short instruction plus confirmed business and client profiles into a complete commercial invoice, protected payment link, and PDF, then reconciles verified Arc USDC settlement into a tamper-evident receipt and delivers it automatically.
 
-The service provider is the only primary user. The client is a necessary bill-to party and payer, not a second product persona. The service provider's agent gathers confirmed information, creates the invoice through Payr, and prepares a Gmail message. The service provider approves publication and email separately. The client always controls the payment transaction.
+The service provider is the only primary user. The client is a necessary bill-to party and payer, not a second product persona. The service provider's agent gathers confirmed information and creates the invoice through Payr. For the current candidate, the service provider explicitly approves both publication and the frozen invoice delivery in Publish & Send. The client always controls the payment transaction.
 
 The remembered three-minute claim is:
 
@@ -138,7 +160,7 @@ The existing arrow-R monogram is retained. The wordmark is refined and standardi
 - One invoice currency and settlement asset: USDC on Arc.
 - Prompt-driven draft creation through a remote MCP connector.
 - Deterministic server-side validation and rendering.
-- Separate human approvals for invoice publication and email sending.
+- Explicit human approval of both invoice publication and its frozen email delivery in Publish & Send; no separate Gmail dependency.
 - Crash-safe publication with immutable sequential numbering, idempotency conflict detection, leased recovery, and no reuse of failed numbers.
 - Revocable high-entropy `https://payrlink.xyz/invoice/<slug>` payment link with no client login; its slug is reproducible from stored non-secret metadata and a versioned server secret.
 - Server-generated invoice PDF, protected PDF URL, served-byte content hash, and embedded QR code, with page/PDF parity.
@@ -165,7 +187,7 @@ The existing arrow-R monogram is retained. The wordmark is refined and standardi
 - Mainstream client onboarding, card payment, or fiat conversion.
 - Multiple chains, stablecoins, or settlement assets.
 - Escrow, milestones, disputes, refunds, partial payments, tips, or overpayments.
-- Automated invoice-email delivery by Payr, reminders, or debt collection. The service provider's agent sends the initial Gmail message after approval.
+- Reminders, debt collection or arbitrary agent email. Payr-sent initial invoice email is selected core scope under the 10 September amendment, not a non-goal.
 - Accounting-suite integration.
 - Tax calculation or jurisdiction-specific invoice compliance.
 - Public invoice contents, invoice NFTs, or token issuance.
@@ -204,7 +226,12 @@ The main demo starts after setup with one sender and one client already saved. M
 10. On explicit publication approval, the agent calls `publish_invoice`.
 11. Payr starts or resumes a fingerprinted publication attempt, permanently reserves the next workspace invoice number, derives link metadata and an invoice key, renders to attempt-specific create-only storage keys, verifies the stored bytes and hashes, then atomically freezes the approved version and exposes the ready page/PDF. A retry reconstructs the same protected URLs from stored token metadata rather than stored raw URLs.
 
-### Initial email
+### Initial email (Legacy v1 Package)
+
+For new publication, the 10 September amendment replaces the sending steps below
+with mandatory Payr Publish & Send. Preserve this six-field object for shipped
+consumers and authorized finalized legacy replay only; do not ask for Gmail send
+or treat it as the candidate's initial-email acceptance proof.
 
 1. `publish_invoice` always returns this exact link-only object, generated at response time rather than persisted with raw URLs:
 
@@ -913,11 +940,11 @@ Each core criterion maps one-to-one to one required proof. Passing a related cri
 
 | ID | Core criterion | Required proof |
 | --- | --- | --- |
-| AC-01 | The deployed remote MCP endpoint exposes exactly the four specified tools to Claude. | Captured Claude tool-discovery result. |
+| AC-01 | The chosen deployed MCP transport exposes its actual catalog and privately authorizes the expected workspace, without scope expansion. | Redacted authenticated Claude discovery/read, missing-scope and cross-account denial; public eleven-operation discovery alone is insufficient. |
 | AC-02 | Valid partial draft input returns exact `MISSING_FIELDS` without mutation. | API response plus before/after database assertion. |
 | AC-03 | Draft input rejects prohibited sender/payout fields and invalid provenance. | Negative API test fixture. |
 | AC-04 | `create_invoice_draft(draftId, expectedVersion)` appends a revision and rejects a stale version. | Compare-and-swap API test. |
-| AC-05 | Publication accepts only explicit approval of the exact draft version and profile diff. | Negative and positive publication API test. |
+| AC-05 | Fresh publication requires both literal approvals for the exact draft version, defaults, profile diff and frozen client/issuer recipients. | Missing/false approval and email-disabled cases fail before reservation; positive/retry tests queue exactly the approved delivery set. |
 | AC-06 | Repeating an idempotency key with identical input returns the same publication resources after process restart. | Restart/retry integration test. |
 | AC-07 | Repeating an idempotency key with different input returns `IDEMPOTENCY_CONFLICT` without mutation. | Conflict integration test. |
 | AC-08 | Only one active publication attempt exists for an invoice/version under concurrency. | Concurrent database/API test. |
@@ -931,7 +958,7 @@ Each core criterion maps one-to-one to one required proof. Passing a related cri
 | AC-16 | QR images decoded from served page/PDF bytes equal their protected page URLs. | Automated QR decode test. |
 | AC-17 | Protected responses have the specified security headers and unsigned direct-storage GET/list requests fail. | Deployed HTTP/storage probe. |
 | AC-18 | At `serverNow == payableUntil`, effective commercial status is `expired` before any sweep and authorization is denied. | Boundary-clock integration test. |
-| AC-19 | Login uses the server-reconstructed message and an atomic purpose-bound nonce consume. | Replay/concurrency/expiry/wrong-purpose auth suite. |
+| AC-19 | Privy login verifies the server-derived subject; existing-workspace linking uses an atomic purpose-bound owner challenge and preserves bindings. | Token, replay/concurrency/expiry/wrong-purpose, legacy-session and linking suites plus AC-45 live proof. |
 | AC-20 | The session cookie is exactly `__Host-payr-session; Secure; HttpOnly; Path=/; SameSite=Lax` with no `Domain`. | Deployed `Set-Cookie` assertion.[15] |
 | AC-21 | A payout change verifies a fresh signature from the workspace owner wallet over old/new payout data. | Owner/payout/agent negative matrix. |
 | AC-22 | Composite foreign keys reject cross-workspace parent IDs and exact version-binding violations. | Direct database constraint tests. |
@@ -947,16 +974,18 @@ Each core criterion maps one-to-one to one required proof. Passing a related cri
 | AC-32 | A settlement creates one recoverable receipt document that produces one immutable receipt page/PDF. | Worker lease/retry/stale-recovery test. |
 | AC-33 | Normalized duplicate party emails produce one outbox delivery retaining both roles. | Same-address delivery test. |
 | AC-34 | An ambiguous Resend attempt older than 24 hours becomes `manual_review` without an automatic resend. | Clock-controlled outbox test.[14] |
-| AC-35 | The exact `gmailLinkPackage` is returned without invoking Gmail, and simulated Gmail failure cannot affect publication. | Response schema plus dependency-failure test. |
-| AC-36 | Either the accepted Privy signer or the isolated testnet signer produces the same contract-valid Payr authorization. | Selected-signer contract integration test. |
+| AC-35 | Legacy finalized no-send replay remains read-only; fresh Publish & Send uses frozen PDF/recipients/origin and exposes invoice delivery separately from receipt delivery. | Legacy no-reserve/no-resume/no-backfill, origin/retry and response-schema tests; AC-46 initial-email proof. |
+| AC-36 | The guarded local-testnet signer produces contract-valid payment authorization, independently of the Privy receiving wallet. | Local-testnet signer contract integration and wrong-network denial tests. |
 | AC-37 | Private invoice content is absent from calldata/events except for the salted commitment and required public settlement fields. | Decoded real transaction/event inspection. |
 | AC-38 | The repository's complete automated test command exits zero under the release environment. | Saved command and output. |
 | AC-39 | The repository's typecheck command exits zero. | Saved command and output. |
 | AC-40 | The production build command exits zero with no mock-settlement or auth-bypass flag. | Saved environment manifest and build output. |
 | AC-41 | The deployed production-origin smoke run uses HTTPS, configured Arc chain/contract, private storage, real database, and selected real signer implementation. | Release checklist with endpoint/transaction evidence. |
-| AC-42 | The core live path from Claude draft through derived Paid receipt fits under three minutes without Gmail, search, or Bazantic. | Uncut timed rehearsal recording. |
+| AC-42 | The core live path from authenticated MCP draft through approved Publish & Send and verified payment/receipt fits under three minutes, without a separate Gmail/search dependency. | Uncut timed rehearsal with initial email and separately gated receipt-delivery evidence; a disabled-email/link-only fallback does not pass. |
 | AC-43 | Repository documentation, architecture diagram, live demo, and submission use the same commercial-state/payment model. | Final release review checklist. |
 | AC-44 | Authenticated overview/invoice surfaces and protected payment/receipt surfaces follow the approved responsive `Commit Ledger` hierarchy, keep commercial and payment state distinct, and expose neither direct web authoring nor Bills. | Desktop/mobile screenshots, keyboard/contrast checks, and browser assertions against `DESIGN.md`. |
+| AC-45 | Privy onboarding preserves user ownership, repeat-login uniqueness, existing-workspace bindings and explicit discovery scopes. | Approved live ownership/linking checks, scoped/cross-workspace discovery denial and genuine policy rejection with otherwise valid owner authorization; mocks or invalid-token denial are insufficient. |
+| AC-46 | Both-approval initial email uses frozen PDF/private links and only approved distinct normalized client/issuer recipients. | Equal/distinct-address, immutable bytes/origin, retry/no-backfill/disabled-gate tests and approved live PDF/link read-back plus inbox inspection; provider acceptance alone is not inbox delivery. |
 
 Enhancement acceptance is separate and cannot satisfy any core AC:
 

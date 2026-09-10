@@ -1,10 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  turbopack: { root: process.cwd() },
+  outputFileTracingRoot: process.cwd(),
   serverExternalPackages: ["@react-pdf/renderer", "pdfjs-dist", "@napi-rs/canvas"],
   outputFileTracingIncludes: {
     "/.well-known/*": ["./skills/payr-create-invoice/SKILL.md"],
-    "/{api/v1/*,api/mcp,api/mcp/*,api/invoices/*/publish,api/jobs/publications,api/jobs/receipts,api/jobs/outbox,receipt/*}": [
+    "/{api/v1/*,api/mcp,api/mcp/*,api/invoices/*/publish,api/jobs/publications,api/jobs/receipts,api/jobs/outbox,api/jobs/invoice-outbox,receipt/*}": [
       // Native-worker imports are intentionally opaque to Turbopack/NFT.
       "./node_modules/pdfjs-dist/package.json",
       "./node_modules/pdfjs-dist/standard_fonts/**/*",

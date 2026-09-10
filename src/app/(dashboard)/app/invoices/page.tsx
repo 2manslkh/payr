@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { DashboardLogin } from "../../../../components/dashboard-login";
 import { PageHeading } from "../../../../components/console-ui";
 import { commercialLabels, InvoiceLedger, InvoiceReadError, InvoiceWorkflow, OpenClaude } from "../../../../components/invoice-ui";
 import { getDashboardSession } from "../../../../lib/auth/runtime";
@@ -12,7 +12,7 @@ export const metadata = { title: "Invoices | Payr" };
 
 export default async function InvoicesPage({ searchParams }: { searchParams: Promise<InvoiceSearchParams> }) {
   const session = await getDashboardSession();
-  if (!session) redirect("/login");
+  if (!session) return <DashboardLogin />;
   let query: InvoiceQuery;
   try {
     query = invoiceQuery(await searchParams);

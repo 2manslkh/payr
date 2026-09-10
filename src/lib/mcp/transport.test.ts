@@ -9,6 +9,21 @@ const request = (body: unknown) => new Request("https://example.test/api/mcp/tes
   method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" }, body: JSON.stringify(body),
 });
 
+it.each([
+  '"approval":false,"approval":true,"deliveryApproval":true',
+  '"approval":true,"deliveryApproval":false,"delivery\\u0041pproval":true',
+])("rejects ambiguous publication approvals before tool dispatch (%s)", async (approvals) => {
+  const { send, services } = authFixture();
+  const req = new Request("https://example.test/api/mcp/test-secret", {
+    method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+    body: `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"publish_invoice","arguments":{${approvals}}}}`,
+  });
+  const response = await send(req);
+  expect(response.status).toBe(400);
+  expect((await response.json()).error).toEqual({ code: -32700, message: "Parse error" });
+  expect(services.publish).not.toHaveBeenCalled();
+});
+
 it.each([true, false])("cancels an unfinished request body within the deadline (valid credential: %s)", async (valid) => {
   vi.useFakeTimers();
   try {
@@ -26,6 +41,23 @@ it.each([true, false])("cancels an unfinished request body within the deadline (
     await pending;
     expect(cancel).toHaveBeenCalledOnce();
     expect(services.createDraft).not.toHaveBeenCalled();
+  } finally { vi.useRealTimers(); }
+});
+
+it("rejects a body read past the deadline even before the timer callback runs", async () => {
+  vi.useFakeTimers();
+  try {
+    const { send, services } = authFixture();
+    const req = new Request("https://example.test/api/mcp/test-secret", {
+      method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+      body: new ReadableStream({ pull(controller) {
+        vi.setSystemTime(Date.now() + 5_000);
+        controller.enqueue(new TextEncoder().encode('{"jsonrpc":"2.0","id":1,"method":"tools/list"}'));
+        controller.close();
+      } }), duplex: "half",
+    } as RequestInit);
+    expect((await send(req)).status).toBe(408);
+    expect(services.publish).not.toHaveBeenCalled();
   } finally { vi.useRealTimers(); }
 });
 
@@ -116,7 +148,7 @@ it("redacts unexpected tool and authentication provider exceptions", async () =>
   repository.admitConnector.mockRejectedValue(new IdentityError(token));
   const failure = await send(); expect(failure.status).toBe(503); expect(await failure.text()).not.toContain(token);
 });
-it("discovers four invoice and two opt-in sender tools without granting their scopes", async () => {
+it("discovers invoice, sender and wallet-read tools without granting their scopes", async () => {
   const authenticate = vi.fn().mockResolvedValue(actor);
   const services = { createDraft: vi.fn(), publish: vi.fn(), status: vi.fn(), void: vi.fn(), getSenderProfile: vi.fn(), saveSenderProfile: vi.fn() };
   const runtime = { authenticate, services, appOrigin: "https://example.test" };
@@ -128,7 +160,7 @@ it("discovers four invoice and two opt-in sender tools without granting their sc
   expect((await first.json()).result.serverInfo.name).toBe("Payr");
   const second = await handleMcpRequest(request({ jsonrpc: "2.0", id: 2, method: "tools/list" }), "test-secret", "127.0.0.1", runtime);
   expect((await second.json()).result.tools.map((tool: { name: string }) => tool.name)).toEqual([
-    "get_sender_profile", "save_sender_profile",
+    "get_account_context", "get_sender_profile", "save_sender_profile",
     "create_invoice_draft", "publish_invoice", "get_invoice_status", "void_invoice",
   ]);
   expect(authenticate).toHaveBeenCalledTimes(2);

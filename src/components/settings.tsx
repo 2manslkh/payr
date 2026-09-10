@@ -7,14 +7,18 @@ import { BillingForm } from "./billing-form";
 import { ConsoleError, consoleApi, useConsoleResource } from "./console-api";
 import { DateValue, Loading, PageHeading, RequestError } from "./console-ui";
 import { connectWallet, signWalletMessage } from "./wallet";
+import { usePrivyWalletActions } from "./privy-provider";
+import Link from "next/link";
 
 export function Settings() {
+  const identity = useConsoleIdentity();
   const resource = useConsoleResource<{ profile: SenderProfile }>("/api/profile");
   return (
     <>
       <PageHeading title="Settings">
         Your sender identity and invoice defaults. Payout changes require a separate signature.
       </PageHeading>
+      {identity.privyUserId && <BusinessWalletDetails />}
       {resource.loading && <Loading label="Loading sender details..." />}
       <RequestError error={resource.error} retry={resource.retry} />
       {resource.data && (
@@ -33,6 +37,19 @@ export function Settings() {
   );
 }
 
+function BusinessWalletDetails() {
+  const resource = useConsoleResource<{ businessWallet: { address: string } | null; invoicePayoutAddress: string }>("/api/account-context");
+  return <section className="ledger-section"><div className="section-heading"><h2>Business receiving wallet</h2><span>Privy / Arc testnet</span></div>
+    <div className="section-body">
+      <RequestError error={resource.error} retry={resource.retry} />
+      {resource.loading && <Loading label="Loading business wallet..." />}
+      {resource.data?.businessWallet && <code className="wallet-address">{resource.data.businessWallet.address}</code>}
+      <p>You control this wallet. Agents with wallet:read can discover its address, but cannot sign or spend. Your invoice payout address is shown separately below. Testnet funds only; withdrawals are not available in PAYR.</p>
+      <Link className="text-link" href="/app?link=1">Link an existing workspace</Link>
+      <p className="field-help">A Privy account links to one workspace. If you selected the wrong workspace during setup, contact the PAYR operator for verified recovery. Existing business data is never moved or deleted automatically.</p>
+    </div></section>;
+}
+
 export function PayoutChange({
   profile,
   onSaved,
@@ -41,6 +58,7 @@ export function PayoutChange({
   onSaved: (profile: SenderProfile) => void;
 }) {
   const session = useConsoleIdentity();
+  const privy = usePrivyWalletActions();
   const form = useRef<HTMLFormElement>(null);
   const [newWallet, setNewWallet] = useState("");
   const [review, setReview] = useState<{ nonce: NonceResponse; from: string; to: string } | null>(null);
@@ -79,8 +97,14 @@ export function PayoutChange({
     setError(null);
     setStatus("Open the owner wallet and review the exact payout-change message.");
     try {
-      const connection = await connectWallet(session.ownerWallet);
-      const signature = await signWalletMessage(connection, review.nonce.message);
+      let signature: string;
+      if (session.privyUserId && privy) {
+        try { signature = await privy.signOwner(session.ownerWallet, review.nonce.message); }
+        catch (failure) {
+          if (!(failure instanceof ConsoleError) || failure.code !== "WRONG_OWNER") throw failure;
+          signature = await signWalletMessage(await connectWallet(session.ownerWallet), review.nonce.message);
+        }
+      } else signature = await signWalletMessage(await connectWallet(session.ownerWallet), review.nonce.message);
       setStatus("Verifying the owner signature...");
       const result = await consoleApi<{ profile: SenderProfile }>("/api/auth/verify", {
         nonceId: review.nonce.nonceId,

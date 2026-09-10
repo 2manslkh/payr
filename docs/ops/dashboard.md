@@ -1,5 +1,16 @@
 # Dashboard and Agent Installation
 
+## Current Scope: 10 September
+
+Preserve the newer dashboard/login and MCP-first `/install` guide in this
+reconciliation candidate. Privy onboarding is receiving-wallet identity, not the
+payment attestor; see `privy-onboarding.md` for the later composed production
+snapshot and migration evidence. The dated eleven-migration read-back below is
+preserved, not a current migration inventory or proof that new SQL is applied.
+Dashboard Publish & Send reviews an agent-created draft with both literal
+approvals and frozen recipients; disabled invoice email blocks fresh publication.
+It does not add browser draft authoring. Candidate CI/deployment remain gated.
+
 ## Deployment
 
 This is retained follow-up work, not included in released `v1.3.0`. On a fresh/disposable database, apply `supabase/migrations/202609080003_dashboard_overview.sql` after the released migrations and before deploying the updated dashboard. It adds the service-role-only `payr_get_invoice_overview_v2` RPC; v1 remains unchanged for already deployed callers with strict response validation.
@@ -30,11 +41,18 @@ Without JavaScript, server HTML explains that browser-wallet reads require JavaS
 
 The default overview streams records independently of the wallet. A no-JavaScript link outside its streaming boundary opens `/app?view=static`, which waits for the same authorized overview read and renders records without Suspense reveal scripts. The non-streaming option changes rendering only, not workspace authority or query scope. Provider abort deadlines remain active through response-body consumption and cancel outstanding calls on completion or failure.
 
-## Plugin Handoff
+## MCP Handoff
 
-`/install` is public and deliberately passes `installation={null}` to `InstallPrompt` until the separate plugin work is ready. To enable it, replace that value with reviewed public metadata containing the exact prompt, official source URL, and verified supported-agent list. Do not derive it from connector credentials or infer readiness from active tokens.
+The 10 September archive decision supersedes the former pending-plugin handoff.
+`/install` is a public MCP connection guide, not a plugin download. The optional
+direct-MCP plugin is excluded from the active product and public packaging.
 
-The prompt must identify the real distribution, preserve existing agent configuration, request approval before configuration changes, keep authentication separate, and verify installation through discovery/read-only operations. No private keys, seed phrases, session cookies, or token-bearing URLs belong in it. Do not claim installation is working until the supported client flow has been tested.
+Separate adding the public server from privately authorizing a workspace and
+verifying it with an authenticated read. Public catalog discovery and prompt-copy
+success prove neither. The recorded gateway has eleven Payr operations without
+context/void; local upstream has twelve including context. Private per-user
+credential injection into generated MCP remains unverified. Never ask for a secret
+in chat or imply the archived plugin solves authentication. Follow `mcp-onboarding.md`.
 
 ## Verification
 

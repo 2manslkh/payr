@@ -1,5 +1,19 @@
 # Email Templates
 
+## Current Scope: 10 September
+
+The original template-only observations below are retained, including their
+then-unconnected receipt builder and no-transport statement. R08 subsequently
+connected verified receipts to the durable outbox. The selected Publish & Send
+candidate adds client, issuer-copy and combined-role initial invoice variants,
+with frozen PDF attachment/private links only after both literal approvals.
+The Gmail package remains link-only compatibility data, not an instruction to
+send separately. Email-disabled blocks fresh publication, and receipt email
+remains independently gated. See `publish-and-send.md` and
+`r08-receipts-delivery.md` for their distinct contracts and dated evidence.
+Preview rendering never proves provider acceptance or inbox delivery; no new
+tests, transport activation or live sends are claimed by docs reconciliation.
+
 ## Preview
 
 Run `pnpm dev` and open `/dev/emails`. The gallery is available only when

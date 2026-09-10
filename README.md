@@ -4,6 +4,35 @@ Payr helps independent developers turn confirmed work into an invoice, then reco
 
 ## Status
 
+**10 September reconciliation:** planned breaking `v2.0.0`, based on released
+`v1.8.0` main `cbcf7e2`, selectively retains Privy onboarding/business-wallet
+discovery, newer dashboard login/MCP setup and mandatory Publish & Send. New
+publishes require both `approval:true` and `deliveryApproval:true`; disabled
+invoice email blocks fresh publication. Finalized legacy no-send replay is
+read-only with no historical mail backfill. The optional direct-MCP plugin is
+archived, not an install prerequisite or pending public package.
+
+Recorded production is `cbcf7e2` **plus an uncommitted Privy snapshot**, not main
+alone and not this reconciliation candidate. Preserve the [10 September deployment
+evidence](docs/ops/privy-onboarding.md#vercel-deployment-2026-09-10): no real login
+credentials were submitted; ownership, linking and genuine policy denial remain
+unproven. [Current execution](docs/ops/reconciliation-v2.md) requires fresh CI and
+review; source consolidation neither releases/deploys this candidate nor authorizes
+live writes. [STATUS.md](STATUS.md) tracks the remaining acceptance gates.
+
+The public gateway's recorded catalog has eleven Payr operations without account
+context or void; local upstream has twelve including context. [MCP onboarding](docs/ops/mcp-onboarding.md)
+separates discovery from private workspace access. Per-user private credential
+injection into generated MCP remains unverified; never paste account/service
+secrets in chat. Initial-email, verified payment/receipt and separately enabled
+receipt-delivery proof are required for core acceptance, not inferred from a tool
+list, provider acceptance, old test counts or same-address email evidence.
+
+### Historical Root-Updates Status (9 September)
+
+The next two paragraphs preserve the older base and evidence limits. Their release
+execution pointers are historical; the 10 September scope above controls this candidate.
+
 This release candidate is based on `v1.6.0` at `aebcd15` ([PR #16](https://github.com/2manslkh/payr/pull/16)). Protected invoices/PDFs, Arc native-USDC payments, reconciliation, immutable receipts, durable delivery workers, public discovery, and Claude MCP are implemented. MCP retains four default invoice tools and separately opted-in sender read/save authority; payout changes remain owner-signed. This is distinct from the recorded R09 `v1.3.0` deployment evidence at `2dfa8db159c19f95a5af9e99cb4a5a428b2c2e2a` ([PR #12](https://github.com/2manslkh/payr/pull/12)). That record does not establish deployment of this candidate. See [R09 release evidence](docs/ops/r09-release.md) and [current release execution](docs/ops/root-release-manifest.md).
 
 The release has explicit live limits: Claude connector and full external-wallet rehearsals remain unverified. One approved R08 receipt email was provider-verified as delivered, but human inbox opening and unattended delivery are not claimed; production receipt email remains disabled. [STATUS.md](STATUS.md) tracks the remaining proof/submission work. The user-approved clean replay on `integration/root-updates-v1.7.0` retains dashboard/wallet/install/roadmap changes while preserving the original `integration/root-updates` evidence. The [root cleanup inventory](docs/ops/repository-cleanup.md) is historical, not a current branch inventory. No release or deployment is implied before the required gates finish.
@@ -74,7 +103,7 @@ The health endpoint returns only `{ "status": "ok", "commit": string | null }`; 
 
 ### Settlement authorization
 
-R07 uses native 18-decimal USDC on Arc Testnet (`5042002`) and an immutable, unfunded attestor; Privy is not used. Follow the [configuration and live-operation runbook](docs/ops/r07-settlement.md) rather than supplying client-side payment facts. `POST /api/invoice/[slug]/authorize` accepts no payload bytes and returns a signature only after authorization persistence. Issuance never marks an invoice paid.
+R07 uses native 18-decimal USDC on Arc Testnet (`5042002`) and an immutable, unfunded attestor with the guarded local-testnet signer. Privy onboarding provides a separate user-owned receiving wallet, not this payment signer. Follow the [configuration and live-operation runbook](docs/ops/r07-settlement.md) rather than supplying client-side payment facts. `POST /api/invoice/[slug]/authorize` accepts no payload bytes and returns a signature only after authorization persistence. Issuance never marks an invoice paid.
 
 The operator script requires an explicit testnet guard and exact human confirmation. It caps gas at `0.1 testnet USDC` and durably retains the public transaction identity in an exclusive local `.operator-payment.json` before broadcast. On any ambiguous result, retain the journal and run `pnpm tsx scripts/operator-pay.ts --recover` from the same directory. Recovery is read-only and requires no payer key. The recorded demo invoice is already paid onchain: never pay it again to repeat evidence.
 
@@ -82,11 +111,11 @@ The operator script requires an explicit testnet guard and exact human confirmat
 
 Configure `NEXT_PUBLIC_APP_URL`, `ARC_CHAIN_ID`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_ENCRYPTION_KEY`, and `CONNECTOR_TOKEN_PEPPER` in the ignored runtime environment before using `/login` and `/app`. The session key must decode from base64/base64url to exactly 32 random bytes; the connector pepper must decode to at least 32 random bytes. They are independent secrets, never browser-facing values. Use the healthy HTTPS origin in production, or an explicit-port localhost/loopback origin locally.
 
-An injected externally owned Ethereum wallet signs a five-minute server challenge; no gas or transaction is involved. Sessions last eight hours and always use a Secure, HttpOnly, SameSite=Lax `__Host-` cookie. First login initializes payout to the signing owner wallet. Changing it requires a fresh owner signature binding the old and new payout addresses. Logout clears this browser's cookie; it does not revoke other sessions.
+With Privy configured, `/login` uses Privy authentication and server-provisioned user-owned receiving wallets. New workspaces initialize payout to that wallet; linking an existing workspace preserves its original owner anchor, payout, profiles, invoices and credentials. Follow [Privy onboarding](docs/ops/privy-onboarding.md) for configuration, explicit legacy linking and live verification. New legacy wallet-login requests are disabled while Privy is configured; existing bounded sessions survive. Payout changes still require a fresh owner signature binding old/new addresses. Sessions use the Secure, HttpOnly, SameSite=Lax `__Host-` cookie; logout clears this browser's cookie, not all sessions.
 
 Sender saves through `POST /api/profile` require `expectedProfileId` from the reviewed `GET /api/profile` response alongside `expectedRevision`. The ID is only a precondition, never authorization scope. A switched browser session returns `PROFILE_CHANGED` without writing the new workspace's profile. Reload older Settings tabs before saving; direct HTTP callers must include the same reviewed ID. The internal service-only profile RPC remains unchanged.
 
-Connector credentials are shown once and expire within 30 days. `POST /api/mcp/[token]` provides stateless MCP with four default invoice tools: `create_invoice_draft`, `publish_invoice`, `get_invoice_status`, and `void_invoice`. Separately opted-in `sender:read` and `sender:write` authorize `get_sender_profile` and `save_sender_profile`; existing/default credentials remain invoice-only. Sender saves, publication, and voiding require explicit approval. Payout changes remain owner-signed in Settings. Creating a credential does not automatically configure Claude; use the [connector smoke procedure](docs/ops/mcp-claude-smoke.md). Revoke credentials after demos: Payr's application redaction cannot remove them from CDN/platform logs, browser or clipboard history, or Claude configuration. Nonce issuance and connector admission use atomic database limits; outside Vercel, nonce requests conservatively share one IP bucket instead of trusting forwarded headers.
+Direct MCP connector credentials are shown once and expire within 30 days. Direct MCP retains the four invoice tools including `void_invoice`; opted-in sender scopes authorize sender read/save, and `wallet:read` gates account context without silently expanding existing tokens. REST gateway account credentials are distinct, service-bound and at most seven days; public generated MCP does not yet have verified private per-user injection. `/install` is the MCP-first guide, not a plugin download. Use the [onboarding boundary](docs/ops/mcp-onboarding.md) and [direct connector smoke procedure](docs/ops/mcp-claude-smoke.md) for the actual transport. Creating a credential does not authenticate an agent automatically. Keep secrets out of chat/recordings and revoke demo credentials; application redaction cannot remove platform/CDN/browser/clipboard copies. Payout changes remain owner-signed; sender saves and voiding require explicit approval.
 
 Browser tests generate ephemeral identity keys for their local server and workers, never reuse production secrets, and keep Secure cookies enabled. `pnpm test:db:local` also exercises the real signature-to-database route flow; browser API mocks are not the only integration evidence.
 
@@ -102,11 +131,18 @@ Country entry requires assigned ISO alpha-2 codes. Previously accepted non-ISO v
 
 Publication binds the configured `ARC_CHAIN_ID` and nonzero `NEXT_PUBLIC_PAYR_CONTRACT_ADDRESS` once per attempt. New reservations also require `LINK_ACTIVE_KEY_VERSION` and matching `LINK_TOKEN_KEY_V<n>` material. Retain old key versions for existing links; replay and read paths use stored versions, never the current active key as a substitute.
 
-`POST /api/invoices/[id]/publish` accepts exact version, explicit approval, and idempotency key. It rejects duplicate JSON properties. A number is permanently consumed at successful reservation; workers recover the same attempt/object with an increased fence after lease expiry. No link is exposed before verified finalization, and a terminal failure requires a new approved idempotency key. R06 installs the real document adapter; publication requires configured chain/contract binding, link keys, and Supabase. There is no production fake-provider switch or browser authoring form. Native producer/package/font and storage infrastructure failures are retryable; invalid document proof is terminal and does not restore a consumed number.
+`POST /api/invoices/[id]/publish` requires exact version, `approval:true`, `deliveryApproval:true` and an idempotency key for new publication. Review the complete draft/defaults/client changes and both frozen email recipients, through the agent or dashboard Publish & Send review. Email enablement and Resend configuration must pass before reservation. Duplicate JSON properties are rejected. A number is permanently consumed at reservation; workers recover the same attempt/object with a higher fence after lease expiry. No link is exposed before verified finalization. Frozen PDF/private links are queued transactionally per distinct normalized client/issuer address; a terminal failure needs a new approved key and never restores the number. See [Publish & Send](docs/ops/publish-and-send.md) for failure and rollout boundaries. No browser draft authoring or production fake provider is added.
 
-Canonical status, link-only Gmail packages, and Share/Copy reconstruct existing finalized artifacts from retained keys. Gmail data is not send approval and no email provider is called. Finalized replay does not need current reservation binding or a document provider. Voiding and void replay do not need link/explorer configuration; they atomically revoke invoice access while preserving immutable records and any later valid settlement.
+Canonical status and Share/Copy reconstruct existing finalized artifacts from retained keys without enqueueing mail. The legacy `gmailLinkPackage` is compatibility data, not an instruction to send a duplicate. Authorized finalized no-send replay remains read-only and cannot reserve/resume or acquire delivery approval retroactively. New Publish & Send results expose `invoiceEmail` separately from `receiptEmail`; `sent` is provider acceptance, not inbox delivery. Voiding revokes access without erasing immutable records or later valid settlement.
 
 Cron publication processing requires a timing-safe `CRON_SECRET` bearer. Migration `202609080001_publication_fairness.sql` orders eligible attempts by least-recent update before creation order, so a persistently unavailable artifact cannot monopolize every recovery batch. Targeted retries, 60-second leases, fences, and immutable artifact rules are unchanged. UI sharing is explicit, holds links only in component memory, and clears them on hide/navigation/void. Publication browser tests verify actual share responses in Node memory and redact credentials before browser artifacts, with trace/video/automatic screenshots disabled for that scenario.
+
+The dedicated invoice-only recovery route `/api/jobs/invoice-outbox` uses
+`PAYR_INVOICE_CRON_SECRET ?? CRON_SECRET`: fallback only when the dedicated variable
+is absent, and an explicitly empty dedicated value fails closed. The selected
+secret must be at least 32 characters; Vault's `payr_invoice_email_cron_secret`
+must match that selected value. [Cron/Vault setup](docs/ops/publish-and-send.md#supabase-cron-setup)
+is a separately approved operator step, not an executed configuration claim.
 
 ### Immutable documents
 

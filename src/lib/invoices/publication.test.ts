@@ -9,6 +9,7 @@ import { buildGmailPackage } from "./gmail-package";
 import { createPublicationService } from "./publication";
 import { PublicationError, type InvoiceDocumentPort, type PublicationAttempt, type PublicationConfig, type PublicationFence, type PublicationRepository, type PublicationStatusData } from "./publication-contracts";
 import { createPublicationWorker } from "./publication-worker";
+import { createInvoiceLifecycleService } from "./lifecycle";
 import { createTestDocumentPort, testPublicationSnapshot } from "./publication.test-support";
 
 // The lifecycle lane owns this frozen seam; integration exercises the real builder.
@@ -18,9 +19,13 @@ vi.mock("./gmail-package", () => ({ buildGmailPackage: vi.fn((input) => ({
 })) }));
 
 const actor: InvoiceActor = { workspaceId: "00000000-0000-4000-8000-000000000001", ownerWallet: `0x${"2".repeat(40)}`, connectorId: null };
-const input = { draftId: "00000000-0000-4000-8000-000000000003", expectedVersion: 1, approval: true, idempotencyKey: "publish-1" };
+const input = { draftId: "00000000-0000-4000-8000-000000000003", expectedVersion: 1, approval: true, deliveryApproval: true, idempotencyKey: "publish-1" };
+const emailConfig = { from: "Payr <sender@example.test>", appOrigin: "https://payrlink.xyz", templateVersion: "invoice-issued-v1" as const, network: "Arc Testnet" as const };
+const invoiceDeliveries = [{ roles: ["client" as const], state: "pending" as const, attemptCount: 0, nextAttemptAt: null },
+  { roles: ["issuer" as const], state: "pending" as const, attemptCount: 0, nextAttemptAt: null }];
 const dependencies = (config: PublicationConfig, documents: InvoiceDocumentPort) => ({
   getLinkConfig: () => config, getReservationConfig: () => config, getDocuments: () => documents,
+  getEmailConfig: () => emailConfig,
 });
 
 function setup() {
@@ -61,7 +66,7 @@ function setup() {
         state: "reserved", snapshot: testPublicationSnapshot(), chainId: reservation.chainId, contractAddress: reservation.contractAddress,
         invoiceKey: reservation.invoiceKey, publicationSalt: reservation.publicationSalt,
         storageKey: `workspace/${actor.workspaceId}/invoice/${reservation.draftId}/${reservation.expectedVersion}/attempt/${reservation.attemptId}.pdf`,
-        link: { tokenId: reservation.tokenId, keyVersion: reservation.keyVersion, verifierHash: reservation.verifierHash,
+        link: { tokenId: reservation.tokenId, keyVersion: reservation.keyVersion, verifierHash: reservation.verifierHash, appOrigin: reservation.emailConfig?.appOrigin,
           expiresAt: "2031-03-02T00:00:00.000Z", activatedAt: null, revokedAt: null },
         leaseOwner: null, leaseUntil: null, fence: "0", artifact: null, failureCode: null, finalizedAt: null,
       };
@@ -111,7 +116,7 @@ function setup() {
       return attempt ? copy({ invoiceId: attempt.invoiceId, invoiceVersion: attempt.invoiceVersion,
         invoiceNumber: attempt.state === "finalized" ? attempt.invoiceNumber : null, commercialState: state.commercialState,
         payableUntil: attempt.state === "finalized" ? attempt.snapshot.payableUntil : null, voidedAt: null,
-        snapshot: attempt.snapshot, attempt, settlement: null, receipt: null, deliveries: [] }) : null;
+        snapshot: attempt.snapshot, attempt, settlement: null, receipt: null, deliveries: [], invoiceDeliveries: attempt.state === "finalized" ? invoiceDeliveries : [] }) : null;
     }),
     voidInvoice: vi.fn(), expire: vi.fn(),
   };
@@ -122,6 +127,54 @@ function setup() {
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z")); vi.clearAllMocks(); });
 afterEach(() => vi.useRealTimers());
+
+it("requires explicit delivery approval and a configured mail gate before fresh writes", async () => {
+  const { repository, config, createOrRead } = setup();
+  const getEmailConfig = vi.fn(() => { throw new PublicationError("INVOICE_EMAIL_DISABLED", 503); });
+  const service = createPublicationService(repository, { ...dependencies(config, { createOrRead }), getEmailConfig });
+  await expect(service.publish(actor, { ...input, deliveryApproval: undefined })).rejects.toMatchObject({ code: "DELIVERY_APPROVAL_REQUIRED" });
+  expect(getEmailConfig).not.toHaveBeenCalled();
+  await expect(service.publish(actor, input)).rejects.toMatchObject({ code: "INVOICE_EMAIL_DISABLED" });
+  expect(repository.reserve).not.toHaveBeenCalled(); expect(repository.claim).not.toHaveBeenCalled(); expect(createOrRead).not.toHaveBeenCalled();
+});
+
+it("reads a historical finalized v1 replay with email disabled, without backfill or dispatch", async () => {
+  const { service, repository, config, createOrRead, attempts } = setup();
+  await service.publish(actor, input);
+  const attempt = [...attempts.values()][0];
+  vi.mocked(repository.findReplay).mockResolvedValue(attempt);
+  const status = (await repository.statusData(actor, input.draftId))!;
+  vi.mocked(repository.statusData).mockResolvedValue({ ...status, invoiceDeliveries: [] });
+  const afterPublication = vi.fn();
+  const getEmailConfig = vi.fn(() => { throw new Error("disabled"); });
+  vi.clearAllMocks();
+  const result = await createPublicationService(repository, { ...dependencies(config, { createOrRead }), getEmailConfig, afterPublication })
+    .publish(actor, { ...input, deliveryApproval: undefined });
+  expect(result).toMatchObject({ sendApprovalRequired: true, invoiceEmail: { state: "not_applicable", deliveries: [] } });
+  expect(getEmailConfig).not.toHaveBeenCalled(); expect(afterPublication).not.toHaveBeenCalled();
+  expect(repository.reserve).not.toHaveBeenCalled(); expect(repository.finalize).not.toHaveBeenCalled();
+});
+
+it("schedules only the committed attempt and does not undo it on callback failure", async () => {
+  const { repository, config, createOrRead } = setup();
+  const afterPublication = vi.fn(() => { throw new Error("scheduler unavailable"); });
+  const result = await createPublicationService(repository, { ...dependencies(config, { createOrRead }), afterPublication }).publish(actor, input);
+  expect(result.invoiceEmail.state).toBe("queued");
+  const attemptId = vi.mocked(repository.reserve).mock.calls[0][1].attemptId;
+  expect(afterPublication).toHaveBeenCalledExactlyOnceWith(attemptId);
+  expect(vi.mocked(repository.finalize).mock.invocationCallOrder[0]).toBeLessThan(afterPublication.mock.invocationCallOrder[0]);
+});
+
+it("does not upgrade a recorded v1 approval by adding deliveryApproval to the same key", async () => {
+  const { service, repository, replays } = setup();
+  await service.publish(actor, input);
+  const recorded = replays.get(input.idempotencyKey)!;
+  recorded.fingerprint = createHash("sha256").update(canonicalJson({ operation: "publish_invoice", workspaceId: actor.workspaceId,
+    draftId: input.draftId, expectedVersion: input.expectedVersion, approval: true })).digest("hex");
+  vi.clearAllMocks();
+  await expect(service.publish(actor, input)).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+  expect(repository.reserve).not.toHaveBeenCalled(); expect(repository.finalize).not.toHaveBeenCalled();
+});
 
 it.each([
   { approval: false }, { approval: undefined }, { approval: "true" }, { expectedVersion: 0 }, { expectedVersion: 1.5 },
@@ -149,9 +202,9 @@ it("publishes through the real worker with exact fingerprint, active-key HMAC me
   const result = await service.publish(actor, input);
   const reservation = vi.mocked(repository.reserve).mock.calls[0][1];
   expect(reservation.requestFingerprint).toBe(createHash("sha256").update(
-    '{"approval":true,"draftId":"00000000-0000-4000-8000-000000000003","expectedVersion":1,"operation":"publish_invoice","workspaceId":"00000000-0000-4000-8000-000000000001"}',
+    '{"approval":true,"deliveryApproval":true,"draftId":"00000000-0000-4000-8000-000000000003","expectedVersion":1,"operation":"publish_invoice","workspaceId":"00000000-0000-4000-8000-000000000001"}',
   ).digest("hex"));
-  expect(reservation).toEqual({ ...input, requestFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
+  expect(reservation).toEqual({ ...input, emailConfig, requestFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
     attemptId: expect.any(String), invoiceKey: expect.stringMatching(/^0x[0-9a-f]{64}$/), publicationSalt: expect.stringMatching(/^0x[0-9a-f]{64}$/),
     tokenId: expect.any(String), keyVersion: 1, verifierHash: expect.stringMatching(/^[0-9a-f]{64}$/), chainId: config.chainId, contractAddress: config.contractAddress });
   expect(reservation.attemptId).not.toBe(reservation.tokenId);
@@ -164,7 +217,8 @@ it("publishes through the real worker with exact fingerprint, active-key HMAC me
     invoiceUrl: `${config.appOrigin}/invoice/${token.slug}`, invoicePdfUrl: `${config.appOrigin}/invoice/${token.slug}/pdf`,
     pdfFilename: "INV-2030-000001.pdf", pdfContentHash: attempt.artifact!.pdfContentHash, documentCommitment: attempt.artifact!.documentCommitment,
     gmailLinkPackage: { to: ["client@example.test"], subject: "INV-2030-000001", textBody: "Gmail seam", htmlBody: "Gmail seam",
-      paymentUrl: `${config.appOrigin}/invoice/${token.slug}`, invoicePdfUrl: `${config.appOrigin}/invoice/${token.slug}/pdf` }, sendApprovalRequired: true,
+      paymentUrl: `${config.appOrigin}/invoice/${token.slug}`, invoicePdfUrl: `${config.appOrigin}/invoice/${token.slug}/pdf` }, sendApprovalRequired: false,
+    invoiceEmail: { state: "queued", deliveries: invoiceDeliveries },
   });
   expect(buildGmailPackage).toHaveBeenCalledExactlyOnceWith({ snapshot: attempt.snapshot, invoiceNumber: attempt.invoiceNumber,
     invoiceUrl: result.invoiceUrl, invoicePdfUrl: result.invoicePdfUrl });
@@ -280,13 +334,15 @@ it.each(["before_document", "after_upload", "before_store", "after_store", "befo
       await expect(service.publish(actor, input)).rejects.toMatchObject({ code: "PUBLICATION_IN_PROGRESS" });
     }
     vi.advanceTimersByTime(60_000);
-    const rotated: PublicationConfig = { ...config, chainId: 42, activeKeyVersion: 2,
+    const rotated: PublicationConfig = { ...config, appOrigin: "https://changed.test", chainId: 42, activeKeyVersion: 2,
       keys: new Map([[1, new Uint8Array(32).fill(7)], [2, new Uint8Array(32).fill(8)]]) };
     const freshDocuments = createTestDocumentPort(objects);
     const worker = createPublicationWorker(repository, rotated, freshDocuments);
     expect(await worker.run()).toEqual(crash === "after_finalize" ? { outcome: "idle" } : { outcome: "finalized", attemptId: attempt.id });
     const result = await createPublicationService(repository, dependencies(rotated, freshDocuments)).publish(actor, input);
-    expect(result).toMatchObject({ invoiceNumber: reservedFacts.invoiceNumber, commercialState: "published", sendApprovalRequired: true });
+    expect(result).toMatchObject({ invoiceNumber: reservedFacts.invoiceNumber, commercialState: "published", sendApprovalRequired: false });
+    expect(new URL(result.invoiceUrl).origin).toBe(config.appOrigin);
+    expect(result.invoicePdfUrl).toBe(`${result.invoiceUrl}/pdf`);
     expect({ id: attempt.id, invoiceNumber: attempt.invoiceNumber, invoiceKey: attempt.invoiceKey,
       publicationSalt: attempt.publicationSalt, storageKey: attempt.storageKey, tokenId: attempt.link.tokenId }).toEqual(reservedFacts);
     expect(attempt.fence).toBe(crash === "after_finalize" ? "1" : "2");
@@ -297,6 +353,36 @@ it.each(["before_document", "after_upload", "before_store", "after_store", "befo
     expect(repository.fail).not.toHaveBeenCalled();
   },
 );
+
+it.each(["reserved", "rendering", "stored"] as const)("foreground restart preserves approval origin and PDF identity from %s", async (stage) => {
+  const { service, repository, config, attempts, objects, createOrRead } = setup();
+  if (stage === "reserved") vi.mocked(repository.claim).mockResolvedValueOnce(null);
+  if (stage === "rendering") createOrRead.mockImplementationOnce(async (value) => {
+    await createTestDocumentPort(objects).createOrRead(value); throw new Error("Crash after upload");
+  });
+  if (stage === "stored") vi.mocked(repository.finalize).mockRejectedValueOnce(new Error("Crash before finalization"));
+  await expect(service.publish(actor, input)).rejects.toMatchObject({ code: stage === "reserved" ? "PUBLICATION_IN_PROGRESS" : "PUBLICATION_RETRYABLE" });
+  const original = [...attempts.values()][0];
+  expect(original.state).toBe(stage);
+  const bytes = objects.get(original.storageKey)?.slice();
+  const artifact = structuredClone(original.artifact);
+  vi.advanceTimersByTime(61_000);
+  const rotated = { ...config, appOrigin: "https://changed.test", activeKeyVersion: 2,
+    keys: new Map([...config.keys, [2, new Uint8Array(32).fill(9)] as const]) };
+  const resumedRead = vi.fn(createTestDocumentPort(objects).createOrRead);
+  const result = await createPublicationService(repository, dependencies(rotated, { createOrRead: resumedRead })).publish(actor, input);
+  expect(new URL(result.invoiceUrl).origin).toBe(config.appOrigin);
+  expect(result.invoicePdfUrl).toBe(`${result.invoiceUrl}/pdf`);
+  expect(result.gmailLinkPackage.paymentUrl).toBe(result.invoiceUrl);
+  expect(resumedRead).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ storageKey: original.storageKey, invoiceUrl: result.invoiceUrl }));
+  if (bytes) expect(objects.get(original.storageKey)).toEqual(bytes);
+  if (artifact) expect(original.artifact).toEqual(artifact);
+  expect(objects.size).toBe(1);
+  expect(repository.fail).not.toHaveBeenCalled();
+  const lifecycle = createInvoiceLifecycleService(repository, () => rotated);
+  expect((await lifecycle.share(actor, input.draftId)).invoiceUrl).toBe(result.invoiceUrl);
+  expect((await lifecycle.status(actor, input.draftId)).invoiceDocument?.pageUrl).toBe(result.invoiceUrl);
+});
 
 it("allows only one live claimant for concurrent same-key calls and rejects different-key competing reservations", async () => {
   const { service, repository, state, createOrRead } = setup();

@@ -2,6 +2,17 @@
 
 **Status:** Approved execution runbook
 
+**10 September reconciliation override:** `docs/ops/reconciliation-v2.md` owns
+the current isolated coordinator/three-lane manifest, base checkpoints and
+exclusive ownership. Its dispatch overrides the original root-coordinator and
+four-lane topology for this candidate. The 10 September `DECISIONS.md` entry and
+framing/implementation amendments require core Privy onboarding and mandatory
+Publish & Send, with the optional direct-MCP plugin archived. Historical tranche
+labels and Gmail decomposition below do not reinstate a separate-send requirement.
+Planned `v2.0.0` still needs fresh combined gates; no release/live operation is
+authorized by lane consolidation. Record actual reviewer models and unavailable
+review requirements honestly rather than claiming a model ran when it did not.
+
 **Goal:** Deliver the Payr MVP through isolated GPT-5.6 Terra xhigh worktrees while preserving frozen interfaces, reviewable release tranches, protected `main`, and one annotated version tag per merge.
 
 The product and acceptance contract lives in `docs/superpowers/specs/2026-09-04-payr-framing-design.md`. The technical sequence lives in `docs/superpowers/plans/2026-09-04-payr-mvp-implementation-plan.md`. This document owns only multi-agent execution and integration mechanics. Release commands and invariants live in `docs/ops/versioning.md`.

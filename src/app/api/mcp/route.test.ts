@@ -49,7 +49,7 @@ function request(authorization: string = `Bearer ${token}`, body: unknown = { js
 it("runs real SDK discovery with the same credential, scopes and atomic admission", async () => {
   const response = await POST(request(`bearer ${token}`));
   expect(response.status).toBe(200);
-  expect((await response.json()).result.tools).toHaveLength(6);
+  expect((await response.json()).result.tools).toHaveLength(7);
   expect(repository.admitConnector).toHaveBeenCalledExactlyOnceWith({ id: tokenId, tokenHash: record.tokenHash,
     ipHash: "5add4d24fff9fb047129f6f1fc524554bba7ceb0687a818bb955f968af45a46e", action: "invoice:status" });
   expect(response.headers.get("cache-control")).toBe("private, no-store");

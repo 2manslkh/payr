@@ -32,7 +32,7 @@ it("uses only the four frozen service RPCs, without an owner actor", async () =>
   expect(await repository.admit("ip", "a".repeat(64))).toEqual({ allowed: false });
   expect(rpc.mock.calls).toEqual([
     ["payr_find_invoice_access_candidate_v1", { p_token_id: id }],
-    ["payr_read_invoice_document_v1", { p_token_id: id }],
+    ["payr_read_invoice_document_v2", { p_token_id: id }],
     ["payr_document_storage_state_v1", { p_storage_key: key }],
     ["payr_admit_document_access_v1", { p_scope: "ip", p_key_hash: "a".repeat(64) }],
   ]);

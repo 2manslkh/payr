@@ -10,6 +10,7 @@ playwright-report/
 test-results/
 .env
 .env.local
+.env.baz
 .env.*.local
 !.env.example
 .supabase/

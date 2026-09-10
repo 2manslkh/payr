@@ -15,26 +15,33 @@ export async function readAuthJson(request: Request, allowEmpty = false): Promis
     throw new IdentityError("INVALID_INPUT");
   }
   const reader = request.body.getReader();
+  const deadlineMs = 5_000;
+  const expires = Date.now() + deadlineMs;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new IdentityError("REQUEST_TIMEOUT", 408)), deadlineMs);
+  });
   let size = 0;
   let text = "";
   try {
     const decoder = new TextDecoder("utf-8", { fatal: true });
     for (;;) {
-      const { done, value } = await reader.read();
+      const { done, value } = await Promise.race([reader.read(), deadline]);
+      if (Date.now() >= expires) throw new IdentityError("REQUEST_TIMEOUT", 408);
       if (done) break;
       size += value.byteLength;
-      if (size > limit) {
-        void reader.cancel().catch(() => {});
-        throw new IdentityError("PAYLOAD_TOO_LARGE", 413);
-      }
+      if (size > limit) throw new IdentityError("PAYLOAD_TOO_LARGE", 413);
       text += decoder.decode(value, { stream: true });
     }
     text += decoder.decode();
     return allowEmpty && size === 0 ? {} : JSON.parse(text);
   } catch (error) {
+    // A hostile stream's cancellation must not extend the read deadline.
+    void reader.cancel().catch(() => {});
     if (error instanceof IdentityError) throw error;
     throw new IdentityError("INVALID_INPUT");
   } finally {
+    clearTimeout(timer);
     reader.releaseLock();
   }
 }

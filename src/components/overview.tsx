@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { DashboardLogin } from "./dashboard-login";
 import { Suspense } from "react";
 import { DateValue, PageHeading } from "./console-ui";
 import { commercialLabels, InvoiceReadError, invoiceTitle, OpenClaude } from "./invoice-ui";
@@ -11,8 +11,11 @@ import { getDraftRepository } from "../lib/invoices/runtime";
 import type { InvoiceOverview } from "../lib/invoices/contracts";
 import styles from "./overview.module.css";
 
-export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ view?: string | string[] }> }) {
-  const staticView = (await searchParams).view === "static";
+export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ view?: string | string[]; link?: string | string[] }> }) {
+  if (!await getDashboardSession()) return <DashboardLogin />;
+  const query = await searchParams;
+  if (query.link === "1") return <DashboardLogin />;
+  const staticView = query.view === "static";
   return <>
     {!staticView && <noscript><p className="notice">Streaming records require JavaScript. <a className="text-link" href="/app?view=static">Open the non-streaming overview</a> to read your records without it.</p></noscript>}
     {staticView ? await OverviewContent({ waitForRecords: true }) : <Suspense fallback={<OverviewLoading />}><OverviewContent /></Suspense>}
@@ -34,7 +37,7 @@ function OverviewLoading() {
 
 export async function OverviewContent({ waitForRecords = false }: { waitForRecords?: boolean } = {}) {
   const session = await getDashboardSession();
-  if (!session) redirect("/login");
+  if (!session) return <DashboardLogin />;
   let overview: Promise<InvoiceOverview | null>;
   try {
     overview = getDraftRepository().getOverview(ownerActor(session)).catch(() => null);
@@ -51,7 +54,7 @@ export async function OverviewContent({ waitForRecords = false }: { waitForRecor
           {records}
         </Suspense>}
       </div>
-      <footer className={styles.installLink}><p>Connect Payr in <Link className="text-link" href="/app/connections">Connections</Link> to use its tools in Claude. Plugin installation is coming separately.</p><Link className="text-link" href="/install">Agent installation guide</Link></footer>
+      <footer className={styles.installLink}><p>Connect Payr in <Link className="text-link" href="/app/connections">Connections</Link> to use its tools in Claude. No plugin required; workspace authentication is a separate step.</p><Link className="text-link" href="/install">Agent connection guide</Link></footer>
     </div>
   );
 }

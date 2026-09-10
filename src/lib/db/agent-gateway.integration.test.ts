@@ -85,6 +85,20 @@ async function avoidMinuteBoundary() {
 describe("gateway SQL transactions (disposable database only)", () => {
   beforeEach(() => fixture("truncate public.gateway_service_keys, public.agent_registration_challenges, public.gateway_rate_limits, public.auth_nonce_rate_limits, public.connector_ip_rate_limits, public.workspaces cascade;"));
 
+  it("keeps scoped wallet admission and denial auditable after invoice-email migration", async () => {
+    const { account, auth } = await register({ scopes: ["invoice:status", "wallet:read"] });
+    await expect(repository.admitAccount({ ...auth, action: "wallet:read", ipHash: hash() }))
+      .resolves.toMatchObject({ workspaceId: account.workspaceId, credential: { scopes: ["invoice:status", "wallet:read"] } });
+    const legacy = await register({ scopes: ["invoice:status"] });
+    await expect(repository.admitAccount({ ...legacy.auth, action: "wallet:read", ipHash: hash() }))
+      .rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+    const activity = await identity.listActivity(account);
+    expect(activity).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "wallet:read", outcome: "allowed", tokenId: auth.id }),
+      expect.objectContaining({ action: "connector.admit", outcome: "denied", tokenId: legacy.auth.id }),
+    ]));
+  });
+
   it("keeps gateway accounts compatible with main's overview while denying owner-only wallet admission", async () => {
     const { account, auth } = await register({ scopes: ["invoice:status"] });
     const actor = { workspaceId: account.workspaceId, ownerWallet: null, connectorId: auth.id };

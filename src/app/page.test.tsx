@@ -39,7 +39,10 @@ describe("HomePage", () => {
     render(<HomePage />);
 
     expect(screen.getByRole("heading", { name: "From finished work to verified payment." })).toBeDefined();
-    expect(screen.getByRole("link", { name: "Sign in to Payr" }).getAttribute("href")).toBe("/login");
+    const dashboardLinks = screen.getAllByRole("link", { name: "Go To Dashboard" });
+    expect(dashboardLinks).toHaveLength(3);
+    dashboardLinks.forEach((link) => expect(link.getAttribute("href")).toBe("/app"));
+    expect(screen.getByText(/Approve the exact draft and email delivery/).textContent).toContain("client and sender");
     expect(screen.getByRole("img", { name: "Payr" }).querySelector("img")?.getAttribute("style")).toBeNull();
     expect(screen.getByRole("heading", { name: "Shipping the work isn't the end of the work." })).toBeDefined();
     expect(screen.getByText(/Receipt email is operator-controlled; automatic sending remains disabled/)).toBeDefined();

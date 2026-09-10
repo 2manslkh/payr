@@ -26,6 +26,16 @@ function setup(data: unknown = account, error: RpcResult["error"] = null) {
 }
 
 describe("gateway repository", () => {
+  it("admits explicitly scoped wallet discovery without broadening existing credentials", async () => {
+    const scoped = { ...account, credential: { ...account.credential, scopes: ["invoice:status", "wallet:read"] } };
+    const { repository, rpc } = setup(scoped);
+    await expect(repository.admitAccount({ ...auth, action: "wallet:read", ipHash })).resolves.toEqual(scoped);
+    expect(rpc).toHaveBeenCalledWith("payr_admit_agent_account_v1", expect.objectContaining({ p_action: "wallet:read" }));
+    await expect(setup(account).repository.admitAccount({ ...auth, action: "wallet:read", ipHash }))
+      .rejects.toMatchObject({ code: "INVALID_DATABASE_RESPONSE" });
+    expect(ACCOUNT_SCOPES).not.toContain("wallet:read");
+  });
+
   it("implements exactly the frozen six-method interface, without admin or owner capabilities", () => {
     expect(Object.keys(setup().repository).sort()).toEqual([
       "admitAccount", "admitService", "completeRegistration", "findChallenge", "issueChallenge", "revokeAccount",

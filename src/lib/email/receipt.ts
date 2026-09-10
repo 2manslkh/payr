@@ -3,11 +3,11 @@ import { createReceiptDocumentPort } from "../documents/receipt-storage";
 import { buildReceiptView } from "../documents/receipt-view";
 import type { PublicationLinkConfig } from "../invoices/publication-contracts";
 import { readReceiptBytes } from "../receipts/bytes";
-import type { DeliveryWork, ReceiptEmailPayload } from "./outbox-contracts";
+import type { ReceiptDeliveryWork, ReceiptEmailPayload } from "./outbox-contracts";
 import { buildReceiptEmail } from "./templates";
 import { receiptRecipients, receiptSenderSchema } from "./address";
 
-export async function prepareReceiptEmail(work: DeliveryWork, config: PublicationLinkConfig, storage: PrivateDocumentStorage, from: string): Promise<ReceiptEmailPayload> {
+export async function prepareReceiptEmail(work: ReceiptDeliveryWork, config: PublicationLinkConfig, storage: PrivateDocumentStorage, from: string): Promise<ReceiptEmailPayload> {
   const receipt = work.receipt;
   const expected = receiptRecipients(receipt.attempt.snapshot.sender.contactEmail!, receipt.attempt.snapshot.client.contactEmail)
     .find((entry) => entry.normalizedRecipient === work.normalizedRecipient);

@@ -6,6 +6,7 @@ import { createIdentityRepository } from "../db/identity";
 import { IdentityError, SESSION_COOKIE, type IdentityConfig, type IdentityRepository, type IdentitySession } from "../identity/contracts";
 import { requireTrustedOrigin } from "./origin";
 import { createSessionCodec } from "./session";
+import { createPrivyRepository } from "../db/privy";
 
 export function getIdentityConfig(): IdentityConfig {
   try {
@@ -27,7 +28,7 @@ export async function readRequestSession(request: Request): Promise<IdentitySess
   if (values.length !== 1) return null;
   const token = values[0].slice(SESSION_COOKIE.length + 1);
   if (!token) return null;
-  return createSessionCodec(getIdentityConfig()).open(token);
+  return validateSession(await createSessionCodec(getIdentityConfig()).open(token));
 }
 
 export async function requireRequestSession(request: Request, mutation = false): Promise<IdentitySession> {
@@ -40,7 +41,14 @@ export async function requireRequestSession(request: Request, mutation = false):
 export async function getDashboardSession(): Promise<IdentitySession | null> {
   const values = (await cookies()).getAll(SESSION_COOKIE);
   if (values.length !== 1 || !values[0].value) return null;
-  return createSessionCodec(getIdentityConfig()).open(values[0].value);
+  return validateSession(await createSessionCodec(getIdentityConfig()).open(values[0].value));
+}
+
+async function validateSession(session: IdentitySession | null): Promise<IdentitySession | null> {
+  if (!session?.privyUserId) return session; // Existing eight-hour sessions survive the rollout.
+  const account = await createPrivyRepository(createSupabaseAdminClient()).account(session.privyUserId);
+  return account?.session?.workspaceId === session.workspaceId && account.session.ownerWallet === session.ownerWallet
+    && account.session.privyUserId === session.privyUserId ? session : null;
 }
 
 export function privateJson(data: unknown, status = 200): Response {
@@ -50,9 +58,10 @@ export function privateJson(data: unknown, status = 200): Response {
 const errorStatuses: Readonly<Record<string, number>> = Object.freeze({
   INVALID_INPUT: 400, NONCE_INVALID_OR_USED: 400, AUTH_REQUIRED: 401, SIGNATURE_INVALID: 401,
   ORIGIN_NOT_ALLOWED: 403, FORBIDDEN: 403, NOT_FOUND: 404, REVISION_CONFLICT: 409,
-  PAYLOAD_TOO_LARGE: 413, UNSUPPORTED_MEDIA_TYPE: 415, RATE_LIMITED: 429,
+  REQUEST_TIMEOUT: 408, PAYLOAD_TOO_LARGE: 413, UNSUPPORTED_MEDIA_TYPE: 415, RATE_LIMITED: 429,
   CONFIGURATION_ERROR: 503, INTERNAL_ERROR: 500,
   CLIENT_ALIAS_CONFLICT: 409, CONNECTOR_CONFLICT: 409, PROFILE_CHANGED: 409,
+  IDENTITY_CONFLICT: 409, WALLET_UNAVAILABLE: 503, WALLET_CONTROL_MISMATCH: 503,
 });
 
 export function apiError(error: unknown): Response {

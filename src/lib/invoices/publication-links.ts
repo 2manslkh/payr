@@ -9,7 +9,9 @@ export function publicationLink(link: LinkMaterial, purpose: LinkPurpose, config
     if (!/^[0-9a-f]{64}$/.test(link.verifierHash) || !timingSafeEqual(Buffer.from(derived.verifierHash, "hex"), Buffer.from(link.verifierHash, "hex"))) {
       throw new Error("Link metadata mismatch");
     }
-    return new URL(`/${purpose === "invoice-bearer" ? "invoice" : "receipt"}/${derived.slug}`, config.appOrigin).href;
+    // New invoice approvals pin their origin; key rotation still uses the current retained keyring.
+    const origin = purpose === "invoice-bearer" ? link.appOrigin ?? config.appOrigin : config.appOrigin;
+    return new URL(`/${purpose === "invoice-bearer" ? "invoice" : "receipt"}/${derived.slug}`, origin).href;
   } catch { throw new PublicationError("LINK_UNAVAILABLE", 503); }
 }
 

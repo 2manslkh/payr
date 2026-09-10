@@ -4,7 +4,7 @@ import { getIdentityRuntime, requireRequestSession } from "../../../../../lib/au
 import { IdentityError, type ConnectorRecord, type IdentityRepository } from "../../../../../lib/identity/contracts";
 import { createConnectorHasher } from "../../../../../lib/connectors/crypto";
 import { PublicationError, type PublicationAttempt, type PublicationConfig, type PublicationRepository } from "../../../../../lib/invoices/publication-contracts";
-import { getPublicationConfig, getPublicationDocumentPort, getPublicationLinkConfig, getPublicationRepository } from "../../../../../lib/invoices/publication-runtime";
+import { afterPublication, getPublicationEmailConfig, getPublicationConfig, getPublicationDocumentPort, getPublicationLinkConfig, getPublicationRepository } from "../../../../../lib/invoices/publication-runtime";
 import { testPublicationSnapshot } from "../../../../../lib/invoices/publication.test-support";
 import { createKeyedTokenCodec } from "../../../../../lib/security/keyed-token";
 import { POST } from "./route";
@@ -14,6 +14,7 @@ vi.mock("../../../../../lib/auth/runtime", async (original) => ({
 }));
 vi.mock("../../../../../lib/invoices/publication-runtime", () => ({
   getPublicationConfig: vi.fn(), getPublicationDocumentPort: vi.fn(), getPublicationLinkConfig: vi.fn(), getPublicationRepository: vi.fn(),
+  getPublicationEmailConfig: vi.fn(), afterPublication: vi.fn(),
 }));
 vi.mock("../../../../../lib/invoices/gmail-package", () => ({ buildGmailPackage: vi.fn((value) => ({
   to: [value.snapshot.client.contactEmail], subject: value.invoiceNumber, textBody: "Gmail seam", htmlBody: "Gmail seam",
@@ -22,7 +23,7 @@ vi.mock("../../../../../lib/invoices/gmail-package", () => ({ buildGmailPackage:
 
 const identity = { workspaceId: "00000000-0000-4000-8000-000000000001", ownerWallet: `0x${"1".repeat(40)}` };
 const invoiceId = "00000000-0000-4000-8000-000000000002";
-const input = { expectedVersion: 1, approval: true, idempotencyKey: "publish" };
+const input = { expectedVersion: 1, approval: true, deliveryApproval: true, idempotencyKey: "publish" };
 const config: PublicationConfig = { appOrigin: "https://payrlink.xyz", explorerOrigin: "https://testnet.arcscan.app", activeKeyVersion: 1,
   keys: new Map([[1, new Uint8Array(32).fill(7)]]), chainId: 5042002, contractAddress: `0x${"1".repeat(40)}` };
 const repository: PublicationRepository = {
@@ -51,6 +52,7 @@ beforeEach(() => {
     repository: { findConnector, admitConnector } as unknown as IdentityRepository });
   vi.mocked(requireRequestSession).mockResolvedValue(identity);
   vi.mocked(getPublicationConfig).mockReturnValue(config);
+  vi.mocked(getPublicationEmailConfig).mockReturnValue({ from: "Payr <sender@example.test>", appOrigin: config.appOrigin, templateVersion: "invoice-issued-v1", network: "Arc Testnet" });
   vi.mocked(getPublicationLinkConfig).mockReturnValue(config);
   vi.mocked(getPublicationRepository).mockReturnValue(repository);
   vi.mocked(getPublicationDocumentPort).mockReturnValue({ createOrRead });
@@ -98,6 +100,18 @@ it("preserves the dashboard mutation session actor and canonical publication ser
   expect(await response.json()).toEqual({ code: "PUBLICATION_IN_PROGRESS" });
   expect(createOrRead).not.toHaveBeenCalled();
   privateHeaders(response);
+});
+
+it.each(["session", "bearer"])("denies fresh %s publication without delivery approval before all writes", async (auth) => {
+  const body = { ...input, deliveryApproval: undefined };
+  const response = await post(auth === "bearer" ? machineRequest(body) : request(body));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ code: "DELIVERY_APPROVAL_REQUIRED" });
+  expect(repository.reserve).not.toHaveBeenCalled();
+  expect(repository.claim).not.toHaveBeenCalled();
+  expect(getPublicationEmailConfig).not.toHaveBeenCalled();
+  expect(getPublicationDocumentPort).not.toHaveBeenCalled();
+  expect(afterPublication).not.toHaveBeenCalled();
 });
 
 it("admits bearer publication with its actual scope and connector actor, never an owner cookie", async () => {
@@ -355,7 +369,10 @@ it.each(["stalled", "trickling"])("bounds %s bearer approval streams by an absol
   unopened();
 });
 
-it.each(["session", "bearer"])("returns the finalized canonical %s result without republishing or implicit send approval", async (auth) => {
+it.each(["session", "bearer", "legacy-session", "legacy-bearer"])("returns the finalized canonical %s result without republishing or implicit send approval", async (auth) => {
+  const legacy = auth.startsWith("legacy-");
+  const body = { ...input, deliveryApproval: legacy ? undefined : true };
+  const deliveries = legacy ? [] : [{ roles: ["client" as const], state: "pending" as const, attemptCount: 0, nextAttemptAt: null }];
   const token = createKeyedTokenCodec(config.keys).derive(invoiceId, "invoice-bearer", 1);
   const attempt: PublicationAttempt = {
     id: invoiceId, workspaceId: identity.workspaceId, invoiceId, invoiceVersionId: invoiceId, invoiceVersion: 1,
@@ -370,21 +387,36 @@ it.each(["session", "bearer"])("returns the finalized canonical %s result withou
   vi.mocked(repository.findReplay).mockResolvedValue(attempt);
   vi.mocked(getPublicationConfig).mockImplementation(() => { throw new PublicationError("CONFIGURATION_ERROR", 503); });
   vi.mocked(getPublicationDocumentPort).mockImplementation(() => { throw new PublicationError("DOCUMENTS_NOT_CONFIGURED", 503); });
+  vi.mocked(getPublicationEmailConfig).mockImplementation(() => { throw new PublicationError("INVOICE_EMAIL_DISABLED", 503); });
   vi.mocked(repository.statusData).mockResolvedValue({ invoiceId, invoiceVersion: 1, invoiceNumber: attempt.invoiceNumber,
     commercialState: "expired", payableUntil: attempt.snapshot.payableUntil, voidedAt: null, snapshot: attempt.snapshot, attempt,
-    settlement: null, receipt: null, deliveries: [] });
-  const response = await post(auth === "bearer" ? machineRequest() : request());
+    settlement: null, receipt: null, deliveries: [], invoiceDeliveries: deliveries });
+  const replay = () => post(auth.endsWith("bearer") ? machineRequest(body) : request(body));
+  const response = await replay();
   expect(response.status).toBe(200);
   const result = await response.json();
   expect(result).toEqual({ invoiceId, invoiceVersion: 1, invoiceNumber: attempt.invoiceNumber, commercialState: "expired",
     invoiceUrl: `${config.appOrigin}/invoice/${token.slug}`, invoicePdfUrl: `${config.appOrigin}/invoice/${token.slug}/pdf`,
     pdfFilename: attempt.artifact!.pdfFilename, pdfContentHash: attempt.artifact!.pdfContentHash, documentCommitment: attempt.artifact!.documentCommitment,
     gmailLinkPackage: { to: ["client@example.test"], subject: attempt.invoiceNumber, textBody: "Gmail seam", htmlBody: "Gmail seam",
-      paymentUrl: `${config.appOrigin}/invoice/${token.slug}`, invoicePdfUrl: `${config.appOrigin}/invoice/${token.slug}/pdf` }, sendApprovalRequired: true });
+      paymentUrl: `${config.appOrigin}/invoice/${token.slug}`, invoicePdfUrl: `${config.appOrigin}/invoice/${token.slug}/pdf` }, sendApprovalRequired: legacy,
+    invoiceEmail: { state: legacy ? "not_applicable" : "queued", deliveries } });
+  if (legacy) {
+    for (const state of ["reserved", "rendering", "stored", "failed"] as const) {
+      vi.mocked(repository.findReplay).mockResolvedValueOnce({ ...attempt, state });
+      const denied = await replay();
+      expect(denied.status).toBe(400);
+      expect(await denied.json()).toEqual({ code: "DELIVERY_APPROVAL_REQUIRED" });
+    }
+    expect(afterPublication).not.toHaveBeenCalled();
+  } else expect(afterPublication).toHaveBeenCalledExactlyOnceWith(attempt.id);
+  expect(repository.reserve).not.toHaveBeenCalled();
+  expect(repository.finalize).not.toHaveBeenCalled();
   expect(repository.claim).not.toHaveBeenCalled();
   expect(createOrRead).not.toHaveBeenCalled();
   expect(JSON.stringify(result)).not.toContain(attempt.publicationSalt);
   expect(getPublicationConfig).not.toHaveBeenCalled();
+  expect(getPublicationEmailConfig).not.toHaveBeenCalled();
   expect(getPublicationDocumentPort).not.toHaveBeenCalled();
   privateHeaders(response);
 });

@@ -95,6 +95,7 @@ jobs:
         env:
           # This job owns a fresh GitHub-hosted runner and a disposable Supabase stack.
           PAYR_TEST_DISPOSABLE_DB: agent-gateway
+      - run: node scripts/test-privy-db.mjs
       - if: always()
         run: pnpm exec supabase stop --no-backup
 

@@ -18,7 +18,7 @@ export function InvoiceWorkflow() {
   return (
     <section className="ruled-section invoice-workflow" aria-labelledby="invoice-workflow-heading">
       <h2 id="invoice-workflow-heading">Draft in Claude. Review here.</h2>
-      <p>Review drafts, revisions, and published invoices here. Drafts do not create a payment request. Explicitly approved publication through Payr creates an immutable invoice, protected page, PDF, and QR code. Share finalized documents from invoice detail; there is no browser publication form.</p>
+      <p>Review drafts, revisions, and published invoices here. Drafts do not create a payment request. Publish &amp; Send approves the exact reviewed version and queues invoice email to its client and sender, with the frozen PDF and private links. Creation and revision remain agent-first.</p>
       <p>Connect Payr in <Link className="text-link" href="/app/connections">Connections</Link> before using its tools in Claude. Open Claude starts a conversation; it does not connect Payr automatically. There is no browser invoice editor.</p>
     </section>
   );

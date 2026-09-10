@@ -55,7 +55,7 @@ export function createDocumentRepository(client: RpcClient): DocumentRepository 
     },
     async readTarget(tokenId) {
       const id = parse(uuid, tokenId);
-      return call("payr_read_invoice_document_v1", { p_token_id: id }, target.refine((v) => v.attempt.link.tokenId === id).nullable());
+      return call("payr_read_invoice_document_v2", { p_token_id: id }, target.refine((v) => v.attempt.link.tokenId === id).nullable());
     },
     async storageState(key) {
       return call("payr_document_storage_state_v1", { p_storage_key: parse(storageKey, key) }, publicationAttemptSchema.shape.state.nullable());

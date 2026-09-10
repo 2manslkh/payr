@@ -2,6 +2,56 @@
 
 Record choices that are consequential, hard to reverse, or likely to be questioned later. Do not use this as a daily activity log.
 
+## 2026-09-10: Reconcile The Major Release
+
+The user approved selective reconciliation onto released main, retaining Privy
+business-wallet onboarding, dashboard login, MCP-first setup and Publish & Send.
+The optional direct-MCP plugin is archived outside the active product. Historical
+source and user-owned artwork are preserved before retiring any donor.
+
+The user explicitly chose a breaking publication cutover rather than preserving
+fresh publish-only requests. Every new publication requires `approval:true` and
+`deliveryApproval:true`; email configuration is required before reserving work.
+This overrides the older separate-Gmail-approval decision and the initial-email
+non-goal for this major release. Send the frozen invoice PDF and private links to
+the frozen client and issuer addresses, deduplicating equal normalized addresses.
+Do not automatically send historical invoices or enable receipt delivery.
+Authorized finalized legacy requests retain read-only replay, not retroactive send
+approval. Provider acceptance is not inbox delivery or exactly-once delivery.
+
+Privy onboarding remains user-owned, receiving-wallet discovery only: no agent
+signing, withdrawals, payment-attestor replacement or automatic scope expansion.
+Existing workspace, invoice, payout and credential bindings must survive linking.
+Production activation, credential changes, live email and payment evidence remain
+separate operator gates. Do not promote a migration-only release over the recorded
+deployed Privy snapshot. Target `v2.0.0` through protected release tooling after
+all integrated gates pass; never rewrite historical SQL or published tags.
+
+For this candidate, this decision takes precedence over the charter's former
+email non-goal, the framing/implementation baseline's separate Gmail workflow,
+and older demo scripts. Preserve those dated observations as history, not active
+acceptance requirements. The portable invoice skill remains active; the optional
+direct-MCP plugin and its public packaging/install instructions do not.
+
+The recorded 10 September production state is main `cbcf7e2` plus an uncommitted
+Privy snapshot, not main alone. Preserve its source digest and deployment evidence
+in `docs/ops/privy-onboarding.md`. No live user credentials were submitted there;
+genuine wallet ownership, existing-workspace linking and policy denial remain
+unproven. The payment attestor remains the guarded local-testnet signer, distinct
+from the Privy receiving wallet. The public gateway's imported catalog has eleven
+Payr operations without account context or void; local upstream has twelve,
+including context but not void. Private per-user credential injection into generated
+MCP remains unverified and is not solved by the archived plugin. Keep account and
+service secrets out of chat; stop authenticated setup until a private path is proven.
+
+Approval here is source consolidation only. `v2.0.0` is planned, not released:
+fresh combined-source CI/review, authorized migration/deployment, gateway reimport,
+Cron/Vault setup, both-approval initial-email proof and verified payment/receipt
+acceptance remain gates. Email-disabled means fresh publication is blocked, not
+a supported publish-only fallback. Older test counts are dated evidence only.
+
+## Earlier Decisions
+
 | Date | Decision | Reason | Alternatives rejected | Revisit when |
 | --- | --- | --- | --- | --- |
 | 2026-09-09 | Approve R09 Direct Chat Setup: opt-in `sender:read` and `sender:write` allow MCP sender business/contact/address, invoice prefix and default-term setup and later updates after explicit approval | Overrides the older dashboard-only sender policy and four-supported-scopes freeze for this narrow capability. Existing/default credentials remain invoice-only; Connections grants both sender scopes only through an unchecked opt-in. Saves atomically match profile ID and revision, use a server-derived connector actor and token-attributed audit. Payout remains ALWAYS owner-signed dashboard only; draft input accepts no sender or payout fields | Impersonating the owner wallet; silently expanding existing tokens; accepting sender fields through draft; granting payout authority; blind save replay | Sender fields or connector authority change; see `docs/ops/mcp-sender-profile.md` for the exact additive contract and verification |

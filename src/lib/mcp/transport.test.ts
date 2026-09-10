@@ -125,7 +125,10 @@ it("discovers four invoice and two opt-in sender tools without granting their sc
   } }), "test-secret", "127.0.0.1", runtime);
   expect(first.status).toBe(200);
   expect(first.headers.has("mcp-session-id")).toBe(false);
-  expect((await first.json()).result.serverInfo.name).toBe("Payr");
+  expect((await first.json()).result.serverInfo).toMatchObject({
+    name: "Payr",
+    icons: [{ src: "https://payrlink.xyz/brand/payr-mark-v2.png", mimeType: "image/png" }],
+  });
   const second = await handleMcpRequest(request({ jsonrpc: "2.0", id: 2, method: "tools/list" }), "test-secret", "127.0.0.1", runtime);
   expect((await second.json()).result.tools.map((tool: { name: string }) => tool.name)).toEqual([
     "get_sender_profile", "save_sender_profile",

@@ -52,11 +52,37 @@ verification, live onboarding evidence, and explicit release scope.
 
 The coordinator owns `.worktrees/privy-reconcile-fresh` on
 `integration/privy-reconcile-fresh`, based on the SHA above. No primary user files
-or ignored credentials are copied. The owned disposable database is
+or ignored credentials are copied. This is an explicit user-authorized exception
+to the orchestration plan's primary-worktree integration topology and tranche
+branch naming: the user required isolated reconciliation and prohibited any
+primary-worktree edits, commits, or stashing. The sole coordinator retains all
+release authority. The owned disposable database is
 `payr-privy-reconcile-v181`, with API/Postgres/shadow ports 61321/61322/61320.
 Start and reset have passed, applying all 15 migrations in numeric order.
-Further tests, independent reviews, PR, tag, and deployment are pending; this
-checkpoint does not claim a completed release.
+SQL lint passed. The pinned CLI's hosted `db push --linked --dry-run` returned
+`Remote database is up to date.` No migration was pushed or history repaired.
+
+Fresh GPT-5.6 Terra xhigh standards and spec/security reviews found no code-level
+reconciliation regression. The standards topology finding is resolved by the
+explicit user exception above; the missing dry-run record is resolved here.
+Security review identified two inherited activation hazards: wallet registration
+trusts its privileged caller's identity/wallet claims, and link completion trusts
+prior signature verification. Neither RPC has a shipped application caller.
+Keep them inactive; a future feature must derive identity/wallet claims from
+verified Privy records and verify the exact stored link message, fixed origin,
+chain, and owner signature before completion. These are activation requirements,
+not permission to edit already-hosted historical SQL.
+
+Initial full database run: 515 passed, three pre-existing publication lock-wait
+tests exceeded their five-second deadlines while review processes were active.
+All five reconciliation regressions passed. No completed release is claimed
+at this pre-release checkpoint.
+
+The subsequent non-competing full DB rerun passed all 518 tests in 16 files.
+All 15 contract tests (including 256 fuzz runs) and the ABI consistency check
+also passed. These supersede the initial timeout result without changing test
+deadlines or historical/application code. The release PR will record the final
+`release:prepare`/`release:verify`, CI, merge/tag and production read-back evidence.
 
 Do not replay this migration on hosted, repair history, reset hosted data, or
 edit the historical SQL. Verify a migration push dry run is up to date. Any

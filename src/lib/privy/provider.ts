@@ -3,13 +3,23 @@ import { PrivyClient } from "@privy-io/node";
 import { IdentityError } from "../identity/contracts";
 import { businessWalletSchema } from "./contracts";
 
+let cachedClient: { appId: string; appSecret: string; client: PrivyClient } | undefined;
+
 export function createPrivyProvider() {
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID || process.env.PRIVY_APP_ID;
   const appSecret = process.env.PRIVY_APP_SECRET;
   const policyId = process.env.PRIVY_WALLET_POLICY_ID;
-  if (!appId || !appSecret || !policyId) throw new IdentityError("CONFIGURATION_ERROR", 503);
+  if (!appId || !appSecret || !policyId) {
+    cachedClient = undefined;
+    throw new IdentityError("CONFIGURATION_ERROR", 503);
+  }
   const acceptedPolicies = new Set([policyId, ...(process.env.PRIVY_ACCEPTED_WALLET_POLICY_IDS ?? "").split(",").map((id) => id.trim()).filter(Boolean)]);
-  const client = new PrivyClient({ appId, appSecret, timeout: 15_000, maxRetries: 1 });
+  // The SDK owns JWKS caching and in-flight fetch coalescing. Keep only the active app credentials.
+  if (cachedClient?.appId !== appId || cachedClient.appSecret !== appSecret) {
+    cachedClient = undefined;
+    cachedClient = { appId, appSecret, client: new PrivyClient({ appId, appSecret, timeout: 15_000, maxRetries: 1 }) };
+  }
+  const client = cachedClient.client;
   return {
     async verifyToken(token: string) {
       try { return (await client.utils().auth().verifyAccessToken(token)).user_id; }

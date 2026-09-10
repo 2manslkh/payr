@@ -730,7 +730,8 @@ describe("F2 identity transactions through Supabase", () => {
 
   it("enforces token lifetime bounds and exact expiry, including expiry during lock waits", async () => {
     const identity = await login();
-    for (const expiresAt of [new Date(Date.now()).toISOString(), new Date(Date.now() + 31 * 86_400_000).toISOString(), "infinity"]) {
+    const databaseNow = Date.parse(fixture("select clock_timestamp();"));
+    for (const expiresAt of [new Date(databaseNow).toISOString(), new Date(databaseNow + 31 * 86_400_000).toISOString(), "infinity"]) {
       await expect(repository.createConnector(identity, { id: randomUUID(), tokenHash: randomBytes(32).toString("hex"), expiresAt }))
         .rejects.toMatchObject({ code: "INVALID_INPUT" });
     }

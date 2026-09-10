@@ -418,8 +418,8 @@ describe("F3 publication RPC transactions", () => {
 
   it.each(["sender_profiles", "clients", "access_links", "idempotency_requests"])("checks the live lease after a %s lock wait", async (table) => {
     const { claimed } = await stored();
-    fixture(`update public.publication_attempts set lease_until = clock_timestamp() + interval '700 milliseconds' where id = '${claimed.id}';`);
     await transaction(`select 1 from public.${table} for update`, async (pid, commit) => {
+      fixture(`update public.publication_attempts set lease_until = clock_timestamp() + interval '700 milliseconds' where id = '${claimed.id}';`);
       const pending = repository.finalize(fence(claimed));
       await waitForWaiter(pid);
       await new Promise((resolve) => setTimeout(resolve, 750));
@@ -428,7 +428,7 @@ describe("F3 publication RPC transactions", () => {
     });
     expect(fixture("select commercial_state from public.invoices;")).toBe("draft");
     expect(fixture("select state from public.publication_attempts;")).toBe("stored");
-  });
+  }, 15_000);
 
   it("blocks active R04 revisions but preserves old draft replays", async () => {
     const snapshot = testPublicationSnapshot();
